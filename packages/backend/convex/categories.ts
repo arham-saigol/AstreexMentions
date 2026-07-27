@@ -1,6 +1,7 @@
 import { ConvexError, type GenericId, v } from "convex/values"
 
 import { authenticatedMutation, authenticatedQuery } from "./lib/authorization"
+import { internalMutationReference } from "./lib/functionReferences"
 import {
   assertCategoryCatalog,
   assertCategoryDeletionAllowed,
@@ -12,10 +13,13 @@ import {
   type CategorySystemKey,
 } from "./lib/categories"
 import { categoryColorTokenValidator } from "./schema"
-import { indexEquals } from "./server"
+import { indexEquals, internalMutation } from "./server"
 import { resolveCurrentCustomer } from "./users"
 
 type CategoryId = GenericId<"categories">
+type WorkspaceId = GenericId<"workspaces">
+
+const CATEGORY_REASSIGN_BATCH_SIZE = 100
 
 type CategoryRecord = CategoryPolicyRecord & {
   colorToken: CategoryColorToken
@@ -299,7 +303,7 @@ export const updateCategory = authenticatedMutation({
 
 export const deleteCategory = authenticatedMutation({
   args: { categoryId: v.id("categories") },
-  returns: v.null(),
+  returns: v.object({ state: v.literal("accepted") }),
   handler: async (ctx, { categoryId }) => {
     const { workspace } = await resolveCurrentCustomer(ctx, ctx.identity)
     const row = await ctx.db.get("categories", categoryId)
@@ -337,28 +341,98 @@ export const deleteCategory = authenticatedMutation({
     }
 
     const now = Date.now()
+    await ctx.db.patch("categories", categoryId, {
+      deletionPendingAt: row.deletionPendingAt ?? now,
+      enabled: false,
+      updatedAt: now,
+    })
+    await ctx.scheduler.runAfter(0, reassignCategoryDeletionBatchReference, {
+      categoryId,
+      otherCategoryId: other._id as CategoryId,
+      workspaceId: workspace.id,
+    })
+
+    return { state: "accepted" as const }
+  },
+})
+
+export const reassignCategoryDeletionBatch = internalMutation({
+  args: {
+    categoryId: v.id("categories"),
+    otherCategoryId: v.id("categories"),
+    workspaceId: v.id("workspaces"),
+  },
+  returns: v.object({
+    reassignedCount: v.number(),
+    state: v.union(
+      v.literal("completed"),
+      v.literal("in_progress"),
+      v.literal("stale"),
+    ),
+  }),
+  handler: async (ctx, args) => {
+    const [category, other] = await Promise.all([
+      ctx.db.get("categories", args.categoryId),
+      ctx.db.get("categories", args.otherCategoryId),
+    ])
+    if (
+      !category ||
+      category.workspaceId !== args.workspaceId ||
+      category.deletedAt !== undefined ||
+      category.deletionPendingAt === undefined ||
+      !other ||
+      other.workspaceId !== args.workspaceId ||
+      other.deletedAt !== undefined ||
+      other.enabled !== true ||
+      other.isSystem !== true ||
+      other.systemKey !== "other"
+    ) {
+      return { reassignedCount: 0, state: "stale" as const }
+    }
+
+    const now = Date.now()
     const mentions = await ctx.db
       .query("mentions")
       .withIndex("by_workspace_category_and_published_at", (q) =>
         indexEquals(
           q,
-          ["workspaceId", workspace.id],
-          ["categoryId", categoryId],
+          ["workspaceId", args.workspaceId],
+          ["categoryId", args.categoryId],
         ),
       )
-      .collect()
+      .take(CATEGORY_REASSIGN_BATCH_SIZE)
     for (const mention of mentions) {
       await ctx.db.patch("mentions", mention._id, {
-        categoryId: other._id as CategoryId,
+        categoryId: args.otherCategoryId,
         updatedAt: now,
       })
     }
 
-    await ctx.db.patch("categories", categoryId, {
+    if (mentions.length === CATEGORY_REASSIGN_BATCH_SIZE) {
+      await ctx.scheduler.runAfter(0, reassignCategoryDeletionBatchReference, {
+        categoryId: args.categoryId,
+        otherCategoryId: args.otherCategoryId,
+        workspaceId: args.workspaceId,
+      })
+      return {
+        reassignedCount: mentions.length,
+        state: "in_progress" as const,
+      }
+    }
+
+    await ctx.db.patch("categories", args.categoryId, {
       deletedAt: now,
+      deletionPendingAt: undefined,
       enabled: false,
       updatedAt: now,
     })
-    return null
+    return { reassignedCount: mentions.length, state: "completed" as const }
   },
 })
+
+export const reassignCategoryDeletionBatchReference =
+  internalMutationReference<{
+    categoryId: CategoryId
+    otherCategoryId: CategoryId
+    workspaceId: WorkspaceId
+  }>("categories:reassignCategoryDeletionBatch")

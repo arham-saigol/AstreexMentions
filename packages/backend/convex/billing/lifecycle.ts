@@ -268,10 +268,7 @@ export function effectiveEntitlementStatus(
   if (subscription.entitlementStatus !== "active") {
     return "inactive"
   }
-  if (
-    subscription.status === "scheduled_cancel" &&
-    now >= subscription.currentPeriodEnd
-  ) {
+  if (now >= subscription.currentPeriodEnd) {
     return "inactive"
   }
   return "active"

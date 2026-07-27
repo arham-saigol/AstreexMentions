@@ -276,9 +276,10 @@ export const customerConvex = {
       },
       unknown
     >("categories:updateCategory"),
-    remove: convexMutationReference<{ categoryId: string }, unknown>(
-      "categories:deleteCategory",
-    ),
+    remove: convexMutationReference<
+      { categoryId: string },
+      { state: "accepted" }
+    >("categories:deleteCategory"),
   },
   savedViews: {
     list: convexQueryReference<Record<string, never>, unknown>(

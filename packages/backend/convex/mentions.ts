@@ -12,6 +12,7 @@ const MAX_PAGE_SIZE = 50
 const MAX_FILTER_VALUES = 50
 const MAX_SEARCH_LENGTH = 200
 const MAX_CURSOR_LENGTH = 20_000
+const MENTION_SCAN_BATCH_SIZE = 100
 const CURSOR_VERSION = 1
 
 const platformValidator = v.union(
@@ -83,7 +84,7 @@ const mentionPageResultValidator = v.object({
   items: v.array(mentionResultValidator),
   monitoringState: mentionMonitoringStateValidator,
   nextCursor: v.union(v.string(), v.null()),
-  totalCount: v.number(),
+  totalCount: v.optional(v.number()),
 })
 
 type UserId = GenericId<"users">
@@ -118,10 +119,10 @@ type NormalizedMentionFilters = {
 }
 
 type MentionCursor = {
-  engagementScore: number
+  bufferedMentionIds: string[]
+  continueCursor: string
+  databaseDone: boolean
   fingerprint: string
-  mentionId: string
-  publishedAt: number
   sort: MentionSort
   version: typeof CURSOR_VERSION
   workspaceId: string
@@ -370,16 +371,17 @@ function decodeMentionCursor(
     parsed.fingerprint !== expected.fingerprint ||
     !("sort" in parsed) ||
     parsed.sort !== expected.sort ||
-    !("mentionId" in parsed) ||
-    typeof parsed.mentionId !== "string" ||
-    parsed.mentionId.length === 0 ||
-    !("publishedAt" in parsed) ||
-    typeof parsed.publishedAt !== "number" ||
-    !Number.isSafeInteger(parsed.publishedAt) ||
-    parsed.publishedAt < 0 ||
-    !("engagementScore" in parsed) ||
-    typeof parsed.engagementScore !== "number" ||
-    !Number.isFinite(parsed.engagementScore)
+    !("continueCursor" in parsed) ||
+    typeof parsed.continueCursor !== "string" ||
+    parsed.continueCursor.length === 0 ||
+    !("databaseDone" in parsed) ||
+    typeof parsed.databaseDone !== "boolean" ||
+    !("bufferedMentionIds" in parsed) ||
+    !Array.isArray(parsed.bufferedMentionIds) ||
+    parsed.bufferedMentionIds.length > MENTION_SCAN_BATCH_SIZE ||
+    parsed.bufferedMentionIds.some(
+      (mentionId) => typeof mentionId !== "string" || mentionId.length === 0,
+    )
   ) {
     mentionError(
       "INVALID_CURSOR",
@@ -388,31 +390,6 @@ function decodeMentionCursor(
   }
 
   return parsed as MentionCursor
-}
-
-function isAfterCursor(row: GenericRow, cursor: MentionCursor): boolean {
-  const rowId = String(row._id)
-  const publishedAt = row.publishedAt as number
-  const engagementScore = row.engagementScore as number
-
-  if (cursor.sort === "oldest") {
-    return (
-      publishedAt > cursor.publishedAt ||
-      (publishedAt === cursor.publishedAt && rowId > cursor.mentionId)
-    )
-  }
-  if (cursor.sort === "most_engaged") {
-    return (
-      engagementScore < cursor.engagementScore ||
-      (engagementScore === cursor.engagementScore &&
-        (publishedAt < cursor.publishedAt ||
-          (publishedAt === cursor.publishedAt && rowId < cursor.mentionId)))
-    )
-  }
-  return (
-    publishedAt < cursor.publishedAt ||
-    (publishedAt === cursor.publishedAt && rowId < cursor.mentionId)
-  )
 }
 
 async function assertAuthorizedFilterIds(
@@ -434,35 +411,10 @@ async function assertAuthorizedFilterIds(
   }
 }
 
-async function matchedMentionIds(
-  ctx: Pick<CustomerDatabaseCtx, "db">,
-  workspaceId: WorkspaceId,
-  keywordIds: readonly KeywordId[],
-): Promise<Set<string> | null> {
-  if (keywordIds.length === 0) {
-    return null
-  }
-
-  const mentionIds = new Set<string>()
-  for (const keywordId of keywordIds) {
-    const matches = (await ctx.db
-      .query("mentionKeywordMatches")
-      .withIndex("by_keyword_and_mention", (q) => q.eq("keywordId", keywordId))
-      .collect()) as GenericRow[]
-    for (const match of matches) {
-      if (match.workspaceId === workspaceId) {
-        mentionIds.add(String(match.mentionId))
-      }
-    }
-  }
-  return mentionIds
-}
-
 function mentionMatchesFilters(
   row: GenericRow,
   input: {
     filters: NormalizedMentionFilters
-    keywordMatchedMentionIds: Set<string> | null
     query: string
   },
 ): boolean {
@@ -470,12 +422,6 @@ function mentionMatchesFilters(
   if (
     filters.categoryIds.length > 0 &&
     !filters.categoryIds.includes(row.categoryId as CategoryId)
-  ) {
-    return false
-  }
-  if (
-    filters.keywordIds.length > 0 &&
-    !input.keywordMatchedMentionIds?.has(String(row._id))
   ) {
     return false
   }
@@ -510,6 +456,71 @@ function mentionMatchesFilters(
     return false
   }
   return true
+}
+
+async function mentionMatchesKeywordFilter(
+  ctx: Pick<CustomerDatabaseCtx, "db">,
+  workspaceId: WorkspaceId,
+  mentionId: GenericId<string>,
+  keywordIds: ReadonlySet<string>,
+): Promise<boolean> {
+  if (keywordIds.size === 0) {
+    return true
+  }
+
+  const matches = (await ctx.db
+    .query("mentionKeywordMatches")
+    .withIndex("by_workspace_and_mention", (q) =>
+      indexEquals(q, ["workspaceId", workspaceId], ["mentionId", mentionId]),
+    )
+    .collect()) as GenericRow[]
+  return matches.some((match) => keywordIds.has(String(match.keywordId)))
+}
+
+async function filterMentionRows(
+  ctx: Pick<CustomerDatabaseCtx, "db">,
+  workspaceId: WorkspaceId,
+  rows: readonly GenericRow[],
+  input: {
+    filters: NormalizedMentionFilters
+    keywordIds: ReadonlySet<string>
+    query: string
+  },
+): Promise<GenericRow[]> {
+  const filtered: GenericRow[] = []
+  for (const row of rows) {
+    if (
+      row.workspaceId === workspaceId &&
+      mentionMatchesFilters(row, input) &&
+      (await mentionMatchesKeywordFilter(
+        ctx,
+        workspaceId,
+        row._id,
+        input.keywordIds,
+      ))
+    ) {
+      filtered.push(row)
+    }
+  }
+  return filtered
+}
+
+async function bufferedMentionRows(
+  ctx: Pick<CustomerDatabaseCtx, "db">,
+  workspaceId: WorkspaceId,
+  mentionIds: readonly string[],
+): Promise<GenericRow[]> {
+  const rows: GenericRow[] = []
+  for (const mentionId of mentionIds) {
+    const row = (await ctx.db.get(
+      "mentions",
+      mentionId as MentionId,
+    )) as GenericRow | null
+    if (row?.workspaceId === workspaceId) {
+      rows.push(row)
+    }
+  }
+  return rows
 }
 
 async function mentionForWorkspace(
@@ -761,53 +772,64 @@ export const listMentions = authenticatedQuery({
           })
 
     await assertAuthorizedFilterIds(ctx, customer.workspaceId, filters)
-    const keywordMatchedMentionIds = await matchedMentionIds(
+    const keywordIds = new Set(filters.keywordIds.map(String))
+    const bufferedRows = await bufferedMentionRows(
       ctx,
       customer.workspaceId,
-      filters.keywordIds,
+      cursor?.bufferedMentionIds ?? [],
     )
-    const rows = (await ctx.db
-      .query("mentions")
-      .withIndex("by_workspace_and_published_at", (q) =>
-        q.eq("workspaceId", customer.workspaceId),
+    const candidates = await filterMentionRows(
+      ctx,
+      customer.workspaceId,
+      bufferedRows,
+      { filters, keywordIds, query },
+    )
+    let continueCursor = cursor?.continueCursor ?? null
+    let databaseDone = cursor?.databaseDone ?? false
+
+    if (candidates.length <= limit && !databaseDone) {
+      const scanQuery =
+        sort === "most_engaged"
+          ? ctx.db
+              .query("mentions")
+              .withIndex("by_workspace_and_engagement", (q) =>
+                q.eq("workspaceId", customer.workspaceId),
+              )
+              .order("desc")
+          : ctx.db
+              .query("mentions")
+              .withIndex("by_workspace_and_published_at", (q) =>
+                q.eq("workspaceId", customer.workspaceId),
+              )
+              .order(sort === "oldest" ? "asc" : "desc")
+      const scanned = await scanQuery.paginate({
+        cursor: continueCursor,
+        numItems: MENTION_SCAN_BATCH_SIZE,
+      })
+      continueCursor = scanned.continueCursor
+      databaseDone = scanned.isDone
+      candidates.push(
+        ...(await filterMentionRows(
+          ctx,
+          customer.workspaceId,
+          scanned.page as GenericRow[],
+          { filters, keywordIds, query },
+        )),
       )
-      .collect()) as GenericRow[]
-    const filtered = rows
-      .filter((row) =>
-        mentionMatchesFilters(row, {
-          filters,
-          keywordMatchedMentionIds,
-          query,
-        }),
-      )
-      .sort((left, right) =>
-        compareMentionRecords(
-          {
-            _id: String(left._id),
-            engagementScore: left.engagementScore as number,
-            publishedAt: left.publishedAt as number,
-          },
-          {
-            _id: String(right._id),
-            engagementScore: right.engagementScore as number,
-            publishedAt: right.publishedAt as number,
-          },
-          sort,
-        ),
-      )
-    const pageCandidates = cursor
-      ? filtered.filter((row) => isAfterCursor(row, cursor))
-      : filtered
-    const pageRows = pageCandidates.slice(0, limit)
-    const hasMore = pageCandidates.length > pageRows.length
-    const lastRow = pageRows.at(-1)
+    }
+
+    const pageRows = candidates.slice(0, limit)
+    const bufferedCandidates = candidates.slice(limit)
+    const hasMore = bufferedCandidates.length > 0 || !databaseDone
     const nextCursor =
-      hasMore && lastRow
+      hasMore && continueCursor
         ? encodeMentionCursor({
-            engagementScore: lastRow.engagementScore as number,
+            bufferedMentionIds: bufferedCandidates.map((row) =>
+              String(row._id),
+            ),
+            continueCursor,
+            databaseDone,
             fingerprint,
-            mentionId: String(lastRow._id),
-            publishedAt: lastRow.publishedAt as number,
             sort,
             version: CURSOR_VERSION,
             workspaceId: String(customer.workspaceId),
@@ -825,7 +847,6 @@ export const listMentions = authenticatedQuery({
       items,
       monitoringState,
       nextCursor,
-      totalCount: filtered.length,
     }
   },
 })

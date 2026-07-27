@@ -581,6 +581,7 @@ export default defineSchema({
       "status",
       "engagementScore",
     ])
+    .index("by_workspace_and_engagement", ["workspaceId", "engagementScore"])
     .index("by_workspace_and_published_at", ["workspaceId", "publishedAt"])
     .index("by_workspace_category_and_published_at", [
       "workspaceId",
@@ -628,6 +629,7 @@ export default defineSchema({
     colorToken: categoryColorTokenValidator,
     createdAt: v.number(),
     deletedAt: v.optional(v.number()),
+    deletionPendingAt: v.optional(v.number()),
     description: v.string(),
     enabled: v.boolean(),
     isSystem: v.boolean(),

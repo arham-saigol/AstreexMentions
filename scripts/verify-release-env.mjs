@@ -49,11 +49,18 @@ for (const name of [
   "NEXT_PUBLIC_SITE_URL",
   "NEXT_PUBLIC_APP_URL",
   "NEXT_PUBLIC_ADMIN_URL",
+  "NEXT_PUBLIC_CONVEX_URL",
   "APP_URL",
   "ADMIN_URL",
   "CREEM_CHECKOUT_SUCCESS_URL",
 ]) {
-  const url = new URL(process.env[name])
+  let url
+  try {
+    url = new URL(process.env[name])
+  } catch {
+    console.error(`${name} must be a valid HTTPS URL for a release deployment.`)
+    process.exit(1)
+  }
   if (url.protocol !== "https:") {
     console.error(`${name} must use HTTPS for a release deployment.`)
     process.exit(1)

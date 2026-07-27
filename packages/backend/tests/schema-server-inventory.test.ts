@@ -120,6 +120,10 @@ describe("complete Convex schema", () => {
       "status",
       "publishedAt",
     ])
+    expectIndex("mentions", "by_workspace_and_engagement", [
+      "workspaceId",
+      "engagementScore",
+    ])
     expectIndex("mentions", "by_workspace_status_and_engagement", [
       "workspaceId",
       "status",

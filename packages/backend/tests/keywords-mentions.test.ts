@@ -41,10 +41,9 @@ const testSchema = defineSchema({
   mentionKeywordMatches: defineTable(v.any())
     .index("by_keyword_and_mention", ["keywordId", "mentionId"])
     .index("by_workspace_and_mention", ["workspaceId", "mentionId"]),
-  mentions: defineTable(v.any()).index("by_workspace_and_published_at", [
-    "workspaceId",
-    "publishedAt",
-  ]),
+  mentions: defineTable(v.any())
+    .index("by_workspace_and_published_at", ["workspaceId", "publishedAt"])
+    .index("by_workspace_and_engagement", ["workspaceId", "engagementScore"]),
   subscriptions: defineTable(v.any()).index("by_workspace", ["workspaceId"]),
   trackingSources: defineTable(v.any())
     .index("by_keyword_and_source_type", ["keywordId", "sourceType"])
@@ -260,7 +259,7 @@ function mentionPage(value: unknown) {
     items: Array<Record<string, unknown> & { id: MentionId; status: string }>
     monitoringState: string
     nextCursor: string | null
-    totalCount: number
+    totalCount?: number
   }
 }
 
@@ -670,7 +669,6 @@ describe("mention Convex functions", () => {
     expect(firstPage).toMatchObject({
       isDone: false,
       monitoringState: "active",
-      totalCount: 2,
     })
     expect(firstPage.items).toHaveLength(1)
     expect(firstPage.items[0]).toMatchObject({
@@ -693,7 +691,7 @@ describe("mention Convex functions", () => {
         sort: "most_engaged",
       }),
     )
-    expect(secondPage).toMatchObject({ isDone: true, totalCount: 2 })
+    expect(secondPage).toMatchObject({ isDone: true })
     expect(secondPage.items[0]?.id).toBe(seeded.mentionIds[0])
 
     const filtered = mentionPage(

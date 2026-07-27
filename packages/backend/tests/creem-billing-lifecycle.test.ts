@@ -247,6 +247,20 @@ describe("Creem subscription lifecycle", () => {
     ).toBe("inactive")
   })
 
+  it("expires an active entitlement when its persisted period ends", () => {
+    const subscription = initialPaidState().subscription
+
+    expect(
+      effectiveEntitlementStatus(
+        subscription,
+        subscription.currentPeriodEnd - 1,
+      ),
+    ).toBe("active")
+    expect(
+      effectiveEntitlementStatus(subscription, subscription.currentPeriodEnd),
+    ).toBe("inactive")
+  })
+
   it("resumes the same paid cycle without resetting usage", () => {
     const initial = initialPaidState()
     const upgrade = subscriptionFixture("subscription-upgrade.json")

@@ -9,7 +9,7 @@ import {
   type UserIdentity,
 } from "convex/server"
 import { v } from "convex/values"
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 const customerTestSchema = defineSchema({
   auditEvents: defineTable(v.any()),
@@ -80,6 +80,10 @@ const customerTestSchema = defineSchema({
     "ownerUserId",
     "kind",
   ]),
+})
+
+afterEach(() => {
+  vi.useRealTimers()
 })
 
 const modules = {
@@ -300,7 +304,7 @@ describe("customer user and workspace functions", () => {
 
 describe("customer category functions", () => {
   it("preserves default and Other invariants while soft-deleting custom categories", async () => {
-    const { customer, t } = await bootstrappedCustomer()
+    const { bootstrap, customer, t } = await bootstrappedCustomer()
     const defaults = (await customer.query(listCategories, {})) as Array<{
       id: string
       name: string
@@ -330,12 +334,30 @@ describe("customer category functions", () => {
       }),
     ).rejects.toMatchObject({ data: { code: "CATEGORY_NAME_CONFLICT" } })
 
+    await t.run(async (ctx) => {
+      for (let index = 0; index < 205; index += 1) {
+        await ctx.db.insert("mentions", {
+          categoryId: custom.id,
+          publishedAt: index,
+          workspaceId: bootstrap.workspaceId,
+        })
+      }
+    })
+    vi.useFakeTimers()
     await expect(
       customer.mutation(deleteCategory, { categoryId: custom.id }),
-    ).resolves.toBeNull()
+    ).resolves.toEqual({ state: "accepted" })
+    await t.finishAllScheduledFunctions(vi.runAllTimers)
     const row = await t.run(async (ctx) => await ctx.db.get(custom.id as never))
     expect(row).toMatchObject({ enabled: false })
     expect(row?.deletedAt).toEqual(expect.any(Number))
+    const reassigned = await t.run(
+      async (ctx) => await ctx.db.query("mentions").collect(),
+    )
+    expect(reassigned).toHaveLength(205)
+    expect(
+      reassigned.every((mention) => mention.categoryId === other?.id),
+    ).toBe(true)
   })
 })
 
