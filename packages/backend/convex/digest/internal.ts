@@ -29,6 +29,7 @@ import {
 import { rankableDigestCandidate, type DigestMentionCandidate } from "./model"
 
 const MAX_DUE_DIGESTS = 64
+const MAX_DIGEST_WINDOW_MENTIONS = 500
 
 type GenericRow = Record<string, unknown> & { _id: GenericId<string> }
 type DigestPreferenceId = GenericId<"digestPreferences">
@@ -101,7 +102,8 @@ async function mentionsInWindow(
         endAt,
       ),
     )
-    .collect()) as GenericRow[]
+    .order("desc")
+    .take(MAX_DIGEST_WINDOW_MENTIONS)) as GenericRow[]
 }
 
 async function schedulePreference(

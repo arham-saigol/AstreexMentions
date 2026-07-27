@@ -14,6 +14,15 @@ export type KnownCreemSubscriptionStatus =
 export type AstreexEntitlementStatus = "active" | "inactive"
 export type AstreexPlanId = "starter" | "growth" | "scale"
 
+export function canReconcileBillingWorkspace(
+  workspace: Readonly<{
+    deletedAt?: number
+    deletionPendingAt?: number
+  }> | null,
+): boolean {
+  return workspace !== null && workspace.deletedAt === undefined
+}
+
 export function normalizeCreemSubscriptionStatus(value: unknown): string {
   if (typeof value !== "string" || value.trim().length === 0) {
     throw new TypeError("Creem subscription status must be a non-empty string")

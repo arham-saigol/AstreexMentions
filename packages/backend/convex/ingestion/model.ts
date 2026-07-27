@@ -1,10 +1,23 @@
 import type { EmailPayload } from "../lib/emailOutbox"
 
 export const INGESTED_MENTION_METRIC = "mentions_ingested"
+export const INGESTED_MENTION_PLATFORM_METRIC_PREFIX =
+  "mentions_ingested_platform:"
+export const CATEGORIZED_MENTION_METRIC_PREFIX = "mentions_categorized:"
 export const USAGE_WARNING_THRESHOLDS = [80, 100] as const
 export type UsageWarningThreshold = (typeof USAGE_WARNING_THRESHOLDS)[number]
 export type IngestionTrackingSourceType =
   "hacker_news" | "reddit_comments" | "reddit_posts" | "x"
+
+export function ingestedMentionPlatformMetric(
+  platform: "hacker_news" | "reddit" | "x",
+): string {
+  return `${INGESTED_MENTION_PLATFORM_METRIC_PREFIX}${platform}`
+}
+
+export function categorizedMentionMetric(categoryId: string): string {
+  return `${CATEGORIZED_MENTION_METRIC_PREFIX}${categoryId}`
+}
 
 export function candidateMatchesTrackingSource(
   candidate: Readonly<{

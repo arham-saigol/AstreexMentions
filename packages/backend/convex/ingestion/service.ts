@@ -10,11 +10,13 @@ import {
 } from "../lib/mentionIngestion"
 import { createPendingEmail, emailPayloadFingerprint } from "../lib/emailOutbox"
 import { indexEquals, type MutationCtx } from "../server"
+import { incrementHourlySystemMetric } from "../lib/systemMetricBuckets"
 import type { IngestionCandidate, IngestionChunk } from "./contracts"
 import {
   buildUsageWarningEmail,
   categorizationJobIdempotencyKey,
   INGESTED_MENTION_METRIC,
+  ingestedMentionPlatformMetric,
   normalizeMentionFallbackKey,
   usageWarningIdempotencyKey,
   usageWarningThresholdsToEnqueue,
@@ -28,7 +30,6 @@ type KeywordId = GenericId<"keywords">
 type TrackingSourceId = GenericId<"trackingSources">
 type UsageCycleId = GenericId<"usageCycles">
 type MentionId = GenericId<"mentions">
-type SystemMetricBucketId = GenericId<"systemMetricBuckets">
 
 type TrackingSourceType =
   "hacker_news" | "reddit_comments" | "reddit_posts" | "x"
@@ -336,61 +337,22 @@ async function ensureCategorizationJob(
 async function incrementIngestedMentionMetric(
   ctx: MutationCtx,
   workspaceId: WorkspaceId,
+  platform: IngestionCandidate["platform"],
   now: number,
 ): Promise<void> {
-  const bucketStartAt = Math.floor(now / 3_600_000) * 3_600_000
-  const bucketEndAt = bucketStartAt + 3_600_000
-
-  for (const scope of ["global", "workspace"] as const) {
-    const metricWorkspaceId = scope === "workspace" ? workspaceId : undefined
-    const bucket = (await ctx.db
-      .query("systemMetricBuckets")
-      .withIndex("by_metric_scope_workspace_granularity_and_bucket", (q) =>
-        indexEquals(
-          q,
-          ["metric", INGESTED_MENTION_METRIC],
-          ["scope", scope],
-          ["workspaceId", metricWorkspaceId],
-          ["granularity", "hour"],
-          ["bucketStartAt", bucketStartAt],
-        ),
-      )
-      .unique()) as GenericRow | null
-
-    if (bucket) {
-      await ctx.db.patch(
-        "systemMetricBuckets",
-        bucket._id as SystemMetricBucketId,
-        {
-          count: (bucket.count as number) + 1,
-          maximum: Math.max(bucket.maximum as number, 1),
-          minimum: Math.min(bucket.minimum as number, 1),
-          sum: (bucket.sum as number) + 1,
-          updatedAt: now,
-          value: (bucket.value as number) + 1,
-        },
-      )
-      continue
-    }
-
-    await ctx.db.insert(
-      "systemMetricBuckets",
-      withoutUndefined({
-        bucketEndAt,
-        bucketStartAt,
-        count: 1,
-        granularity: "hour",
-        maximum: 1,
-        metric: INGESTED_MENTION_METRIC,
-        minimum: 1,
-        scope,
-        sum: 1,
-        updatedAt: now,
-        value: 1,
-        workspaceId: metricWorkspaceId,
-      }),
-    )
-  }
+  await incrementHourlySystemMetric(ctx, {
+    bucketAt: now,
+    metric: INGESTED_MENTION_METRIC,
+    updatedAt: now,
+    workspaceId,
+  })
+  await incrementHourlySystemMetric(ctx, {
+    bucketAt: now,
+    metric: ingestedMentionPlatformMetric(platform),
+    scope: "global",
+    updatedAt: now,
+    workspaceId,
+  })
 }
 
 async function ensureUsageWarningEmail(
@@ -736,7 +698,12 @@ export async function applyIngestionChunkAtomically(
     ) {
       associationsAdded += 1
     }
-    await incrementIngestedMentionMetric(ctx, workspaceId, options.now)
+    await incrementIngestedMentionMetric(
+      ctx,
+      workspaceId,
+      candidate.platform,
+      options.now,
+    )
 
     const thresholds = usageWarningThresholdsToEnqueue({
       mentionLimit,

@@ -8,6 +8,10 @@ import {
   ACCOUNT_DELETION_WORKFLOW_VERSION,
   accountDeletionOperationId,
 } from "./deletion/model"
+import {
+  CATEGORIZED_MENTION_METRIC_PREFIX,
+  ingestedMentionPlatformMetric,
+} from "./ingestion/model"
 import { adminMutation, adminQuery } from "./lib/authorization"
 import { withoutUndefinedValues } from "./lib/jobRuntime"
 import {
@@ -672,7 +676,6 @@ export const getMetricsOverview = adminQuery({
       subscriptions,
       workspaces,
       trackingSources,
-      mentions,
       categories,
       categorizationJobs,
     ] = (await Promise.all([
@@ -699,11 +702,9 @@ export const getMetricsOverview = adminQuery({
       ctx.db.query("subscriptions").collect(),
       ctx.db.query("workspaces").collect(),
       ctx.db.query("trackingSources").collect(),
-      ctx.db.query("mentions").collect(),
       ctx.db.query("categories").collect(),
       ctx.db.query("categorizationJobs").collect(),
     ])) as [
-      GenericRow[],
       GenericRow[],
       GenericRow[],
       GenericRow[],
@@ -716,12 +717,6 @@ export const getMetricsOverview = adminQuery({
     const relevantSystemRows = systemRows.filter(
       (row) => (row.bucketStartAt as number) >= metricReadStartAt,
     )
-    const mentionsInRange = mentions.filter(
-      (mention) => (mention.firstSeenAt as number) >= startAt,
-    )
-    const mentionsLast30Days = mentions.filter(
-      (mention) => (mention.firstSeenAt as number) >= last30DaysStartAt,
-    )
     const categoryNames = new Map(
       categories.map((category) => [
         String(category._id),
@@ -729,13 +724,31 @@ export const getMetricsOverview = adminQuery({
       ]),
     )
     const categoryCounts = new Map<string, number>()
-    for (const mention of mentionsInRange) {
-      const category =
-        mention.categoryId === undefined
-          ? "Uncategorized"
-          : (categoryNames.get(String(mention.categoryId)) ??
-            "Unavailable category")
-      categoryCounts.set(category, (categoryCounts.get(category) ?? 0) + 1)
+    let categorizedMentions = 0
+    for (const row of relevantSystemRows) {
+      if (
+        row.scope !== "global" ||
+        typeof row.metric !== "string" ||
+        !row.metric.startsWith(CATEGORIZED_MENTION_METRIC_PREFIX) ||
+        (row.bucketStartAt as number) < startAt
+      ) {
+        continue
+      }
+      const categoryId = row.metric.slice(
+        CATEGORIZED_MENTION_METRIC_PREFIX.length,
+      )
+      const category = categoryNames.get(categoryId) ?? "Unavailable category"
+      const count = metricAmount(row)
+      categorizedMentions += count
+      categoryCounts.set(category, (categoryCounts.get(category) ?? 0) + count)
+    }
+    const uncategorizedMentions = Math.max(
+      0,
+      sumMetric(relevantSystemRows, MENTION_METRIC, startAt) -
+        categorizedMentions,
+    )
+    if (uncategorizedMentions > 0) {
+      categoryCounts.set("Uncategorized", uncategorizedMentions)
     }
     const categoryBreakdown = [...categoryCounts.entries()]
       .map(([category, count]) => ({ category, count }))
@@ -747,9 +760,11 @@ export const getMetricsOverview = adminQuery({
 
     const mentionsByPlatform = (["x", "reddit", "hacker_news"] as const).map(
       (platform) => ({
-        count: mentionsLast30Days.filter(
-          (mention) => mention.platform === platform,
-        ).length,
+        count: sumMetric(
+          relevantSystemRows,
+          ingestedMentionPlatformMetric(platform),
+          last30DaysStartAt,
+        ),
         platform,
       }),
     )

@@ -1,0 +1,78 @@
+import type { GenericId } from "convex/values"
+
+import { indexEquals, type MutationCtx } from "../server"
+
+type GenericRow = Record<string, unknown> & { _id: GenericId<string> }
+type SystemMetricBucketId = GenericId<"systemMetricBuckets">
+type WorkspaceId = GenericId<"workspaces">
+
+const HOUR_MS = 3_600_000
+
+export async function incrementHourlySystemMetric(
+  ctx: MutationCtx,
+  input: {
+    bucketAt: number
+    metric: string
+    scope?: "global" | "global_and_workspace"
+    updatedAt: number
+    workspaceId: WorkspaceId
+  },
+): Promise<void> {
+  const bucketStartAt = Math.floor(input.bucketAt / HOUR_MS) * HOUR_MS
+  const bucketEndAt = bucketStartAt + HOUR_MS
+
+  const scopes =
+    input.scope === "global"
+      ? (["global"] as const)
+      : (["global", "workspace"] as const)
+  for (const scope of scopes) {
+    const metricWorkspaceId =
+      scope === "workspace" ? input.workspaceId : undefined
+    const bucket = (await ctx.db
+      .query("systemMetricBuckets")
+      .withIndex("by_metric_scope_workspace_granularity_and_bucket", (q) =>
+        indexEquals(
+          q,
+          ["metric", input.metric],
+          ["scope", scope],
+          ["workspaceId", metricWorkspaceId],
+          ["granularity", "hour"],
+          ["bucketStartAt", bucketStartAt],
+        ),
+      )
+      .unique()) as GenericRow | null
+
+    if (bucket) {
+      await ctx.db.patch(
+        "systemMetricBuckets",
+        bucket._id as SystemMetricBucketId,
+        {
+          count: (bucket.count as number) + 1,
+          maximum: Math.max(bucket.maximum as number, 1),
+          minimum: Math.min(bucket.minimum as number, 1),
+          sum: (bucket.sum as number) + 1,
+          updatedAt: input.updatedAt,
+          value: (bucket.value as number) + 1,
+        },
+      )
+      continue
+    }
+
+    await ctx.db.insert("systemMetricBuckets", {
+      bucketEndAt,
+      bucketStartAt,
+      count: 1,
+      granularity: "hour",
+      maximum: 1,
+      metric: input.metric,
+      minimum: 1,
+      scope,
+      sum: 1,
+      updatedAt: input.updatedAt,
+      value: 1,
+      ...(metricWorkspaceId === undefined
+        ? {}
+        : { workspaceId: metricWorkspaceId }),
+    })
+  }
+}

@@ -352,6 +352,21 @@ describe("admin metrics", () => {
           workspaceId: bootstrap.workspaceId,
         },
         {
+          metric: "mentions_ingested_platform:x",
+          scope: "global",
+          value: 1,
+        },
+        {
+          metric: "mentions_ingested_platform:reddit",
+          scope: "global",
+          value: 1,
+        },
+        {
+          metric: `mentions_categorized:${String(categoryId)}`,
+          scope: "global",
+          value: 1,
+        },
+        {
           metric: "email_delivery_delivered",
           scope: "global",
           value: 2,
@@ -433,7 +448,7 @@ describe("admin metrics", () => {
     expect(result.categoryBreakdown).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ count: 1 }),
-        { category: "Uncategorized", count: 1 },
+        { category: "Uncategorized", count: 4 },
       ]),
     )
     expect(result.categorization).toEqual({

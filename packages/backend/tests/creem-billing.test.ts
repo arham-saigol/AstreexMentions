@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest"
 
 import {
+  canReconcileBillingWorkspace,
   createUsagePlanSnapshot,
   entitlementForCreemSubscriptionStatus,
   insertCreemBillingEventIdempotently,
@@ -9,6 +10,14 @@ import {
 } from "../convex/lib/creemBilling"
 
 describe("Creem billing contract", () => {
+  it("continues webhook reconciliation while deletion is pending", () => {
+    expect(
+      canReconcileBillingWorkspace({ deletionPendingAt: Date.now() }),
+    ).toBe(true)
+    expect(canReconcileBillingWorkspace({ deletedAt: Date.now() })).toBe(false)
+    expect(canReconcileBillingWorkspace(null)).toBe(false)
+  })
+
   it("retains every documented state and future non-empty states", () => {
     expect(KNOWN_CREEM_SUBSCRIPTION_STATUSES).toEqual([
       "active",

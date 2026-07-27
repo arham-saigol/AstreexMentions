@@ -15,6 +15,7 @@ import {
   internalMutationReference,
   internalQueryReference,
 } from "../lib/functionReferences"
+import { canReconcileBillingWorkspace } from "../lib/creemBilling"
 import { indexAtMost, withoutUndefinedValues } from "../lib/jobRuntime"
 import {
   env,
@@ -323,11 +324,7 @@ async function findWorkspaceForNewSubscription(
   } catch {
     return null
   }
-  if (
-    !workspace ||
-    workspace.deletedAt !== undefined ||
-    workspace.deletionPendingAt !== undefined
-  ) {
+  if (!canReconcileBillingWorkspace(workspace)) {
     return null
   }
 
@@ -563,11 +560,7 @@ async function applyCheckoutEvent(
   }
   const workspaceId = checkout.workspaceId as WorkspaceId
   const workspace = await ctx.db.get("workspaces", workspaceId)
-  if (
-    !workspace ||
-    workspace.deletedAt !== undefined ||
-    workspace.deletionPendingAt !== undefined
-  ) {
+  if (!canReconcileBillingWorkspace(workspace)) {
     return { kind: "pending", workspaceId }
   }
   if (event.object.status !== "completed") {
@@ -633,11 +626,7 @@ async function applySubscriptionEvent(
     }
   }
   const workspace = await ctx.db.get("workspaces", workspaceId)
-  if (
-    !workspace ||
-    workspace.deletedAt !== undefined ||
-    workspace.deletionPendingAt !== undefined
-  ) {
+  if (!canReconcileBillingWorkspace(workspace)) {
     return { kind: "pending", workspaceId }
   }
 

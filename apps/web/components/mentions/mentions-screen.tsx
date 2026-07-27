@@ -455,6 +455,11 @@ export function MentionsScreen() {
     search.trim().length > 0 ||
     mentionFilterCount(filters) > 0 ||
     selectedViewId !== null
+  const paginationAvailable =
+    cursorHistory.length > 0 ||
+    (mentionsResult.state === "ready" &&
+      !mentionsResult.data.isDone &&
+      Boolean(mentionsResult.data.nextCursor))
 
   return (
     <div>
@@ -631,51 +636,52 @@ export function MentionsScreen() {
                     />
                   ))}
                 </div>
-
-                <nav
-                  aria-label="Mentions pagination"
-                  className="mt-5 flex items-center justify-between gap-4"
-                >
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={cursorHistory.length === 0}
-                    onClick={() => {
-                      const previous = cursorHistory.at(-1)
-                      setCursor(previous)
-                      setCursorHistory((current) => current.slice(0, -1))
-                    }}
-                  >
-                    <ArrowLeftIcon aria-hidden="true" />
-                    Previous
-                  </Button>
-                  <span className="text-muted-foreground text-xs">
-                    Page {cursorHistory.length + 1}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={
-                      mentionsResult.state !== "ready" ||
-                      mentionsResult.data.isDone ||
-                      !mentionsResult.data.nextCursor
-                    }
-                    onClick={() => {
-                      if (
-                        mentionsResult.state !== "ready" ||
-                        !mentionsResult.data.nextCursor
-                      ) {
-                        return
-                      }
-                      setCursorHistory((current) => [...current, cursor])
-                      setCursor(mentionsResult.data.nextCursor ?? undefined)
-                    }}
-                  >
-                    Next
-                    <ArrowRightIcon aria-hidden="true" />
-                  </Button>
-                </nav>
               </>
+            )}
+            {paginationAvailable && (
+              <nav
+                aria-label="Mentions pagination"
+                className="mt-5 flex items-center justify-between gap-4"
+              >
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={cursorHistory.length === 0}
+                  onClick={() => {
+                    const previous = cursorHistory.at(-1)
+                    setCursor(previous)
+                    setCursorHistory((current) => current.slice(0, -1))
+                  }}
+                >
+                  <ArrowLeftIcon aria-hidden="true" />
+                  Previous
+                </Button>
+                <span className="text-muted-foreground text-xs">
+                  Page {cursorHistory.length + 1}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={
+                    mentionsResult.state !== "ready" ||
+                    mentionsResult.data.isDone ||
+                    !mentionsResult.data.nextCursor
+                  }
+                  onClick={() => {
+                    if (
+                      mentionsResult.state !== "ready" ||
+                      !mentionsResult.data.nextCursor
+                    ) {
+                      return
+                    }
+                    setCursorHistory((current) => [...current, cursor])
+                    setCursor(mentionsResult.data.nextCursor ?? undefined)
+                  }}
+                >
+                  Next
+                  <ArrowRightIcon aria-hidden="true" />
+                </Button>
+              </nav>
             )}
           </div>
         </>

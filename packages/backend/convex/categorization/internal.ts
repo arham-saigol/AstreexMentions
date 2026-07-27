@@ -12,6 +12,8 @@ import {
   internalQueryReference,
 } from "../lib/functionReferences"
 import { indexAtMost } from "../lib/jobRuntime"
+import { incrementHourlySystemMetric } from "../lib/systemMetricBuckets"
+import { categorizedMentionMetric } from "../ingestion/model"
 import {
   indexEquals,
   internalMutation,
@@ -879,6 +881,13 @@ export const applyCategorizationBatch = internalMutation({
       if (!result || !categoryId) {
         throw new TypeError("Categorization result cannot be applied")
       }
+      const mention = (await ctx.db.get(
+        "mentions",
+        mentionId,
+      )) as GenericRow | null
+      if (!mention || mention.workspaceId !== batch.workspaceId) {
+        throw new TypeError("Categorization mention is unavailable")
+      }
       await ctx.db.patch("mentions", mentionId, {
         analysisState: "completed",
         categoryId,
@@ -892,6 +901,13 @@ export const applyCategorizationBatch = internalMutation({
         nextAttemptAt: undefined,
         status: "completed",
         updatedAt: now,
+      })
+      await incrementHourlySystemMetric(ctx, {
+        bucketAt: mention.firstSeenAt as number,
+        metric: categorizedMentionMetric(String(categoryId)),
+        scope: "global",
+        updatedAt: now,
+        workspaceId: batch.workspaceId,
       })
     }
     await finishProviderRun(

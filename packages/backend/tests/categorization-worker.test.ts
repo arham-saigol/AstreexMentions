@@ -35,6 +35,10 @@ const categorizationTestSchema = defineSchema({
   providerRuns: defineTable(v.any()).index("by_idempotency_key", [
     "idempotencyKey",
   ]),
+  systemMetricBuckets: defineTable(v.any()).index(
+    "by_metric_scope_workspace_granularity_and_bucket",
+    ["metric", "scope", "workspaceId", "granularity", "bucketStartAt"],
+  ),
   usageCycles: defineTable(v.any()),
   workspaces: defineTable(v.any()),
 })
@@ -175,6 +179,7 @@ async function seedCategorization(
       const mentionId = await ctx.db.insert("mentions", {
         analysisState: "pending",
         body: `${mentionFixture.body} Fixture ${index}.`,
+        firstSeenAt: NOW - 1_000 + index,
         title: mentionFixture.title,
         updatedAt: NOW - 1_000 + index,
         workspaceId,
@@ -441,6 +446,16 @@ describe("durable DeepSeek categorization worker", () => {
       completed: 1,
       state: "completed",
     })
+    const categoryMetrics = await t.run(
+      async (ctx) => await ctx.db.query("systemMetricBuckets").collect(),
+    )
+    expect(categoryMetrics).toEqual([
+      expect.objectContaining({
+        metric: `mentions_categorized:${String(seeded.categories[0]!.id)}`,
+        scope: "global",
+        value: 1,
+      }),
+    ])
 
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined
     const body = JSON.parse(String(init?.body)) as Record<string, unknown>
