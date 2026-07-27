@@ -376,6 +376,11 @@ export default defineSchema({
     .index("by_idempotency_key", ["idempotencyKey"])
     .index("by_provider_session", ["provider", "providerCheckoutSessionId"])
     .index("by_workspace_and_created_at", ["workspaceId", "createdAt"])
+    .index("by_workspace_status_and_expires_at", [
+      "workspaceId",
+      "status",
+      "expiresAt",
+    ])
     .index("by_user_and_created_at", ["requestedByUserId", "createdAt"])
     .index("by_status_and_expires_at", ["status", "expiresAt"])
     .index("by_status_and_created_at", ["status", "createdAt"]),

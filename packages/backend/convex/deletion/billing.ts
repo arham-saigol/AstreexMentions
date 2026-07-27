@@ -32,7 +32,8 @@ export async function readDeletionBillingSnapshot(
 ): Promise<DeletionBillingSnapshot> {
   const [
     subscriptionRows,
-    checkoutRows,
+    openCheckoutRows,
+    completeCheckoutRows,
     runningProviderRuns,
     pendingBillingEventRows,
     leasedBillingEventRows,
@@ -44,10 +45,24 @@ export async function readDeletionBillingSnapshot(
       .collect(),
     db
       .query("billingCheckouts")
-      .withIndex("by_workspace_and_created_at", (q) =>
-        q.eq("workspaceId", workspaceId),
+      .withIndex("by_workspace_status_and_expires_at", (q) =>
+        indexGreaterThanOrEqual(
+          indexEquals(q, ["workspaceId", workspaceId], ["status", "open"]),
+          "expiresAt",
+          checkedAt + 1,
+        ),
       )
-      .collect(),
+      .take(1),
+    db
+      .query("billingCheckouts")
+      .withIndex("by_workspace_status_and_expires_at", (q) =>
+        indexGreaterThanOrEqual(
+          indexEquals(q, ["workspaceId", workspaceId], ["status", "complete"]),
+          "expiresAt",
+          checkedAt + 1,
+        ),
+      )
+      .take(1),
     db
       .query("providerRuns")
       .withIndex("by_workspace_status_and_started_at", (q) =>
@@ -92,10 +107,12 @@ export async function readDeletionBillingSnapshot(
   const guard = evaluateCompositeDeletionBillingGuard({
     activeSideEffectCount: activeEmailOutboxLeases.length,
     checkedAt,
-    checkouts: checkoutRows.map((checkout) => ({
-      expiresAt: checkout.expiresAt as number,
-      status: checkout.status as string,
-    })),
+    checkouts: [...openCheckoutRows, ...completeCheckoutRows].map(
+      (checkout) => ({
+        expiresAt: checkout.expiresAt as number,
+        status: checkout.status as string,
+      }),
+    ),
     pendingBillingEventCount:
       pendingBillingEventRows.length + leasedBillingEventRows.length,
     providerConfigured: providerConfiguration.state === "configured",

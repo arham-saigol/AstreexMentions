@@ -31,10 +31,13 @@ const customerTestSchema = defineSchema({
     .index("by_idempotency_key", ["idempotencyKey"])
     .index("by_workspace_and_created_at", ["workspaceId", "createdAt"])
     .index("by_account_user_and_created_at", ["accountUserId", "createdAt"]),
-  billingCheckouts: defineTable(v.any()).index("by_workspace_and_created_at", [
-    "workspaceId",
-    "createdAt",
-  ]),
+  billingCheckouts: defineTable(v.any())
+    .index("by_workspace_and_created_at", ["workspaceId", "createdAt"])
+    .index("by_workspace_status_and_expires_at", [
+      "workspaceId",
+      "status",
+      "expiresAt",
+    ]),
   billingEvents: defineTable(v.any())
     .index("by_status_and_received_at", ["status", "receivedAt"])
     .index("by_workspace_and_received_at", ["workspaceId", "receivedAt"])

@@ -195,6 +195,11 @@ describe("complete Convex schema", () => {
       "status",
       "receivedAt",
     ])
+    expectIndex("billingCheckouts", "by_workspace_status_and_expires_at", [
+      "workspaceId",
+      "status",
+      "expiresAt",
+    ])
     expectIndex(
       "systemMetricBuckets",
       "by_metric_scope_workspace_granularity_and_bucket",
