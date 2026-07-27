@@ -73,6 +73,7 @@ export type CheckpointPagination =
   | {
       hasMore: boolean
       kind: "provider_pages"
+      pagesRequested: number
     }
 
 export type CheckpointObservation = {
@@ -500,7 +501,26 @@ export function planCheckpointTransition(input: {
     }
   }
 
-  // FetchLayer pagination is provider-managed and has no safe client cursor.
+  if (input.pagination.kind === "provider_pages" && input.pagination.hasMore) {
+    const pagesRequested = input.pagination.pagesRequested
+    if (
+      !Number.isSafeInteger(pagesRequested) ||
+      pagesRequested <= 0 ||
+      pagesRequested >= Number.MAX_SAFE_INTEGER
+    ) {
+      throw new TrackingSchedulingError(
+        "INVALID_CHECKPOINT",
+        "Provider-managed pagination must advance with a page count",
+      )
+    }
+    return {
+      checkpointVersion,
+      inProgressPage: pagesRequested + 1,
+      kind: "continue",
+      nextRunAt: input.scheduledFor,
+    }
+  }
+
   const observedAt = input.observation.newestPublishedAt
   if (observedAt !== undefined) {
     assertTimestamp(observedAt, "newestPublishedAt")

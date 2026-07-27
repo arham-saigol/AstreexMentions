@@ -82,7 +82,7 @@ async function searchProvider(
       }
       const input = {
         limit: MAX_INGESTION_CHUNK_SIZE,
-        pages: 1,
+        pages: context.page ?? 1,
         query: context.providerQuery,
         sort: "new" as const,
       }

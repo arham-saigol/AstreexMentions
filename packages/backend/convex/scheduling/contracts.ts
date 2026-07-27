@@ -58,7 +58,7 @@ const providerPagesPaginationSchema = z
   .object({
     hasMore: z.boolean(),
     kind: z.literal("provider_pages"),
-    pagesRequested: z.number().int().nonnegative().optional(),
+    pagesRequested: z.number().int().positive(),
     pagesScraped: z.number().int().nonnegative().optional(),
   })
   .strict()

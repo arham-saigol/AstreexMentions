@@ -260,9 +260,7 @@ function paginationObservation(
   return {
     hasMore: Boolean(response.nextPageUrl?.trim()),
     kind: "provider_pages",
-    ...((response.pagesRequested ?? input.pages) === undefined
-      ? {}
-      : { pagesRequested: response.pagesRequested ?? input.pages }),
+    pagesRequested: input.pages ?? 1,
     ...(response.pagesScraped === undefined
       ? {}
       : { pagesScraped: response.pagesScraped }),

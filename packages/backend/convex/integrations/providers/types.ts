@@ -86,7 +86,7 @@ export type CursorPaginationObservation = {
 export type ProviderPagesPaginationObservation = {
   hasMore: boolean
   kind: "provider_pages"
-  pagesRequested?: number | undefined
+  pagesRequested: number
   pagesScraped?: number | undefined
 }
 

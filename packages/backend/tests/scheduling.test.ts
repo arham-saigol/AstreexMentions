@@ -369,7 +369,30 @@ describe("deterministic retry and checkpoint transitions", () => {
     })
   })
 
-  it("settles terminal and provider-managed pages, clears work in persistence, and advances exactly", () => {
+  it("continues provider-managed pages by increasing the requested depth", () => {
+    expect(
+      planCheckpointTransition({
+        checkpointVersion: 4,
+        completedAt: fixture.now,
+        intervalMs: HOUR_MS,
+        observation: {},
+        pagination: {
+          hasMore: true,
+          kind: "provider_pages",
+          pagesRequested: 2,
+        },
+        scheduledFor: fixture.now - MINUTE_MS,
+        windowEndAt: fixture.now,
+      }),
+    ).toEqual({
+      checkpointVersion: 5,
+      inProgressPage: 3,
+      kind: "continue",
+      nextRunAt: fixture.now - MINUTE_MS,
+    })
+  })
+
+  it("settles terminal pages, clears work in persistence, and advances exactly", () => {
     const transition = planCheckpointTransition({
       checkpointVersion: 4,
       completedAt: fixture.now + MINUTE_MS,
@@ -378,7 +401,11 @@ describe("deterministic retry and checkpoint transitions", () => {
         newestProviderItemId: "reddit-42",
         newestPublishedAt: fixture.now - 10_000,
       },
-      pagination: { hasMore: true, kind: "provider_pages" },
+      pagination: {
+        hasMore: false,
+        kind: "provider_pages",
+        pagesRequested: 2,
+      },
       scheduledFor: fixture.now,
       settledWatermarkAt: fixture.now - HOUR_MS,
       windowEndAt: fixture.now,
@@ -419,6 +446,19 @@ describe("configuration and normalized result contracts", () => {
           items: [],
           inventedProviderField: true,
           pagination: { hasMore: false, kind: "cursor" },
+          state: "ok",
+        }),
+      ),
+    ).toThrowError(expect.objectContaining({ code: "INVALID_RESULT" }))
+  })
+
+  it("requires provider-managed pagination to identify its requested depth", () => {
+    expect(() =>
+      parseProviderSearchResultJson(
+        JSON.stringify({
+          checkpoint: {},
+          items: [],
+          pagination: { hasMore: true, kind: "provider_pages" },
           state: "ok",
         }),
       ),
@@ -479,6 +519,7 @@ describe("Convex dispatcher boundary", () => {
     expect(contextRead).toBeGreaterThan(-1)
     expect(configRead).toBeGreaterThan(contextRead)
     expect(providerCall).toBeGreaterThan(configRead)
+    expect(actionsSource).toContain("pages: context.page ?? 1")
 
     for (const guard of [
       'keyword.status !== "active"',

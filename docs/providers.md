@@ -92,11 +92,11 @@ The shared request body accepts:
 - optional `subreddit`;
 - optional `time`: `all`, `year`, `month`, `week`, `day`, or `hour`.
 
-The scheduler sends `limit: 25`, `pages: 1`, and `sort: "new"` independently to posts and comments.
+The scheduler sends `limit: 25` and `sort: "new"` independently to posts and comments. It begins with `pages: 1`; while FetchLayer reports another page, it durably increases the requested page depth and reruns the same search window. Previously returned items are deduplicated during ingestion.
 
 Posts require enough data to derive stable ID, title/body, creation time, and Reddit permalink. Comments require stable ID, body, creation time, and permalink. Permalinks are accepted only for `reddit.com` or its subdomains and are canonicalized to `https://www.reddit.com/...`.
 
-FetchLayer reports provider-managed pagination such as `nextPageUrl`, `pagesRequested`, and `pagesScraped`, but the documented search input intentionally has no cursor. Astreex records `hasMore` for observation but does not follow `nextPageUrl`; each scheduler execution settles its current window. This is a known coverage limitation compared with cursor/page-resumable providers.
+FetchLayer reports provider-managed pagination such as `nextPageUrl`, `pagesRequested`, and `pagesScraped`, but the documented search input intentionally has no cursor. Astreex does not fetch the provider-supplied URL. Instead, it persists the page depth and increases `pages` until FetchLayer reports no next page; only then does it settle the current window.
 
 `FETCHLAYER_REQUESTS_PER_MINUTE` defaults to 30 and sets both the per-minute claim cap and the hourly budget multiplier.
 

@@ -142,7 +142,7 @@ Cursor and page providers continue as follows:
 - continuation increments `checkpointVersion` but keeps the same scheduled `nextRunAt`, cursor window, and cadence boundary;
 - the terminal page clears in-progress cursor/page/window state.
 
-FetchLayer exposes provider-managed pages but no safe client cursor. Its `provider_pages` result therefore settles the current window even when `nextPageUrl` indicates more provider data; the next scheduled run begins from the settled watermark rather than following that URL.
+FetchLayer exposes provider-managed pages but no safe client cursor. When `nextPageUrl` indicates more provider data, the scheduler persists an incremented page depth and repeats the same window with a larger `pages` request. Ingestion deduplicates the repeated prefix, and the window settles only after FetchLayer reports no next page.
 
 A settled watermark is the maximum of the previous watermark, newest observed publication time, and window end. It never moves backward.
 
@@ -209,7 +209,7 @@ See [providers.md](./providers.md) for the exact Resend transport and webhook pr
 ## Current limitations
 
 - Categorization has no admin requeue/repair control or configurable provider budget/circuit. A broken enabled-category catalog leaves due jobs pending until the catalog is repaired.
-- FetchLayer pagination cannot be resumed by a client cursor; one scheduled request asks for one provider-managed page.
+- FetchLayer pagination is resumed by durably increasing the provider-managed page depth; repeated prefix items are deduplicated.
 - Fixture-backed and `convex-test` suites validate deterministic worker behavior, not provider credentials, quotas, payment state, DNS, or webhook delivery.
 
 ## Durable account deletion
