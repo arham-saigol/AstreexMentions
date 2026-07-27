@@ -37,6 +37,8 @@ const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const MENTION_METRIC = "mentions_ingested"
 const DELIVERY_METRIC_PREFIX = "email_delivery_"
 const MAX_ACTIVE_WORKSPACE_COUNT = 10_000
+const MAX_FEATURE_REQUEST_SEARCH_RESULTS = 500
+const FEATURE_REQUEST_SEARCH_CURSOR_PREFIX = "fr1:"
 
 const featureRequestStatusValidator = v.union(
   v.literal("new"),
@@ -230,6 +232,14 @@ type WorkspaceId = GenericId<"workspaces">
 type FeatureRequestStatus =
   "new" | "planned" | "in_progress" | "completed" | "declined"
 type ChangelogStatus = "draft" | "published"
+type FeatureRequestSort = "newest" | "oldest"
+type FeatureRequestSearchCursor = {
+  offset: number
+  query: string
+  sort: FeatureRequestSort
+  status: FeatureRequestStatus | null
+  version: 1
+}
 
 type ProviderAggregate = {
   failureCount: number
@@ -245,6 +255,59 @@ type ProviderAggregate = {
 
 function adminError(code: string, message: string): never {
   throw new ConvexError({ code, message })
+}
+
+function featureRequestSearchCursorError(): never {
+  adminError("INVALID_ADMIN_INPUT", "Feature request cursor is invalid")
+}
+
+function encodeFeatureRequestSearchCursor(
+  cursor: FeatureRequestSearchCursor,
+): string {
+  return `${FEATURE_REQUEST_SEARCH_CURSOR_PREFIX}${encodeURIComponent(
+    JSON.stringify(cursor),
+  )}`
+}
+
+function decodeFeatureRequestSearchCursor(
+  cursor: string,
+  expected: Omit<FeatureRequestSearchCursor, "offset" | "version">,
+): FeatureRequestSearchCursor {
+  if (
+    cursor.length > 2_000 ||
+    !cursor.startsWith(FEATURE_REQUEST_SEARCH_CURSOR_PREFIX)
+  ) {
+    featureRequestSearchCursorError()
+  }
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(
+      decodeURIComponent(
+        cursor.slice(FEATURE_REQUEST_SEARCH_CURSOR_PREFIX.length),
+      ),
+    )
+  } catch {
+    featureRequestSearchCursorError()
+  }
+  if (
+    typeof parsed !== "object" ||
+    parsed === null ||
+    !("version" in parsed) ||
+    parsed.version !== 1 ||
+    !("offset" in parsed) ||
+    !Number.isSafeInteger(parsed.offset) ||
+    (parsed.offset as number) < 0 ||
+    (parsed.offset as number) > MAX_FEATURE_REQUEST_SEARCH_RESULTS ||
+    !("query" in parsed) ||
+    parsed.query !== expected.query ||
+    !("sort" in parsed) ||
+    parsed.sort !== expected.sort ||
+    !("status" in parsed) ||
+    parsed.status !== expected.status
+  ) {
+    featureRequestSearchCursorError()
+  }
+  return parsed as FeatureRequestSearchCursor
 }
 
 function optionalTrimmedText(
@@ -1203,7 +1266,8 @@ export const listFeatureRequests = adminQuery({
         "Feature request page limit must be 1 to 50",
       )
     }
-    const order = args.sort === "oldest" ? "asc" : "desc"
+    const sort = args.sort ?? "newest"
+    const order = sort === "oldest" ? "asc" : "desc"
     const searchQuery = args.query?.trim()
     if (searchQuery !== undefined && searchQuery.length > 160) {
       adminError(
@@ -1211,27 +1275,67 @@ export const listFeatureRequests = adminQuery({
         "Feature request search must not exceed 160 characters",
       )
     }
-    const result = searchQuery
+    if (searchQuery) {
+      const matches = await ctx.db
+        .query("featureRequests")
+        .withSearchIndex("search_content", (q) => {
+          const search = q.search("searchText", searchQuery)
+          return args.status ? search.eq("status", args.status) : search
+        })
+        .take(MAX_FEATURE_REQUEST_SEARCH_RESULTS + 1)
+      if (matches.length > MAX_FEATURE_REQUEST_SEARCH_RESULTS) {
+        adminError(
+          "FEATURE_REQUEST_SEARCH_TOO_BROAD",
+          "Feature request search matched too many rows; narrow the search",
+        )
+      }
+      matches.sort((left, right) => {
+        const chronological =
+          (left.createdAt as number) - (right.createdAt as number)
+        const stable =
+          chronological ||
+          String(left._id).localeCompare(String(right._id), "en")
+        return sort === "oldest" ? stable : -stable
+      })
+      const cursorInput = {
+        query: searchQuery,
+        sort,
+        status: (args.status ?? null) as FeatureRequestStatus | null,
+      }
+      const offset = args.cursor
+        ? decodeFeatureRequestSearchCursor(args.cursor, cursorInput).offset
+        : 0
+      const page = matches.slice(offset, offset + limit)
+      const nextOffset = offset + page.length
+      return {
+        items: await Promise.all(
+          page.map(async (row) => await formatFeatureRequest(ctx, row)),
+        ),
+        ...(nextOffset >= matches.length
+          ? {}
+          : {
+              nextCursor: encodeFeatureRequestSearchCursor({
+                ...cursorInput,
+                offset: nextOffset,
+                version: 1,
+              }),
+            }),
+      }
+    }
+
+    const result = args.status
       ? await ctx.db
           .query("featureRequests")
-          .withSearchIndex("search_content", (q) => {
-            const search = q.search("searchText", searchQuery)
-            return args.status ? search.eq("status", args.status) : search
-          })
+          .withIndex("by_status_and_created_at", (q) =>
+            indexEquals(q, ["status", args.status]),
+          )
+          .order(order)
           .paginate({ cursor: args.cursor ?? null, numItems: limit })
-      : args.status
-        ? await ctx.db
-            .query("featureRequests")
-            .withIndex("by_status_and_created_at", (q) =>
-              indexEquals(q, ["status", args.status]),
-            )
-            .order(order)
-            .paginate({ cursor: args.cursor ?? null, numItems: limit })
-        : await ctx.db
-            .query("featureRequests")
-            .withIndex("by_created_at")
-            .order(order)
-            .paginate({ cursor: args.cursor ?? null, numItems: limit })
+      : await ctx.db
+          .query("featureRequests")
+          .withIndex("by_created_at")
+          .order(order)
+          .paginate({ cursor: args.cursor ?? null, numItems: limit })
 
     return {
       items: await Promise.all(

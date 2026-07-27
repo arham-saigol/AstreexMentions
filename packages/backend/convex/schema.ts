@@ -895,6 +895,11 @@ export default defineSchema({
       "createdAt",
     ])
     .index("by_workspace_and_created_at", ["workspaceId", "createdAt"])
+    .index("by_workspace_creator_and_created_at", [
+      "workspaceId",
+      "createdByUserId",
+      "createdAt",
+    ])
     .index("by_creator_and_created_at", ["createdByUserId", "createdAt"])
     .index("by_created_at", ["createdAt"])
     .index("by_status_and_created_at", ["status", "createdAt"])

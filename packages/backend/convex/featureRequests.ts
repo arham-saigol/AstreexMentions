@@ -2,10 +2,12 @@ import type { GenericId } from "convex/values"
 import { ConvexError, v } from "convex/values"
 
 import { authenticatedMutation, authenticatedQuery } from "./lib/authorization"
+import { indexEquals } from "./server"
 import { resolveCurrentCustomer } from "./users"
 
 const MAX_TITLE_LENGTH = 120
 const MAX_BODY_LENGTH = 2_000
+const MAX_CUSTOMER_FEATURE_REQUESTS = 100
 
 const featureRequestStatusValidator = v.union(
   v.literal("new"),
@@ -145,14 +147,16 @@ export const listMyFeatureRequests = authenticatedQuery({
     )
     const rows = await ctx.db
       .query("featureRequests")
-      .withIndex("by_creator_and_created_at", (q) =>
-        q.eq("createdByUserId", viewer.id),
+      .withIndex("by_workspace_creator_and_created_at", (q) =>
+        indexEquals(
+          q,
+          ["workspaceId", workspace.id],
+          ["createdByUserId", viewer.id],
+        ),
       )
       .order("desc")
-      .collect()
+      .take(MAX_CUSTOMER_FEATURE_REQUESTS)
 
-    return rows
-      .filter((row) => row.workspaceId === workspace.id)
-      .map((row) => publicFeatureRequest(row))
+    return rows.map((row) => publicFeatureRequest(row))
   },
 })

@@ -219,6 +219,11 @@ describe("complete Convex schema", () => {
       "planId",
       "lastSyncedAt",
     ])
+    expectIndex("featureRequests", "by_workspace_creator_and_created_at", [
+      "workspaceId",
+      "createdByUserId",
+      "createdAt",
+    ])
     expectIndex(
       "providerRuns",
       "by_workspace_provider_operation_status_and_started_at",

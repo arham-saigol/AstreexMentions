@@ -33,6 +33,11 @@ const schema = defineSchema({
     .index("by_kind_and_created_at", ["kind", "createdAt"])
     .index("by_workspace_and_created_at", ["workspaceId", "createdAt"]),
   featureRequests: defineTable(v.any())
+    .index("by_workspace_creator_and_created_at", [
+      "workspaceId",
+      "createdByUserId",
+      "createdAt",
+    ])
     .index("by_creator_and_created_at", ["createdByUserId", "createdAt"])
     .index("by_created_at", ["createdAt"])
     .index("by_status_and_created_at", ["status", "createdAt"])
@@ -222,6 +227,31 @@ describe("customer feature request functions", () => {
         title: "x",
       }),
     ).rejects.toMatchObject({ data: { code: "INVALID_FEATURE_REQUEST" } })
+  })
+
+  it("bounds customer history to the newest feature requests", async () => {
+    const { bootstrap, customer, t } = await setup()
+    await t.run(async (ctx) => {
+      for (let index = 0; index < 105; index += 1) {
+        await ctx.db.insert("featureRequests", {
+          body: `Detailed retained feature request ${index}.`,
+          createdAt: index,
+          createdByUserId: bootstrap.userId,
+          searchText: `retained feature request ${index}`,
+          status: "new",
+          title: `Retained request ${index}`,
+          updatedAt: index,
+          workspaceId: bootstrap.workspaceId,
+        })
+      }
+    })
+
+    const rows = (await customer.query(listMyFeatureRequests, {})) as Array<{
+      title: string
+    }>
+    expect(rows).toHaveLength(100)
+    expect(rows[0]?.title).toBe("Retained request 104")
+    expect(rows.at(-1)?.title).toBe("Retained request 5")
   })
 })
 
@@ -463,6 +493,83 @@ describe("admin feature request and changelog functions", () => {
       "Buried needle request",
     ])
     expect(result.nextCursor).toBeUndefined()
+  })
+
+  it("sorts searched feature requests chronologically across cursor pages", async () => {
+    const { admin, customer, t } = await setup()
+    const seeded = await Promise.all(
+      [
+        { createdAt: 100, title: "Chronology marker older" },
+        { createdAt: 200, title: "Chronology marker middle" },
+        { createdAt: 300, title: "Chronology marker newer" },
+      ].map(async ({ createdAt, title }) => {
+        const created = (await customer.mutation(createFeatureRequest, {
+          description: `A sufficiently detailed description for ${title}.`,
+          title,
+        })) as { id: string }
+        return { createdAt, id: created.id, title }
+      }),
+    )
+    await t.run(async (ctx) => {
+      for (const request of seeded) {
+        const requestId = ctx.db.normalizeId("featureRequests", request.id)
+        expect(requestId).not.toBeNull()
+        await ctx.db.patch("featureRequests", requestId!, {
+          createdAt: request.createdAt,
+          updatedAt: request.createdAt,
+        })
+      }
+    })
+
+    const first = (await admin.query(listFeatureRequests, {
+      limit: 1,
+      query: "Chronology marker",
+      sort: "oldest",
+    })) as {
+      items: Array<{ title: string }>
+      nextCursor?: string
+    }
+    expect(first.items.map(({ title }) => title)).toEqual([
+      "Chronology marker older",
+    ])
+    expect(first.nextCursor).toEqual(expect.any(String))
+
+    const second = (await admin.query(listFeatureRequests, {
+      cursor: first.nextCursor,
+      limit: 1,
+      query: "Chronology marker",
+      sort: "oldest",
+    })) as {
+      items: Array<{ title: string }>
+      nextCursor?: string
+    }
+    expect(second.items.map(({ title }) => title)).toEqual([
+      "Chronology marker middle",
+    ])
+    expect(second.nextCursor).toEqual(expect.any(String))
+
+    const third = (await admin.query(listFeatureRequests, {
+      cursor: second.nextCursor,
+      limit: 1,
+      query: "Chronology marker",
+      sort: "oldest",
+    })) as {
+      items: Array<{ title: string }>
+      nextCursor?: string
+    }
+    expect(third.items.map(({ title }) => title)).toEqual([
+      "Chronology marker newer",
+    ])
+    expect(third.nextCursor).toBeUndefined()
+
+    await expect(
+      admin.query(listFeatureRequests, {
+        cursor: first.nextCursor,
+        limit: 1,
+        query: "Chronology marker",
+        sort: "newest",
+      }),
+    ).rejects.toMatchObject({ data: { code: "INVALID_ADMIN_INPUT" } })
   })
 })
 
