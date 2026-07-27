@@ -10,6 +10,7 @@ import {
   type PlanId,
   type TrackingSourceType,
 } from "./scheduling/model"
+import { finalizeInvalidatedTrackingProviderRun } from "./scheduling/providerRuns"
 import { indexEquals, type MutationCtx, type QueryCtx } from "./server"
 import { resolveCurrentCustomer } from "./users"
 
@@ -545,6 +546,12 @@ async function syncTrackingSources(
     const sourceType = source.sourceType as TrackingSourceType
     const sourceId = source._id as TrackingSourceId
     if (!desiredSet.has(sourceType) || retainedTypes.has(sourceType)) {
+      await finalizeInvalidatedTrackingProviderRun(ctx, {
+        errorCode: "source_deleted",
+        errorMessage: "Tracking source configuration was removed",
+        now: input.now,
+        source,
+      })
       await ctx.db.patch("trackingSources", sourceId, {
         deletedAt: input.now,
         inProgressCursor: undefined,
@@ -576,6 +583,22 @@ async function syncTrackingSources(
       !reactivating &&
       desiredState.status === "active" &&
       source.status === "error"
+    if (
+      providerQueryChanged ||
+      reactivating ||
+      desiredState.status !== "active"
+    ) {
+      await finalizeInvalidatedTrackingProviderRun(ctx, {
+        errorCode:
+          desiredState.status === "active" ? "source_changed" : "source_paused",
+        errorMessage:
+          desiredState.status === "active"
+            ? "Tracking source configuration changed"
+            : "Tracking source became ineligible",
+        now: input.now,
+        source,
+      })
+    }
 
     await ctx.db.patch("trackingSources", sourceId, {
       ...schedule,
@@ -691,6 +714,12 @@ export async function replaceWorkspaceKeywordConfiguration(
       if (source.status === "deleted" && source.deletedAt !== undefined) {
         continue
       }
+      await finalizeInvalidatedTrackingProviderRun(ctx, {
+        errorCode: "source_deleted",
+        errorMessage: "Keyword configuration was removed",
+        now,
+        source,
+      })
       await ctx.db.patch("trackingSources", source._id as TrackingSourceId, {
         deletedAt: now,
         inProgressCursor: undefined,
@@ -965,6 +994,12 @@ export const pauseKeyword = authenticatedMutation({
       if (source.status === "deleted" || source.deletedAt !== undefined) {
         continue
       }
+      await finalizeInvalidatedTrackingProviderRun(ctx, {
+        errorCode: "source_paused",
+        errorMessage: "Keyword was paused by the user",
+        now,
+        source,
+      })
       await ctx.db.patch("trackingSources", source._id as TrackingSourceId, {
         leaseExpiresAt: undefined,
         leaseToken: undefined,
@@ -1009,6 +1044,12 @@ export const resumeKeyword = authenticatedMutation({
       if (source.status === "deleted" || source.deletedAt !== undefined) {
         continue
       }
+      await finalizeInvalidatedTrackingProviderRun(ctx, {
+        errorCode: "source_changed",
+        errorMessage: "Keyword was resumed with a new tracking lease",
+        now,
+        source,
+      })
       await ctx.db.patch("trackingSources", source._id as TrackingSourceId, {
         leaseExpiresAt: undefined,
         leaseToken: undefined,
@@ -1047,6 +1088,12 @@ export const deleteKeyword = authenticatedMutation({
       if (source.status === "deleted" && source.deletedAt !== undefined) {
         continue
       }
+      await finalizeInvalidatedTrackingProviderRun(ctx, {
+        errorCode: "source_deleted",
+        errorMessage: "Keyword was deleted",
+        now,
+        source,
+      })
       await ctx.db.patch("trackingSources", source._id as TrackingSourceId, {
         deletedAt: now,
         inProgressCursor: undefined,

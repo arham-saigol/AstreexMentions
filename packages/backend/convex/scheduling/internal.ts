@@ -38,6 +38,11 @@ import {
 } from "./model"
 import { parseProviderSearchResultJson } from "./contracts"
 import { createProviderIngestionChunks } from "./ingestion"
+import {
+  findTrackingProviderRun,
+  finishTrackingProviderRun,
+  trackingProviderRunIdempotencyKey,
+} from "./providerRuns"
 
 const releaseReasonValidator = v.union(
   v.literal("keyword_inactive"),
@@ -52,8 +57,6 @@ const MAX_DUE_SCAN = 256
 type TrackingSourceId = GenericId<"trackingSources">
 type KeywordId = GenericId<"keywords">
 type WorkspaceId = GenericId<"workspaces">
-type ProviderRunId = GenericId<"providerRuns">
-type ProviderMetricBucketId = GenericId<"providerMetricBuckets">
 type GenericRow = Record<string, unknown> & { _id: GenericId<string> }
 type LeaseArguments = {
   leaseExpiresAt: number
@@ -418,12 +421,15 @@ async function claimProviderSources(
       schedule.leaseExpiresAt <= now &&
       schedule.leaseVersion > 0
     ) {
-      const expiredRun = await findProviderRun(
+      const expiredRun = await findTrackingProviderRun(
         ctx,
-        providerRunIdempotencyKey(trackingSourceId, schedule.leaseVersion),
+        trackingProviderRunIdempotencyKey(
+          trackingSourceId,
+          schedule.leaseVersion,
+        ),
       )
       if (expiredRun?.status === "running") {
-        await finishProviderRun(
+        await finishTrackingProviderRun(
           ctx,
           {
             durationMs: Math.max(0, now - (expiredRun.startedAt as number)),
@@ -587,25 +593,6 @@ export const releaseIneligibleTrackingLease = internalMutation({
   },
 })
 
-function providerRunIdempotencyKey(
-  trackingSourceId: TrackingSourceId,
-  leaseVersion: number,
-): string {
-  return `tracking:${String(trackingSourceId)}:${leaseVersion}`
-}
-
-async function findProviderRun(
-  ctx: MutationCtx,
-  idempotencyKey: string,
-): Promise<GenericRow | null> {
-  return (await ctx.db
-    .query("providerRuns")
-    .withIndex("by_idempotency_key", (q) =>
-      q.eq("idempotencyKey", idempotencyKey),
-    )
-    .unique()) as GenericRow | null
-}
-
 export const startTrackingProviderRun = internalMutation({
   args: {
     leaseExpiresAt: v.number(),
@@ -623,11 +610,11 @@ export const startTrackingProviderRun = internalMutation({
       return { state: "stale_lease" as const }
     }
 
-    const idempotencyKey = providerRunIdempotencyKey(
+    const idempotencyKey = trackingProviderRunIdempotencyKey(
       args.trackingSourceId,
       args.leaseVersion,
     )
-    const existing = await findProviderRun(ctx, idempotencyKey)
+    const existing = await findTrackingProviderRun(ctx, idempotencyKey)
     if (existing) {
       return { state: "duplicate" as const }
     }
@@ -655,118 +642,6 @@ export const startTrackingProviderRun = internalMutation({
     return { state: "started" as const }
   },
 })
-
-async function updateProviderMetric(
-  ctx: MutationCtx,
-  input: {
-    durationMs: number
-    errorCode?: string | undefined
-    inputCount: number
-    operation: string
-    outputCount: number
-    provider: TrackingSourceType
-    retry: boolean
-    status: "failed" | "succeeded"
-  },
-  now: number,
-): Promise<void> {
-  const bucketStartAt = Math.floor(now / HOUR_MS) * HOUR_MS
-  const bucketEndAt = bucketStartAt + HOUR_MS
-  const bucket = (await ctx.db
-    .query("providerMetricBuckets")
-    .withIndex("by_provider_operation_granularity_and_bucket", (q) =>
-      indexEquals(
-        q,
-        ["provider", input.provider],
-        ["operation", input.operation],
-        ["granularity", "hour"],
-        ["bucketStartAt", bucketStartAt],
-      ),
-    )
-    .unique()) as GenericRow | null
-  const durationMs = Math.max(0, Math.round(input.durationMs))
-  const successIncrement = input.status === "succeeded" ? 1 : 0
-  const failureIncrement = input.status === "failed" ? 1 : 0
-  const rateLimitIncrement = input.errorCode === "rate_limit" ? 1 : 0
-  const retryIncrement = input.retry ? 1 : 0
-
-  if (bucket) {
-    await ctx.db.patch(
-      "providerMetricBuckets",
-      bucket._id as ProviderMetricBucketId,
-      {
-        failureCount: (bucket.failureCount as number) + failureIncrement,
-        inputItemCount: (bucket.inputItemCount as number) + input.inputCount,
-        latencyMaxMs: Math.max(bucket.latencyMaxMs as number, durationMs),
-        latencyTotalMs: (bucket.latencyTotalMs as number) + durationMs,
-        outputItemCount: (bucket.outputItemCount as number) + input.outputCount,
-        rateLimitedCount:
-          (bucket.rateLimitedCount as number) + rateLimitIncrement,
-        requestCount: (bucket.requestCount as number) + 1,
-        retryCount: (bucket.retryCount as number) + retryIncrement,
-        successCount: (bucket.successCount as number) + successIncrement,
-        updatedAt: now,
-      },
-    )
-    return
-  }
-
-  await ctx.db.insert("providerMetricBuckets", {
-    bucketEndAt,
-    bucketStartAt,
-    failureCount: failureIncrement,
-    granularity: "hour",
-    inputItemCount: input.inputCount,
-    latencyMaxMs: durationMs,
-    latencyTotalMs: durationMs,
-    operation: input.operation,
-    outputItemCount: input.outputCount,
-    provider: input.provider,
-    rateLimitedCount: rateLimitIncrement,
-    requestCount: 1,
-    retryCount: retryIncrement,
-    successCount: successIncrement,
-    updatedAt: now,
-  })
-}
-
-async function finishProviderRun(
-  ctx: MutationCtx,
-  input: {
-    durationMs: number
-    errorCode?: string | undefined
-    errorMessage?: string | undefined
-    outputCount: number
-    run: GenericRow
-    status: "failed" | "succeeded"
-  },
-  now: number,
-): Promise<void> {
-  const durationMs = Math.max(0, Math.round(input.durationMs))
-  await ctx.db.patch("providerRuns", input.run._id as ProviderRunId, {
-    durationMs,
-    errorCode: input.errorCode,
-    errorMessage: input.errorMessage,
-    finishedAt: now,
-    outputCount: input.outputCount,
-    status: input.status,
-    updatedAt: now,
-  })
-  await updateProviderMetric(
-    ctx,
-    {
-      durationMs,
-      errorCode: input.errorCode,
-      inputCount: input.run.inputCount as number,
-      operation: input.run.operation as string,
-      outputCount: input.outputCount,
-      provider: input.run.provider as TrackingSourceType,
-      retry: input.run.trigger === "retry",
-      status: input.status,
-    },
-    now,
-  )
-}
 
 type ProviderPageIngestion = {
   associationsAdded: number
@@ -848,9 +723,12 @@ export const applyTrackingProviderPage = internalMutation({
     if (!currentLeaseMatches(source, leaseFromArguments(args), now)) {
       return { state: "stale_lease" as const }
     }
-    const run = await findProviderRun(
+    const run = await findTrackingProviderRun(
       ctx,
-      providerRunIdempotencyKey(args.trackingSourceId, args.leaseVersion),
+      trackingProviderRunIdempotencyKey(
+        args.trackingSourceId,
+        args.leaseVersion,
+      ),
     )
     if (!run || run.status !== "running") {
       return { state: "stale_run" as const }
@@ -868,7 +746,7 @@ export const applyTrackingProviderPage = internalMutation({
         lastRunAt: now,
         updatedAt: now,
       })
-      await finishProviderRun(
+      await finishTrackingProviderRun(
         ctx,
         {
           durationMs: args.durationMs,
@@ -892,7 +770,7 @@ export const applyTrackingProviderPage = internalMutation({
         status: "paused",
         updatedAt: now,
       })
-      await finishProviderRun(
+      await finishTrackingProviderRun(
         ctx,
         {
           durationMs: args.durationMs,
@@ -986,7 +864,7 @@ export const applyTrackingProviderPage = internalMutation({
       }
     }
 
-    await finishProviderRun(
+    await finishTrackingProviderRun(
       ctx,
       {
         durationMs: args.durationMs,
@@ -1032,9 +910,12 @@ export const failTrackingProviderRun = internalMutation({
     if (!currentLeaseMatches(source, leaseFromArguments(args), now)) {
       return { state: "stale_lease" as const }
     }
-    const run = await findProviderRun(
+    const run = await findTrackingProviderRun(
       ctx,
-      providerRunIdempotencyKey(args.trackingSourceId, args.leaseVersion),
+      trackingProviderRunIdempotencyKey(
+        args.trackingSourceId,
+        args.leaseVersion,
+      ),
     )
     if (!run || run.status !== "running") {
       return { state: "stale_run" as const }
@@ -1064,7 +945,7 @@ export const failTrackingProviderRun = internalMutation({
       totalFailures: (source.totalFailures as number) + 1,
       updatedAt: now,
     })
-    await finishProviderRun(
+    await finishTrackingProviderRun(
       ctx,
       {
         durationMs: args.durationMs,

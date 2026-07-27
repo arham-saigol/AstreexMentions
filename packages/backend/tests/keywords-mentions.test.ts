@@ -44,6 +44,13 @@ const testSchema = defineSchema({
   mentions: defineTable(v.any())
     .index("by_workspace_and_published_at", ["workspaceId", "publishedAt"])
     .index("by_workspace_and_engagement", ["workspaceId", "engagementScore"]),
+  providerMetricBuckets: defineTable(v.any()).index(
+    "by_provider_operation_granularity_and_bucket",
+    ["provider", "operation", "granularity", "bucketStartAt"],
+  ),
+  providerRuns: defineTable(v.any()).index("by_idempotency_key", [
+    "idempotencyKey",
+  ]),
   subscriptions: defineTable(v.any()).index("by_workspace", ["workspaceId"]),
   systemMetricBuckets: defineTable(v.any()).index(
     "by_metric_scope_workspace_granularity_and_bucket",
@@ -469,12 +476,28 @@ describe("keyword Convex functions", () => {
 
     const leasedSourceId = created.sources[0]!.id
     await t.run(async (ctx) => {
+      const now = Date.now()
       await ctx.db.patch("trackingSources", leasedSourceId, {
         inProgressCursor: "old-query-cursor",
         inProgressPage: 2,
-        leaseExpiresAt: Date.now() + 60_000,
+        leaseExpiresAt: now + 60_000,
         leaseToken: "old-query-lease",
         leaseVersion: 3,
+      })
+      await ctx.db.insert("providerRuns", {
+        attempt: 1,
+        createdAt: now,
+        idempotencyKey: `tracking:${String(leasedSourceId)}:3`,
+        inputCount: 1,
+        operation: "posts.search",
+        outputCount: 0,
+        provider: "reddit_posts",
+        startedAt: now,
+        status: "running",
+        trackingSourceId: leasedSourceId,
+        trigger: "scheduled",
+        updatedAt: now,
+        workspaceId: customer.workspaceId,
       })
     })
     await customer.client.mutation(updateKeywordReference, {
@@ -493,6 +516,20 @@ describe("keyword Convex functions", () => {
     expect(queryChangedSource).not.toHaveProperty("inProgressPage")
     expect(queryChangedSource).not.toHaveProperty("leaseExpiresAt")
     expect(queryChangedSource).not.toHaveProperty("leaseToken")
+    const queryChangedRun = await t.run(
+      async (ctx) =>
+        await ctx.db
+          .query("providerRuns")
+          .withIndex("by_idempotency_key", (q) =>
+            q.eq("idempotencyKey", `tracking:${String(leasedSourceId)}:3`),
+          )
+          .unique(),
+    )
+    expect(queryChangedRun).toMatchObject({
+      errorCode: "source_changed",
+      status: "failed",
+    })
+    expect(queryChangedRun?.finishedAt).toEqual(expect.any(Number))
 
     const updated = keywordResult(
       await customer.client.mutation(updateKeywordReference, {
@@ -506,6 +543,30 @@ describe("keyword Convex functions", () => {
       "hacker_news",
     ])
 
+    const pauseLeasedSourceId = updated.sources[0]!.id
+    await t.run(async (ctx) => {
+      const now = Date.now()
+      await ctx.db.patch("trackingSources", pauseLeasedSourceId, {
+        leaseExpiresAt: now + 60_000,
+        leaseToken: "pause-lease",
+        leaseVersion: 7,
+      })
+      await ctx.db.insert("providerRuns", {
+        attempt: 1,
+        createdAt: now,
+        idempotencyKey: `tracking:${String(pauseLeasedSourceId)}:7`,
+        inputCount: 1,
+        operation: "tweets.search",
+        outputCount: 0,
+        provider: "x",
+        startedAt: now,
+        status: "running",
+        trackingSourceId: pauseLeasedSourceId,
+        trigger: "scheduled",
+        updatedAt: now,
+        workspaceId: customer.workspaceId,
+      })
+    })
     const paused = keywordResult(
       await customer.client.mutation(pauseKeywordReference, {
         keywordId: created.id,
@@ -515,6 +576,20 @@ describe("keyword Convex functions", () => {
     expect(
       paused.sources.every((source) => source.pauseReason === "user"),
     ).toBe(true)
+    const pausedRun = await t.run(
+      async (ctx) =>
+        await ctx.db
+          .query("providerRuns")
+          .withIndex("by_idempotency_key", (q) =>
+            q.eq("idempotencyKey", `tracking:${String(pauseLeasedSourceId)}:7`),
+          )
+          .unique(),
+    )
+    expect(pausedRun).toMatchObject({
+      errorCode: "source_paused",
+      status: "failed",
+    })
+    expect(pausedRun?.finishedAt).toEqual(expect.any(Number))
 
     const resumed = keywordResult(
       await customer.client.mutation(resumeKeywordReference, {

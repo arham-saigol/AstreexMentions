@@ -95,7 +95,7 @@ with:
 }
 ```
 
-The validated response is applied immediately to the stored subscription and usage-cycle projection. Signed subscription webhooks can later reconcile the same provider object; stale or equal-time updates do not roll state backward.
+The validated response is applied immediately to the stored subscription and usage-cycle projection. If Creem omits either billing-period boundary, the upgrade operation remains unresolved and schedules up to five authoritative subscription reads at 30-second intervals. The operation is marked successful only after a complete period is applied; an exhausted reconciliation becomes retryable rather than freezing the old entitlement behind a completed idempotency key. Signed subscription webhooks can also reconcile the same provider object; stale or equal-time updates do not roll state backward.
 
 ### Billing portal
 

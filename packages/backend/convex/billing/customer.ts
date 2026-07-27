@@ -495,14 +495,35 @@ export const upgradeSubscription = customerAction({
       })
       const normalized = normalizeCreemSubscription(upgraded)
       const applied = await ctx.runMutation(applyUpgradeResponseReference, {
+        incompleteReconciliation: {
+          actorClerkUserId: ctx.identity.subject,
+          actorUserId: ctx.viewer.id,
+          attempt: 1,
+          delayMs: 0,
+          idempotencyKey: operationId,
+        },
         providerCreatedAt: normalized.updatedAt,
         rawSubscriptionJson: JSON.stringify(upgraded),
         workspaceId: ctx.workspace.id,
       })
       if (applied.state === "provider_unconfigured") {
+        await ctx.runMutation(markCreemProviderOperationUnresolvedReference, {
+          errorCode: "PROVIDER_UNCONFIGURED",
+          errorMessage:
+            "Creem product configuration changed during upgrade completion",
+          idempotencyKey: operationId,
+          workspaceId: ctx.workspace.id,
+        })
         return {
           missing: ["CREEM_PRODUCT_ALLOWLIST_JSON"],
           state: "provider_unconfigured" as const,
+        }
+      }
+      if (applied.kind === "incomplete_period") {
+        return {
+          kind: "reconciliation_pending",
+          planId: planResult.data,
+          state: "configured" as const,
         }
       }
       await ctx.runMutation(recordCreemProviderOperationReference, {

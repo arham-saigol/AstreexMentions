@@ -773,6 +773,15 @@ export const recordCheckout = internalMutation({
 
 export const applyUpgradeResponse = internalMutation({
   args: {
+    incompleteReconciliation: v.optional(
+      v.object({
+        actorClerkUserId: v.string(),
+        actorUserId: v.id("users"),
+        attempt: v.number(),
+        delayMs: v.number(),
+        idempotencyKey: v.string(),
+      }),
+    ),
     providerCreatedAt: v.number(),
     rawSubscriptionJson: v.string(),
     workspaceId: v.id("workspaces"),
@@ -811,19 +820,28 @@ export const applyUpgradeResponse = internalMutation({
       )
     }
 
-    return {
-      kind: await persistSubscriptionTransition(ctx, {
-        existingRow: existing,
-        plan,
-        providerCreatedAt: Math.max(
-          args.providerCreatedAt,
-          normalized.updatedAt,
-        ),
-        subscription: normalized,
-        workspaceId: args.workspaceId,
-      }),
-      state: "configured" as const,
+    const kind = await persistSubscriptionTransition(ctx, {
+      existingRow: existing,
+      plan,
+      providerCreatedAt: Math.max(args.providerCreatedAt, normalized.updatedAt),
+      subscription: normalized,
+      workspaceId: args.workspaceId,
+    })
+    if (kind === "incomplete_period" && args.incompleteReconciliation) {
+      await ctx.scheduler.runAfter(
+        args.incompleteReconciliation.delayMs,
+        reconcileIncompleteCreemUpgradeReference,
+        {
+          actorClerkUserId: args.incompleteReconciliation.actorClerkUserId,
+          actorUserId: args.incompleteReconciliation.actorUserId,
+          attempt: args.incompleteReconciliation.attempt,
+          idempotencyKey: args.incompleteReconciliation.idempotencyKey,
+          providerSubscriptionId: normalized.providerSubscriptionId,
+          workspaceId: args.workspaceId,
+        },
+      )
     }
+    return { kind, state: "configured" as const }
   },
 })
 
@@ -1298,6 +1316,13 @@ export const recordCheckoutReference = internalMutationReference<
 
 export const applyUpgradeResponseReference = internalMutationReference<
   {
+    incompleteReconciliation?: {
+      actorClerkUserId: string
+      actorUserId: UserId
+      attempt: number
+      delayMs: number
+      idempotencyKey: string
+    }
     providerCreatedAt: number
     rawSubscriptionJson: string
     workspaceId: WorkspaceId
@@ -1347,6 +1372,20 @@ type BillingEventReconciliationArguments = {
 export const reconcileIncompleteCreemBillingEventReference =
   internalActionReference<BillingEventReconciliationArguments>(
     "billing/reconciliation:reconcileIncompleteCreemBillingEvent",
+  )
+
+export type IncompleteCreemUpgradeReconciliationArguments = {
+  actorClerkUserId: string
+  actorUserId: UserId
+  attempt: number
+  idempotencyKey: string
+  providerSubscriptionId: string
+  workspaceId: WorkspaceId
+}
+
+export const reconcileIncompleteCreemUpgradeReference =
+  internalActionReference<IncompleteCreemUpgradeReconciliationArguments>(
+    "billing/reconciliation:reconcileIncompleteCreemUpgrade",
   )
 
 export const loadIncompleteCreemBillingEventReference = internalQueryReference<

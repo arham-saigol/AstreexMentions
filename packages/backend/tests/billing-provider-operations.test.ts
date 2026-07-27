@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs"
+
 import { convexTest } from "convex-test"
 import { makeFunctionReference } from "convex/server"
 import type { GenericId } from "convex/values"
@@ -104,5 +106,48 @@ describe("Creem provider operation retries", () => {
     })
     expect(retried?.errorCode).toBeUndefined()
     expect(retried?.finishedAt).toBeUndefined()
+  })
+
+  it("keeps incomplete upgrades unresolved until authoritative reconciliation", () => {
+    const customerSource = readFileSync(
+      new URL("../convex/billing/customer.ts", import.meta.url),
+      "utf8",
+    )
+    const reconciliationSchedule = customerSource.indexOf(
+      "incompleteReconciliation:",
+    )
+    const incompleteGuard = customerSource.indexOf(
+      'applied.kind === "incomplete_period"',
+      reconciliationSchedule,
+    )
+    const successRecord = customerSource.indexOf(
+      "recordCreemProviderOperationReference",
+      incompleteGuard,
+    )
+    expect(reconciliationSchedule).toBeGreaterThan(-1)
+    expect(incompleteGuard).toBeGreaterThan(reconciliationSchedule)
+    expect(successRecord).toBeGreaterThan(incompleteGuard)
+
+    const reconciliationSource = readFileSync(
+      new URL("../convex/billing/reconciliation.ts", import.meta.url),
+      "utf8",
+    )
+    expect(reconciliationSource).toContain(
+      ".getSubscription(args.providerSubscriptionId)",
+    )
+    expect(reconciliationSource).toContain(
+      'applied.kind === "incomplete_period"',
+    )
+    expect(reconciliationSource).toContain(
+      "markCreemProviderOperationUnresolvedReference",
+    )
+    const internalSource = readFileSync(
+      new URL("../convex/billing/internal.ts", import.meta.url),
+      "utf8",
+    )
+    expect(internalSource).toContain(
+      'kind === "incomplete_period" && args.incompleteReconciliation',
+    )
+    expect(internalSource).toContain("reconcileIncompleteCreemUpgradeReference")
   })
 })
