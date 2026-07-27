@@ -58,6 +58,7 @@ import {
   normalizeKeywordPhrase,
   ONBOARDING_STEP_COUNT,
   onboardingDraftSchema,
+  selectOnboardingPlan,
   type OnboardingCategoryDraft,
   type OnboardingDraft,
   type OnboardingKeywordDraft,
@@ -1012,6 +1013,9 @@ function PlanStep({
               The saved checkout is still pending. Astreex checks authoritative
               subscription status before opening access. Returning from Creem or
               reopening this page never marks the account active by itself.
+              Changing the selected plan does not replace this payment session;
+              continuing checkout resumes the original {checkoutPlan.name}{" "}
+              session.
               <span className="mt-1 block text-xs">
                 Started {new Date(draft.checkout.startedAt).toLocaleString()} ·
                 Provider status: {draft.checkout.status}
@@ -1049,7 +1053,7 @@ function PlanStep({
           ) : (
             <CreditCardIcon aria-hidden="true" />
           )}
-          {draft.checkout?.url
+          {draft.checkout
             ? "Continue saved checkout"
             : "Continue to secure checkout"}
         </Button>
@@ -1461,12 +1465,7 @@ export function OnboardingFlow() {
 
   const choosePlan = useCallback(
     (planId: PlanId) => {
-      changeDraft((current) => ({
-        ...current,
-        checkout:
-          current.checkout?.planId === planId ? current.checkout : undefined,
-        selectedPlan: planId,
-      }))
+      changeDraft((current) => selectOnboardingPlan(current, planId))
     },
     [changeDraft],
   )
@@ -1487,8 +1486,7 @@ export function OnboardingFlow() {
       return
     }
 
-    const savedCheckout =
-      draft.checkout?.planId === draft.selectedPlan ? draft.checkout : undefined
+    const savedCheckout = draft.checkout
     if (savedCheckout && isCompletedOnboardingCheckout(savedCheckout)) {
       setCheckoutError(
         "This checkout is already complete. Astreex is waiting for authoritative subscription activation and will not open another payment session.",

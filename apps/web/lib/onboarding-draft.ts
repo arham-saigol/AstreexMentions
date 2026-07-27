@@ -139,6 +139,16 @@ export function createOnboardingDraft(workspaceName: string): OnboardingDraft {
   }
 }
 
+export function selectOnboardingPlan(
+  draft: OnboardingDraft,
+  planId: NonNullable<OnboardingDraft["selectedPlan"]>,
+): OnboardingDraft {
+  return {
+    ...draft,
+    selectedPlan: planId,
+  }
+}
+
 export function normalizeKeywordPhrase(value: string): string {
   return value.trim().replace(/\s+/g, " ").toLocaleLowerCase("en")
 }

@@ -8,6 +8,7 @@ import {
   MAX_DRAFT_KEYWORDS,
   normalizeKeywordPhrase,
   onboardingDraftSchema,
+  selectOnboardingPlan,
 } from "./onboarding-draft"
 
 function keyword(index: number) {
@@ -115,5 +116,25 @@ describe("onboarding draft", () => {
     expect(isCompletedOnboardingCheckout({ ...checkout, status: "open" })).toBe(
       false,
     )
+  })
+
+  it("preserves an outstanding checkout when selecting another plan", () => {
+    const draft = {
+      ...createOnboardingDraft("Astreex"),
+      checkout: {
+        idempotencyKey: "checkout-outstanding",
+        planId: "starter" as const,
+        startedAt: 2_000_000_000_000,
+        status: "open",
+        url: "https://checkout.example/session",
+      },
+      selectedPlan: "starter" as const,
+      step: 7 as const,
+    }
+
+    expect(selectOnboardingPlan(draft, "growth")).toMatchObject({
+      checkout: draft.checkout,
+      selectedPlan: "growth",
+    })
   })
 })
