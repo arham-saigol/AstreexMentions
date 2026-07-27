@@ -34,7 +34,7 @@ const FRONTEND_ARGUMENT_KEYS = {
   "admin:getDeletionJob": ["deletionJobId"],
   "admin:getMetricsOverview": ["days"],
   "admin:listChangelogEntries": ["cursor", "status"],
-  "admin:listFeatureRequests": ["cursor", "limit", "sort", "status"],
+  "admin:listFeatureRequests": ["cursor", "limit", "query", "sort", "status"],
   "admin:listDeletionJobs": ["limit", "status"],
   "admin:publishChangelogEntry": ["entryId"],
   "admin:retryDeletionJob": ["confirmation", "deletionJobId"],

@@ -16,7 +16,6 @@ import {
 import { adminConvex, type FeatureRequestStatus } from "@/lib/convex-references"
 import {
   featureRequestStatusLabels,
-  filterAndSortFeatureRequests,
   type FeatureRequestSort,
 } from "@/lib/feature-requests"
 
@@ -123,6 +122,7 @@ export default async function FeatureRequestsPage({
   const result = await runAdminQuery(adminConvex.listFeatureRequests, {
     ...(cursor === undefined ? {} : { cursor }),
     limit: 25,
+    ...(query ? { query } : {}),
     sort,
     ...(status === undefined ? {} : { status }),
   })
@@ -145,7 +145,7 @@ export default async function FeatureRequestsPage({
     return <AccessState kind="unavailable" />
   }
 
-  const visibleRequests = filterAndSortFeatureRequests(page.items, query, sort)
+  const visibleRequests = page.items
   const hasFilters = Boolean(query || status || sort === "oldest" || cursor)
 
   return (

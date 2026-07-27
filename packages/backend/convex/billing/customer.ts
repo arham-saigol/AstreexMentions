@@ -487,8 +487,21 @@ export const upgradeSubscription = customerAction({
         "Current Creem subscription identifier is invalid",
       )
     }
+    const subscriptionVersion = subscription.lastSyncedAt
+    if (
+      typeof subscriptionVersion !== "number" ||
+      !Number.isSafeInteger(subscriptionVersion) ||
+      subscriptionVersion < 0
+    ) {
+      billingError(
+        "BILLING_STATE_INVALID",
+        "Current Creem subscription version is invalid",
+      )
+    }
 
-    const operationId = `upgrade:${providerSubscriptionId}:${planResult.data}`
+    const operationId =
+      `upgrade:${providerSubscriptionId}:${currentPlan.data}:` +
+      `${planResult.data}:${subscriptionVersion}`
     const operation = await ctx.runMutation(
       beginCreemProviderOperationReference,
       {

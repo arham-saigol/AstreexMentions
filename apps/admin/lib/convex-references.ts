@@ -28,6 +28,7 @@ export const adminConvex = {
     {
       cursor?: string
       limit?: number
+      query?: string
       sort?: "newest" | "oldest"
       status?: FeatureRequestStatus
     },

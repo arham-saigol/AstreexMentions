@@ -55,6 +55,32 @@ function validatedBody(value: string): string {
   return body
 }
 
+function featureRequestSearchText(input: {
+  body: string
+  requestId?: FeatureRequestId | undefined
+  title: string
+  user: Record<string, unknown>
+  workspace: Record<string, unknown>
+}): string {
+  return [
+    input.requestId,
+    input.title,
+    input.body,
+    input.user._id,
+    input.user.clerkUserId,
+    input.user.name,
+    input.user.email,
+    input.workspace._id,
+    input.workspace.name,
+    input.workspace.slug,
+  ]
+    .filter(
+      (value): value is string =>
+        typeof value === "string" && value.trim().length > 0,
+    )
+    .join("\n")
+}
+
 function publicFeatureRequest(row: Record<string, unknown>) {
   return {
     body: row.body as string,
@@ -77,16 +103,33 @@ export const createFeatureRequest = authenticatedMutation({
       ctx,
       ctx.identity,
     )
+    const title = validatedTitle(args.title)
+    const body = validatedBody(args.description)
     const now = Date.now()
     const requestId = (await ctx.db.insert("featureRequests", {
-      body: validatedBody(args.description),
+      body,
       createdAt: now,
       createdByUserId: viewer.id,
+      searchText: featureRequestSearchText({
+        body,
+        title,
+        user: viewer,
+        workspace,
+      }),
       status: "new",
-      title: validatedTitle(args.title),
+      title,
       updatedAt: now,
       workspaceId: workspace.id,
     })) as FeatureRequestId
+    await ctx.db.patch("featureRequests", requestId, {
+      searchText: featureRequestSearchText({
+        body,
+        requestId,
+        title,
+        user: viewer,
+        workspace,
+      }),
+    })
 
     return { id: requestId }
   },

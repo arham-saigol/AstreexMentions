@@ -316,6 +316,9 @@ describe("complete Convex schema", () => {
     expect(tableByName.get("mentions")?.searchIndexes).toEqual([
       expect.objectContaining({ indexDescriptor: "search_body" }),
     ])
+    expect(tableByName.get("featureRequests")?.searchIndexes).toEqual([
+      expect.objectContaining({ indexDescriptor: "search_content" }),
+    ])
   })
 })
 

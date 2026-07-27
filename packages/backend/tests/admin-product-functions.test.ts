@@ -35,7 +35,11 @@ const schema = defineSchema({
   featureRequests: defineTable(v.any())
     .index("by_creator_and_created_at", ["createdByUserId", "createdAt"])
     .index("by_created_at", ["createdAt"])
-    .index("by_status_and_created_at", ["status", "createdAt"]),
+    .index("by_status_and_created_at", ["status", "createdAt"])
+    .searchIndex("search_content", {
+      searchField: "searchText",
+      filterFields: ["status"],
+    }),
   mentions: defineTable(v.any()),
   providerMetricBuckets: defineTable(v.any()).index(
     "by_granularity_and_bucket",
@@ -432,6 +436,33 @@ describe("admin feature request and changelog functions", () => {
     }
     expect(second.items).toHaveLength(1)
     expect(second.items[0]!.id).not.toBe(first.items[0]!.id)
+  })
+
+  it("searches the complete feature request queue before pagination", async () => {
+    const { admin, customer } = await setup()
+    await customer.mutation(createFeatureRequest, {
+      description:
+        "A sufficiently detailed description for the buried search result.",
+      title: "Buried needle request",
+    })
+    for (let index = 0; index < 30; index += 1) {
+      await customer.mutation(createFeatureRequest, {
+        description: `A sufficiently detailed filler request ${index}.`,
+        title: `Newer filler request ${index}`,
+      })
+    }
+
+    const result = (await admin.query(listFeatureRequests, {
+      limit: 25,
+      query: "Buried needle",
+    })) as {
+      items: Array<{ title: string }>
+      nextCursor?: string
+    }
+    expect(result.items.map(({ title }) => title)).toEqual([
+      "Buried needle request",
+    ])
+    expect(result.nextCursor).toBeUndefined()
   })
 })
 

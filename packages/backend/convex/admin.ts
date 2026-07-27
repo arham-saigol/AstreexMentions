@@ -1187,6 +1187,7 @@ export const listFeatureRequests = adminQuery({
   args: {
     cursor: v.optional(v.string()),
     limit: v.optional(v.number()),
+    query: v.optional(v.string()),
     sort: v.optional(v.union(v.literal("newest"), v.literal("oldest"))),
     status: v.optional(featureRequestStatusValidator),
   },
@@ -1203,19 +1204,34 @@ export const listFeatureRequests = adminQuery({
       )
     }
     const order = args.sort === "oldest" ? "asc" : "desc"
-    const result = args.status
+    const searchQuery = args.query?.trim()
+    if (searchQuery !== undefined && searchQuery.length > 160) {
+      adminError(
+        "INVALID_ADMIN_INPUT",
+        "Feature request search must not exceed 160 characters",
+      )
+    }
+    const result = searchQuery
       ? await ctx.db
           .query("featureRequests")
-          .withIndex("by_status_and_created_at", (q) =>
-            indexEquals(q, ["status", args.status]),
-          )
-          .order(order)
+          .withSearchIndex("search_content", (q) => {
+            const search = q.search("searchText", searchQuery)
+            return args.status ? search.eq("status", args.status) : search
+          })
           .paginate({ cursor: args.cursor ?? null, numItems: limit })
-      : await ctx.db
-          .query("featureRequests")
-          .withIndex("by_created_at")
-          .order(order)
-          .paginate({ cursor: args.cursor ?? null, numItems: limit })
+      : args.status
+        ? await ctx.db
+            .query("featureRequests")
+            .withIndex("by_status_and_created_at", (q) =>
+              indexEquals(q, ["status", args.status]),
+            )
+            .order(order)
+            .paginate({ cursor: args.cursor ?? null, numItems: limit })
+        : await ctx.db
+            .query("featureRequests")
+            .withIndex("by_created_at")
+            .order(order)
+            .paginate({ cursor: args.cursor ?? null, numItems: limit })
 
     return {
       items: await Promise.all(

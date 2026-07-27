@@ -312,4 +312,26 @@ describe("Creem provider operation retries", () => {
     )
     expect(internalSource).toContain("reconcileIncompleteCreemUpgradeReference")
   })
+
+  it("versions upgrade idempotency by the current subscription state", () => {
+    const customerSource = readFileSync(
+      new URL("../convex/billing/customer.ts", import.meta.url),
+      "utf8",
+    )
+    const upgradeStart = customerSource.indexOf(
+      "export const upgradeSubscription",
+    )
+    const operationStart = customerSource.indexOf(
+      "const operationId =",
+      upgradeStart,
+    )
+    const operationEnd = customerSource.indexOf(
+      "beginCreemProviderOperationReference",
+      operationStart,
+    )
+    const operationId = customerSource.slice(operationStart, operationEnd)
+    expect(operationId).toContain("currentPlan.data")
+    expect(operationId).toContain("planResult.data")
+    expect(operationId).toContain("subscriptionVersion")
+  })
 })

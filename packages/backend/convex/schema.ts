@@ -870,6 +870,7 @@ export default defineSchema({
     completedAt: v.optional(v.number()),
     createdAt: v.number(),
     createdByUserId: v.id("users"),
+    searchText: v.string(),
     status: featureRequestStatusValidator,
     title: v.string(),
     updatedAt: v.number(),
@@ -884,7 +885,11 @@ export default defineSchema({
     .index("by_creator_and_created_at", ["createdByUserId", "createdAt"])
     .index("by_created_at", ["createdAt"])
     .index("by_status_and_created_at", ["status", "createdAt"])
-    .index("by_status_and_updated_at", ["status", "updatedAt"]),
+    .index("by_status_and_updated_at", ["status", "updatedAt"])
+    .searchIndex("search_content", {
+      searchField: "searchText",
+      filterFields: ["status"],
+    }),
 
   changelogEntries: defineTable({
     body: v.string(),
