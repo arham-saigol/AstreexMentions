@@ -7,7 +7,10 @@ import {
   createClerkAdminClient,
   ClerkIntegrationError,
 } from "../convex/integrations/clerk"
-import { evaluateCompositeDeletionBillingGuard } from "../convex/lib/billingDeletionGuard"
+import {
+  evaluateCompositeDeletionBillingGuard,
+  PROVIDER_OPERATION_STALE_MS,
+} from "../convex/lib/billingDeletionGuard"
 import {
   ACCOUNT_DELETION_LEASE_MS,
   ACCOUNT_DELETION_PURGE_STAGES,
@@ -358,6 +361,26 @@ describe("account deletion request and billing boundary", () => {
     expect(
       evaluateCompositeDeletionBillingGuard({ ...input, checkedAt: NOW }),
     ).toMatchObject({ code })
+  })
+
+  it("does not let an expired provider operation block deletion forever", () => {
+    expect(
+      evaluateCompositeDeletionBillingGuard({
+        activeSideEffectCount: 0,
+        checkedAt: NOW,
+        checkouts: [],
+        pendingBillingEventCount: 0,
+        providerConfigured: true,
+        providerRuns: [
+          {
+            provider: "creem",
+            startedAt: NOW - PROVIDER_OPERATION_STALE_MS,
+            status: "running",
+          },
+        ],
+        subscriptions: [],
+      }),
+    ).toMatchObject({ status: "confirmed_inactive" })
   })
 
   it("rechecks billing transactionally before quiescence and catches a checkout race", async () => {

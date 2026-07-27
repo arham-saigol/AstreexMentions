@@ -3,10 +3,16 @@ import type { GenericId } from "convex/values"
 import { readCreemApiConfiguration } from "../billing/config"
 import {
   evaluateCompositeDeletionBillingGuard,
+  PROVIDER_OPERATION_STALE_MS,
   type CompositeDeletionBillingGuardResult,
   type SubscriptionEntitlementForDeletion,
 } from "../lib/billingDeletionGuard"
-import { env, indexEquals, type DatabaseReader } from "../server"
+import {
+  env,
+  indexEquals,
+  indexGreaterThanOrEqual,
+  type DatabaseReader,
+} from "../server"
 
 type WorkspaceId = GenericId<"workspaces">
 
@@ -44,7 +50,11 @@ export async function readDeletionBillingSnapshot(
     db
       .query("providerRuns")
       .withIndex("by_workspace_status_and_started_at", (q) =>
-        indexEquals(q, ["workspaceId", workspaceId], ["status", "running"]),
+        indexGreaterThanOrEqual(
+          indexEquals(q, ["workspaceId", workspaceId], ["status", "running"]),
+          "startedAt",
+          checkedAt - PROVIDER_OPERATION_STALE_MS + 1,
+        ),
       )
       .take(1),
     db
@@ -86,6 +96,7 @@ export async function readDeletionBillingSnapshot(
     providerConfigured: providerConfiguration.state === "configured",
     providerRuns: runningProviderRuns.map((run) => ({
       provider: run.provider as string,
+      startedAt: run.startedAt as number,
       status: run.status as string,
     })),
     subscriptions,

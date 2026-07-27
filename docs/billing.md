@@ -132,7 +132,7 @@ Supported event types are:
 - `refund.created`
 - `dispute.created`
 
-The durable idempotency key is `(provider = creem, providerEventId)`. A terminal `processed` or `dead` event is a no-op on replay. A pending replay reuses the originally stored verified payload rather than replacing it.
+The durable idempotency key is `(provider = creem, providerEventId)`. A terminal `processed` or `dead` event is a no-op on replay. A pending replay reuses the originally stored verified payload rather than replacing it. Manual checkout, portal, and upgrade provider runs become stale after 15 minutes: the same idempotency key can then start a fenced new attempt, and the one-minute billing cron terminally fails at most 16 abandoned Creem runs per dispatch.
 
 Subscription events are accepted only when the product ID is allowlisted. A new subscription must either already map by provider subscription ID or include `metadata.internal_customer_id` for an active workspace with a matching checkout for that plan. Events without a ready target remain pending and retry after 30 seconds. The one-minute billing cron processes at most 16 due pending events per dispatch.
 
@@ -172,7 +172,7 @@ Warnings are enqueued once per cycle at 80% and 100%:
 - the warning timestamp is written when the durable email is enqueued, not when Resend confirms delivery;
 - warning composition requires `RESEND_FROM_EMAIL` and a deliverable workspace-owner email.
 
-When the next new mention would exceed the cap, that candidate and later candidates are not inserted. The atomic ingestion mutation records the first unprocessed provider position, returns `checkpoint: "hold"`, and pauses every active tracking source in the workspace with `pauseReason: "usage"`. Re-running the same provider page can safely resume from that position without double-counting earlier items.
+When the next new mention would exceed the cap, that candidate and later candidates are not inserted. The atomic ingestion mutation records the first unprocessed provider position, returns `checkpoint: "hold"`, and pauses every active tracking source in the workspace with `pauseReason: "usage"`. It finalizes concurrent in-flight tracking runs before clearing their leases; the run that reached the cap is finalized by its owning scheduling mutation. Re-running the same provider page can safely resume from that position without double-counting earlier items.
 
 Usage-paused sources resume only when synchronized billing state is active and `mentionsUsed < mentionLimit`, for example after a new period or a same-period upgrade that raises the cap. Billing synchronization also pauses active sources with `pauseReason: "paid"` when entitlement becomes inactive and resumes paid-paused sources when entitlement returns. User-paused, configuration-paused, and error sources are not silently resumed by this billing path.
 
@@ -184,7 +184,7 @@ Deletion always evaluates every stored subscription for the workspace. It is all
 - is not `cancelAtPeriodEnd`;
 - has terminal status `canceled`, `cancelled`, `expired`, or `inactive`.
 
-No subscription rows means there is no entitlement to retain. Active, scheduled-cancel, unknown, or other nonterminal state fails closed. Deletion also blocks on an unexpired open/complete checkout, pending or leased billing event, running provider operation, active leased side effect, or unavailable Creem configuration.
+No subscription rows means there is no entitlement to retain. Active, scheduled-cancel, unknown, or other nonterminal state fails closed. Deletion also blocks on an unexpired open/complete checkout, pending or leased billing event, a provider operation started within the last 15 minutes, active leased side effect, or unavailable Creem configuration. Older running rows are abandoned evidence rather than active work and are failed by the billing cron.
 
 Active entitlement creates or updates an idempotent blocked account job, returns `BILLING_PORTAL_REQUIRED`, and instructs the customer to cancel in Creem and wait for a terminal signed webhook. Other provider uncertainty returns a support-required result.
 

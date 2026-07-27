@@ -125,6 +125,146 @@ describe("Creem webhook reconciliation", () => {
     expect(state.auditEvents[0]).not.toHaveProperty("workspaceId")
   })
 
+  it("finalizes in-flight tracking runs before billing pauses their sources", async () => {
+    process.env.CREEM_PRODUCT_ALLOWLIST_JSON = JSON.stringify({
+      prod_growth: {
+        keywordLimit: 6,
+        mentionLimit: 20_000,
+        planId: "growth",
+      },
+    })
+    const paidEvent = JSON.parse(
+      readFileSync(
+        fileURLToPath(
+          new URL("./fixtures/creem/subscription-paid.json", import.meta.url),
+        ),
+        "utf8",
+      ),
+    ) as Record<string, any>
+    const t = convexTest({ modules, schema })
+    const seeded = await t.run(async (ctx) => {
+      const now = paidEvent.created_at as number
+      const userId = await ctx.db.insert("users", {
+        clerkUserId: "billing-pause-user",
+        createdAt: now,
+        tokenIdentifier: "issuer|billing-pause-user",
+        updatedAt: now,
+      })
+      const workspaceId = await ctx.db.insert("workspaces", {
+        createdAt: now,
+        kind: "personal",
+        name: "Billing pause",
+        normalizedName: "billing pause",
+        ownerUserId: userId,
+        updatedAt: now,
+      })
+      await ctx.db.insert("billingCheckouts", {
+        createdAt: now,
+        expiresAt: now + 86_400_000,
+        idempotencyKey: "billing-pause-checkout",
+        planId: "growth",
+        provider: "creem",
+        providerCheckoutSessionId: "checkout_billing_pause",
+        requestedByUserId: userId,
+        status: "complete",
+        updatedAt: now,
+        workspaceId,
+      })
+      return { userId, workspaceId }
+    })
+    paidEvent.id = "evt_paid_billing_pause"
+    paidEvent.object.id = "sub_billing_pause"
+    paidEvent.object.metadata.internal_customer_id = String(seeded.workspaceId)
+    await expect(
+      t.mutation(ingestWebhook, {
+        rawBody: JSON.stringify(paidEvent),
+        receivedAt: paidEvent.created_at,
+      }),
+    ).resolves.toEqual({ kind: "applied" })
+
+    const sourceId = await t.run(async (ctx) => {
+      const now = paidEvent.created_at as number
+      const keywordId = await ctx.db.insert("keywords", {
+        createdAt: now,
+        createdByUserId: seeded.userId,
+        normalizedPhrase: "billing pause",
+        phrase: "Billing pause",
+        platforms: ["x"],
+        status: "active",
+        updatedAt: now,
+        workspaceId: seeded.workspaceId,
+      })
+      const trackingSourceId = await ctx.db.insert("trackingSources", {
+        backoffMs: 0,
+        checkpointVersion: 1,
+        consecutiveFailures: 0,
+        createdAt: now,
+        intervalMs: 300_000,
+        keywordId,
+        leaseExpiresAt: now + 60_000,
+        leaseToken: "billing-pause-lease",
+        leaseVersion: 4,
+        nextRunAt: now,
+        providerQuery: "Billing pause",
+        sourceType: "x",
+        status: "active",
+        totalFailures: 0,
+        updatedAt: now,
+        workspaceId: seeded.workspaceId,
+      })
+      await ctx.db.insert("providerRuns", {
+        attempt: 1,
+        createdAt: now,
+        idempotencyKey: `tracking:${String(trackingSourceId)}:4`,
+        inputCount: 1,
+        operation: "tweets.search",
+        outputCount: 0,
+        provider: "x",
+        startedAt: now,
+        status: "running",
+        trackingSourceId,
+        trigger: "scheduled",
+        updatedAt: now,
+        workspaceId: seeded.workspaceId,
+      })
+      return trackingSourceId
+    })
+
+    const canceledEvent = structuredClone(paidEvent)
+    canceledEvent.id = "evt_canceled_billing_pause"
+    canceledEvent.eventType = "subscription.canceled"
+    canceledEvent.created_at += 1
+    canceledEvent.object.status = "canceled"
+    canceledEvent.object.canceled_at = "2026-07-01T00:00:01.000Z"
+    canceledEvent.object.updated_at = "2026-07-01T00:00:01.000Z"
+    await expect(
+      t.mutation(ingestWebhook, {
+        rawBody: JSON.stringify(canceledEvent),
+        receivedAt: canceledEvent.created_at,
+      }),
+    ).resolves.toEqual({ kind: "applied" })
+
+    const state = await t.run(async (ctx) => ({
+      run: await ctx.db
+        .query("providerRuns")
+        .withIndex("by_idempotency_key", (q) =>
+          q.eq("idempotencyKey", `tracking:${String(sourceId)}:4`),
+        )
+        .unique(),
+      source: await ctx.db.get("trackingSources", sourceId),
+    }))
+    expect(state.source).toMatchObject({
+      pauseReason: "paid",
+      status: "paused",
+    })
+    expect(state.source).not.toHaveProperty("leaseToken")
+    expect(state.run).toMatchObject({
+      errorCode: "source_paused",
+      status: "failed",
+    })
+    expect(state.run?.finishedAt).toEqual(expect.any(Number))
+  })
+
   it("keeps incomplete periods pending and applies authoritative subscription data", async () => {
     process.env.CREEM_PRODUCT_ALLOWLIST_JSON = JSON.stringify({
       prod_growth: {

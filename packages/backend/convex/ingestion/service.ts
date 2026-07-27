@@ -12,6 +12,7 @@ import {
 import { syncUsagePausedWorkspaceMetric } from "../lib/operationalMetrics"
 import { createPendingEmail, emailPayloadFingerprint } from "../lib/emailOutbox"
 import { indexEquals, type MutationCtx } from "../server"
+import { finalizeInvalidatedTrackingProviderRun } from "../scheduling/providerRuns"
 import { incrementHourlySystemMetric } from "../lib/systemMetricBuckets"
 import type { IngestionCandidate, IngestionChunk } from "./contracts"
 import {
@@ -451,6 +452,7 @@ async function ensureUsageWarningEmail(
 async function pauseWorkspaceSourcesForUsage(
   ctx: MutationCtx,
   workspaceId: WorkspaceId,
+  currentTrackingSourceId: TrackingSourceId,
   now: number,
 ): Promise<number> {
   const activeSources = (await ctx.db
@@ -461,6 +463,14 @@ async function pauseWorkspaceSourcesForUsage(
     .collect()) as GenericRow[]
 
   for (const source of activeSources) {
+    if (source._id !== currentTrackingSourceId) {
+      await finalizeInvalidatedTrackingProviderRun(ctx, {
+        errorCode: "source_paused",
+        errorMessage: "Workspace mention allowance was exhausted",
+        now,
+        source,
+      })
+    }
     await ctx.db.patch("trackingSources", source._id as TrackingSourceId, {
       leaseExpiresAt: undefined,
       leaseToken: undefined,
@@ -631,6 +641,7 @@ export async function applyIngestionChunkAtomically(
         pausedSourceCount = await pauseWorkspaceSourcesForUsage(
           ctx,
           workspaceId,
+          trackingSourceId,
           options.now,
         )
         sourcesPaused = true
@@ -759,6 +770,7 @@ export async function applyIngestionChunkAtomically(
       pausedSourceCount = await pauseWorkspaceSourcesForUsage(
         ctx,
         workspaceId,
+        trackingSourceId,
         options.now,
       )
       sourcesPaused = true

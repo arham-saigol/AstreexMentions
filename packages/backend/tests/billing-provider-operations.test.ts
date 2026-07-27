@@ -5,6 +5,7 @@ import { makeFunctionReference } from "convex/server"
 import type { GenericId } from "convex/values"
 import { describe, expect, it } from "vitest"
 
+import { PROVIDER_OPERATION_STALE_MS } from "../convex/lib/billingDeletionGuard"
 import schema from "../convex/schema"
 
 const modules = {
@@ -33,6 +34,12 @@ const markRetryable = makeFunctionReference<
   },
   { state: string }
 >("billing/internal:markCreemProviderOperationUnresolved")
+
+const dispatchBilling = makeFunctionReference<
+  "mutation",
+  { now?: number },
+  { expiredOperations: number; state: string }
+>("billing/internal:dispatchPendingCreemBillingEvents")
 
 describe("Creem provider operation retries", () => {
   it("moves retryable failures out of running and permits another attempt", async () => {
@@ -106,6 +113,86 @@ describe("Creem provider operation retries", () => {
     })
     expect(retried?.errorCode).toBeUndefined()
     expect(retried?.finishedAt).toBeUndefined()
+  })
+
+  it("reclaims stale operations on retry and expires abandoned rows in the dispatcher", async () => {
+    const t = convexTest({ modules, schema })
+    const now = Date.now()
+    const workspaceId = await t.run(async (ctx) => {
+      const userId = await ctx.db.insert("users", {
+        clerkUserId: "user_billing_stale",
+        createdAt: now,
+        tokenIdentifier: "issuer|user_billing_stale",
+        updatedAt: now,
+      })
+      return await ctx.db.insert("workspaces", {
+        createdAt: now,
+        kind: "personal",
+        name: "Billing stale recovery",
+        normalizedName: "billing stale recovery",
+        ownerUserId: userId,
+        updatedAt: now,
+      })
+    })
+    const retryArgs = {
+      idempotencyKey: "portal:stale-retry",
+      operation: "portal",
+      workspaceId,
+    }
+    await expect(t.mutation(beginOperation, retryArgs)).resolves.toEqual({
+      state: "started",
+    })
+    await expect(t.mutation(beginOperation, retryArgs)).resolves.toEqual({
+      state: "running",
+    })
+    await t.run(async (ctx) => {
+      const run = await ctx.db
+        .query("providerRuns")
+        .withIndex("by_idempotency_key", (q) =>
+          q.eq("idempotencyKey", retryArgs.idempotencyKey),
+        )
+        .unique()
+      await ctx.db.patch("providerRuns", run!._id, {
+        startedAt: now - PROVIDER_OPERATION_STALE_MS,
+      })
+    })
+    await expect(t.mutation(beginOperation, retryArgs)).resolves.toEqual({
+      state: "started",
+    })
+
+    await t.run(async (ctx) => {
+      await ctx.db.insert("providerRuns", {
+        attempt: 1,
+        createdAt: now - PROVIDER_OPERATION_STALE_MS,
+        idempotencyKey: "checkout:abandoned",
+        inputCount: 1,
+        operation: "checkout",
+        outputCount: 0,
+        provider: "creem",
+        startedAt: now - PROVIDER_OPERATION_STALE_MS,
+        status: "running",
+        trigger: "manual",
+        updatedAt: now - PROVIDER_OPERATION_STALE_MS,
+        workspaceId,
+      })
+    })
+    await expect(t.mutation(dispatchBilling, { now })).resolves.toMatchObject({
+      expiredOperations: 1,
+      state: "dispatched",
+    })
+
+    const runs = await t.run(async (ctx) => {
+      return await ctx.db.query("providerRuns").collect()
+    })
+    expect(
+      runs.find((run) => run.idempotencyKey === retryArgs.idempotencyKey),
+    ).toMatchObject({ attempt: 2, status: "running" })
+    expect(
+      runs.find((run) => run.idempotencyKey === "checkout:abandoned"),
+    ).toMatchObject({
+      errorCode: "operation_abandoned",
+      status: "failed",
+    })
   })
 
   it("keeps incomplete upgrades unresolved until authoritative reconciliation", () => {

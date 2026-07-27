@@ -77,6 +77,13 @@ const ingestionTestSchema = defineSchema({
       "contentType",
       "fallbackKey",
     ]),
+  providerMetricBuckets: defineTable(v.any()).index(
+    "by_provider_operation_granularity_and_bucket",
+    ["provider", "operation", "granularity", "bucketStartAt"],
+  ),
+  providerRuns: defineTable(v.any()).index("by_idempotency_key", [
+    "idempotencyKey",
+  ]),
   systemMetricBuckets: defineTable(v.any()).index(
     "by_metric_scope_workspace_granularity_and_bucket",
     ["metric", "scope", "workspaceId", "granularity", "bucketStartAt"],
@@ -233,6 +240,7 @@ async function snapshot(t: BackendTest, seeded: SeededWorkspace) {
     mentions: await ctx.db.query("mentions").collect(),
     metrics: await ctx.db.query("systemMetricBuckets").collect(),
     outbox: await ctx.db.query("emailOutbox").collect(),
+    providerRuns: await ctx.db.query("providerRuns").collect(),
     sources: await Promise.all(
       seeded.sourceIds.map(
         async (sourceId) => await ctx.db.get("trackingSources", sourceId),
@@ -390,6 +398,25 @@ describe("serializable atomic ingestion", () => {
   it("holds the checkpoint at the first over-cap position and keeps all side effects exactly once", async () => {
     const t = createBackendTest()
     const seeded = await seedWorkspace(t, { mentionLimit: 2 })
+    await t.run(async (ctx) => {
+      for (const sourceId of seeded.sourceIds) {
+        await ctx.db.insert("providerRuns", {
+          attempt: 1,
+          createdAt: NOW,
+          idempotencyKey: `tracking:${String(sourceId)}:3`,
+          inputCount: 1,
+          operation: "tweets.search",
+          outputCount: 0,
+          provider: "x",
+          startedAt: NOW,
+          status: "running",
+          trackingSourceId: sourceId,
+          trigger: "scheduled",
+          updatedAt: NOW,
+          workspaceId: seeded.workspaceId,
+        })
+      }
+    })
     const input = chunk(seeded, {
       candidates: [
         candidate("providerCandidate"),
@@ -443,6 +470,21 @@ describe("serializable atomic ingestion", () => {
       expect(pausedSource).not.toHaveProperty("leaseExpiresAt")
       expect(pausedSource).not.toHaveProperty("leaseToken")
     }
+    expect(
+      firstState.providerRuns.find(
+        (run) =>
+          run.idempotencyKey === `tracking:${String(seeded.sourceIds[0])}:3`,
+      ),
+    ).toMatchObject({ status: "running" })
+    const concurrentlyPausedRun = firstState.providerRuns.find(
+      (run) =>
+        run.idempotencyKey === `tracking:${String(seeded.sourceIds[1])}:3`,
+    )
+    expect(concurrentlyPausedRun).toMatchObject({
+      errorCode: "source_paused",
+      status: "failed",
+    })
+    expect(concurrentlyPausedRun?.finishedAt).toBe(NOW)
 
     await expect(applyChunk(t, input, NOW + 1)).resolves.toMatchObject({
       categorizationJobsEnqueued: 0,

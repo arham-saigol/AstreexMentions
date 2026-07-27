@@ -17,6 +17,10 @@ import {
   internalQueryReference,
 } from "../lib/functionReferences"
 import { canReconcileBillingWorkspace } from "../lib/creemBilling"
+import {
+  PROVIDER_OPERATION_STALE_MS,
+  providerRunIsStale,
+} from "../lib/billingDeletionGuard"
 import { indexAtMost, withoutUndefinedValues } from "../lib/jobRuntime"
 import {
   syncUsagePausedWorkspaceMetric,
@@ -29,6 +33,7 @@ import {
   internalQuery,
   type MutationCtx,
 } from "../server"
+import { finalizeInvalidatedTrackingProviderRun } from "../scheduling/providerRuns"
 import {
   isProviderUnconfigured,
   readCreemProductAllowlist,
@@ -50,6 +55,7 @@ const planIdValidator = v.union(
 
 const CHECKOUT_RECORD_TTL_MS = 24 * 60 * 60 * 1_000
 const WEBHOOK_RETRY_DELAY_MS = 30_000
+const MAX_STALE_CREEM_OPERATIONS_PER_DISPATCH = 16
 const POST_PURGE_DELETION_PHASES = new Set([
   "verify_data",
   "identity_delete",
@@ -63,6 +69,7 @@ type SubscriptionId = GenericId<"subscriptions">
 type UsageCycleId = GenericId<"usageCycles">
 type BillingEventId = GenericId<"billingEvents">
 type ProviderRunId = GenericId<"providerRuns">
+type GenericRow = Record<string, unknown> & { _id: GenericId<string> }
 
 type GenericMutationContext = MutationCtx
 
@@ -386,7 +393,7 @@ async function synchronizeTrackingSourcesForBilling(
   },
 ): Promise<void> {
   if (input.entitlementStatus === "inactive") {
-    const activeSources = await ctx.db
+    const activeSources = (await ctx.db
       .query("trackingSources")
       .withIndex("by_workspace_status_and_created_at", (q) =>
         indexEquals(
@@ -395,8 +402,14 @@ async function synchronizeTrackingSourcesForBilling(
           ["status", "active"],
         ),
       )
-      .collect()
+      .collect()) as GenericRow[]
     for (const source of activeSources) {
+      await finalizeInvalidatedTrackingProviderRun(ctx, {
+        errorCode: "source_paused",
+        errorMessage: "Billing entitlement became inactive",
+        now: input.now,
+        source,
+      })
       await ctx.db.patch(
         "trackingSources",
         source._id as GenericId<"trackingSources">,
@@ -911,6 +924,7 @@ export const beginCreemProviderOperation = internalMutation({
     workspaceId: v.id("workspaces"),
   },
   handler: async (ctx, args) => {
+    const now = Date.now()
     const existing = await ctx.db
       .query("providerRuns")
       .withIndex("by_idempotency_key", (q) =>
@@ -925,8 +939,7 @@ export const beginCreemProviderOperation = internalMutation({
       ) {
         throw new TypeError("Creem operation idempotency key is already in use")
       }
-      if (existing.status === "failed") {
-        const now = Date.now()
+      if (existing.status === "failed" || providerRunIsStale(existing, now)) {
         await ctx.db.patch("providerRuns", existing._id as ProviderRunId, {
           attempt: (existing.attempt as number) + 1,
           durationMs: undefined,
@@ -955,7 +968,6 @@ export const beginCreemProviderOperation = internalMutation({
     ) {
       throw new TypeError("Workspace is unavailable for billing operations")
     }
-    const now = Date.now()
     await ctx.db.insert("providerRuns", {
       attempt: 1,
       createdAt: now,
@@ -1361,6 +1373,30 @@ export const dispatchPendingCreemBillingEvents = internalMutation({
   args: { now: v.optional(v.number()) },
   handler: async (ctx, args) => {
     const now = args.now ?? Date.now()
+    const staleOperations = await ctx.db
+      .query("providerRuns")
+      .withIndex("by_provider_status_and_started_at", (q) =>
+        indexAtMost(
+          indexEquals(q, ["provider", "creem"], ["status", "running"]),
+          "startedAt",
+          now - PROVIDER_OPERATION_STALE_MS,
+        ),
+      )
+      .take(MAX_STALE_CREEM_OPERATIONS_PER_DISPATCH)
+    for (const run of staleOperations) {
+      await recordProviderRunAndMetric(ctx, {
+        durationMs: Math.max(0, now - (run.startedAt as number)),
+        errorCode: "operation_abandoned",
+        errorMessage: "Creem provider operation exceeded its recovery timeout",
+        idempotencyKey: run.idempotencyKey as string,
+        operation: run.operation as string,
+        status: "failed",
+        trigger: "retry",
+        ...(run.workspaceId === undefined
+          ? {}
+          : { workspaceId: run.workspaceId as WorkspaceId }),
+      })
+    }
     const due = await ctx.db
       .query("billingEvents")
       .withIndex("by_status_and_next_attempt_at", (q) =>
@@ -1386,7 +1422,11 @@ export const dispatchPendingCreemBillingEvents = internalMutation({
       outcomes[result.kind] = (outcomes[result.kind] ?? 0) + 1
     }
 
-    return { outcomes, state: "dispatched" as const }
+    return {
+      expiredOperations: staleOperations.length,
+      outcomes,
+      state: "dispatched" as const,
+    }
   },
 })
 

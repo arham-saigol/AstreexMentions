@@ -42,7 +42,22 @@ export type CheckoutForDeletion = {
 
 export type ProviderRunForDeletion = {
   provider: string
+  startedAt?: number | undefined
   status: string
+}
+
+export const PROVIDER_OPERATION_STALE_MS = 15 * 60 * 1_000
+
+export function providerRunIsStale(
+  run: { startedAt?: unknown; status?: unknown },
+  checkedAt = Date.now(),
+): boolean {
+  return (
+    run.status === "running" &&
+    typeof run.startedAt === "number" &&
+    Number.isFinite(run.startedAt) &&
+    run.startedAt <= checkedAt - PROVIDER_OPERATION_STALE_MS
+  )
 }
 
 const TERMINAL_SUBSCRIPTION_STATUSES = new Set([
@@ -117,7 +132,7 @@ export function evaluateCompositeDeletionBillingGuard(input: {
       (checkout.status === "open" || checkout.status === "complete"),
   )
   const runningProviderOperation = input.providerRuns.some(
-    (run) => run.status === "running",
+    (run) => run.status === "running" && !providerRunIsStale(run, checkedAt),
   )
   if (
     unresolvedCheckout ||

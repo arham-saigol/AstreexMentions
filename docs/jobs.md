@@ -94,7 +94,7 @@ tracking:{trackingSourceId}:{leaseVersion}
 
 The start mutation inserts it once. Duplicate action delivery cannot create a second run for the same lease.
 
-Keyword pause, resume, deletion, platform removal, and query changes finalize any matching in-flight provider run before clearing or replacing its lease. The stale action is fenced from persistence, while the run and provider metrics reach a terminal failed state.
+Keyword pause, resume, deletion, platform removal, query changes, inactive billing transitions, and workspace usage-cap pauses finalize any matching in-flight provider run before clearing or replacing its lease. During a usage-cap transaction, the triggering run remains owned by its scheduling mutation while every other invalidated run is finalized. Stale actions are fenced from persistence, while their runs and provider metrics reach a terminal state.
 
 ## Eligibility recheck
 
