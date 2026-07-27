@@ -215,6 +215,18 @@ async function latestAccountDeletionJob(
   )
 }
 
+function nextDeletionGeneration(existing: GenericRow | null): number {
+  if (!existing) {
+    return 1
+  }
+  const generation = existing.generation
+  return typeof generation === "number" &&
+    Number.isSafeInteger(generation) &&
+    generation >= 1
+    ? generation + 1
+    : 2
+}
+
 async function legacyWorkspaceDeletionJob(
   ctx: DatabaseCtx,
   workspaceId: WorkspaceId,
@@ -289,21 +301,25 @@ async function createBlockedDeletionJob(
     if (existing.workflowVersion !== ACCOUNT_DELETION_WORKFLOW_VERSION) {
       return existing._id as DeletionJobId
     }
-    if (existing.status !== "blocked") {
+    if (existing.status !== "blocked" && existing.status !== "canceled") {
       return existing._id as DeletionJobId
     }
-    await ctx.db.patch("deletionJobs", existing._id as DeletionJobId, {
-      billingCheckedAt: now,
-      billingGuardStatus:
-        code === "BILLING_CONFIGURATION_REQUIRED" ? "failed" : "blocked_active",
-      lastError: code,
-      lastErrorCode: code,
-      updatedAt: now,
-    })
-    return existing._id as DeletionJobId
+    if (existing.status === "blocked") {
+      await ctx.db.patch("deletionJobs", existing._id as DeletionJobId, {
+        billingCheckedAt: now,
+        billingGuardStatus:
+          code === "BILLING_CONFIGURATION_REQUIRED"
+            ? "failed"
+            : "blocked_active",
+        lastError: code,
+        lastErrorCode: code,
+        updatedAt: now,
+      })
+      return existing._id as DeletionJobId
+    }
   }
 
-  const generation = 1
+  const generation = nextDeletionGeneration(existing)
   const operationId = accountDeletionOperationId(
     String(customer.viewer.id),
     generation,
@@ -331,6 +347,9 @@ async function createBlockedDeletionJob(
       resourceKey: accountDeletionResourceKey(String(customer.viewer.id)),
       scheduledAt: now,
       status: "blocked",
+      ...(existing === null
+        ? {}
+        : { supersedesJobId: existing._id as DeletionJobId }),
       updatedAt: now,
       workflowVersion: ACCOUNT_DELETION_WORKFLOW_VERSION,
       workspaceId: customer.workspace.id,
@@ -350,12 +369,16 @@ async function acceptDeletion(
   ) {
     return existing._id as DeletionJobId
   }
-  if (existing && existing.status !== "blocked") {
+  if (
+    existing &&
+    existing.status !== "blocked" &&
+    existing.status !== "canceled"
+  ) {
     return existing._id as DeletionJobId
   }
 
   let deletionJobId: DeletionJobId
-  if (existing) {
+  if (existing?.status === "blocked") {
     deletionJobId = existing._id as DeletionJobId
     await ctx.db.patch("deletionJobs", deletionJobId, {
       accessFencedAt: now,
@@ -371,7 +394,7 @@ async function acceptDeletion(
       updatedAt: now,
     })
   } else {
-    const generation = 1
+    const generation = nextDeletionGeneration(existing)
     const operationId = accountDeletionOperationId(
       String(customer.viewer.id),
       generation,
@@ -398,6 +421,9 @@ async function acceptDeletion(
         resourceKey: accountDeletionResourceKey(String(customer.viewer.id)),
         scheduledAt: now,
         status: "pending",
+        ...(existing === null
+          ? {}
+          : { supersedesJobId: existing._id as DeletionJobId }),
         updatedAt: now,
         workflowVersion: ACCOUNT_DELETION_WORKFLOW_VERSION,
         workspaceId: customer.workspace.id,
@@ -490,7 +516,11 @@ export const getAccountDeletionReadiness = authenticatedQuery({
       ctx,
       requester.customer.viewer.id,
     )
-    if (existing && existing.status !== "blocked") {
+    if (
+      existing &&
+      existing.status !== "blocked" &&
+      existing.status !== "canceled"
+    ) {
       return resultForExistingJob(existing)
     }
     const legacy = await legacyWorkspaceDeletionJob(
@@ -544,7 +574,9 @@ export const getAccountDeletionStatus = authenticatedQuery({
       ctx,
       requester.customer.viewer.id,
     )
-    return job ? resultForExistingJob(job) : { state: "available" }
+    return job && job.status !== "canceled"
+      ? resultForExistingJob(job)
+      : { state: "available" }
   },
 })
 
@@ -564,7 +596,11 @@ export const deleteAccount = authenticatedMutation({
     }
     const customer = requester.customer
     const existing = await latestAccountDeletionJob(ctx, customer.viewer.id)
-    if (existing && existing.status !== "blocked") {
+    if (
+      existing &&
+      existing.status !== "blocked" &&
+      existing.status !== "canceled"
+    ) {
       return resultForExistingJob(existing)
     }
     const legacy = await legacyWorkspaceDeletionJob(ctx, customer.workspace.id)

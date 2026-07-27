@@ -90,6 +90,7 @@ export default async function DeletionsPage({
   const status = parseStatus(params.status)
   const result = await runAdminQuery(adminConvex.listDeletionJobs, {
     limit: 200,
+    ...(status ? { status } : {}),
   })
 
   if (result.status === "access-denied") {
@@ -106,17 +107,12 @@ export default async function DeletionsPage({
   if (!jobs) {
     return <AccessState kind="unavailable" />
   }
-  const visibleJobs = status
-    ? jobs.filter((job) => job.status === status)
-    : jobs
-  const selectedJob = selectedJobId
-    ? jobs.find((job) => job.id === selectedJobId)
-    : undefined
+  const visibleJobs = jobs
   let detail = null
   let detailUnavailable = false
-  if (selectedJob) {
+  if (selectedJobId) {
     const detailResult = await runAdminQuery(adminConvex.getDeletionJob, {
-      deletionJobId: selectedJob.id,
+      deletionJobId: selectedJobId,
     })
     if (detailResult.status === "ready") {
       detail = parseDeletionJobDetail(detailResult.data)
@@ -279,7 +275,7 @@ export default async function DeletionsPage({
               safe.
             </p>
           </div>
-          {selectedJob && detail ? (
+          {detail ? (
             <div className="admin-panel space-y-5 p-4 sm:p-5">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="outline">{detail.job.status}</Badge>

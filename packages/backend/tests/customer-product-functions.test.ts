@@ -33,6 +33,11 @@ const customerTestSchema = defineSchema({
     .index("by_account_user_and_created_at", ["accountUserId", "createdAt"]),
   billingCheckouts: defineTable(v.any())
     .index("by_workspace_and_created_at", ["workspaceId", "createdAt"])
+    .index("by_workspace_plan_and_created_at", [
+      "workspaceId",
+      "planId",
+      "createdAt",
+    ])
     .index("by_workspace_status_and_expires_at", [
       "workspaceId",
       "status",
@@ -149,6 +154,9 @@ const deleteAccount = makeFunctionReference<"mutation">(
 )
 const getAccountDeletionReadiness = makeFunctionReference<"query">(
   "workspaces:getAccountDeletionReadiness",
+)
+const getAccountDeletionStatus = makeFunctionReference<"query">(
+  "workspaces:getAccountDeletionStatus",
 )
 const listCategories = makeFunctionReference<"query">(
   "categories:listCategories",
@@ -354,6 +362,82 @@ describe("customer user and workspace functions", () => {
     })
     expect(persisted.user?.deletedAt).toBeUndefined()
     expect(persisted.workspace?.deletedAt).toBeUndefined()
+  })
+
+  it("creates a new deletion generation after operator cancellation", async () => {
+    const { bootstrap, customer, t } = await bootstrappedCustomer()
+    const now = Date.now()
+    const canceledId = await t.run(
+      async (ctx) =>
+        await ctx.db.insert("deletionJobs", {
+          accountUserId: bootstrap.userId,
+          accessFencedAt: now - 1,
+          attempts: 0,
+          billingGuardStatus: "confirmed_inactive",
+          createdAt: now - 1,
+          generation: 1,
+          idempotencyKey: `account:${bootstrap.userId}:1`,
+          identityClerkUserId: identity.subject,
+          kind: "account",
+          leaseVersion: 0,
+          maxAttempts: 10,
+          operationId: `account:${bootstrap.userId}:1`,
+          phase: "billing_check",
+          requestedByUserId: bootstrap.userId,
+          resourceKey: `account:${bootstrap.userId}`,
+          scheduledAt: now - 1,
+          status: "canceled",
+          updatedAt: now - 1,
+          workflowVersion: 2,
+          workspaceId: bootstrap.workspaceId,
+        }),
+    )
+    const previousApiKey = process.env.CREEM_API_KEY
+    const previousMode = process.env.CREEM_MODE
+    process.env.CREEM_API_KEY = "creem_test_fixture"
+    process.env.CREEM_MODE = "test"
+    try {
+      await expect(
+        customer.query(getAccountDeletionReadiness, {}),
+      ).resolves.toEqual({ state: "available" })
+      await expect(
+        customer.query(getAccountDeletionStatus, {}),
+      ).resolves.toEqual({ state: "available" })
+
+      const accepted = (await customer.mutation(deleteAccount, {
+        confirmation: "DELETE",
+      })) as { deletionJobId: string; state: string }
+      expect(accepted).toMatchObject({
+        deletionJobId: expect.any(String),
+        state: "accepted",
+      })
+      expect(accepted.deletionJobId).not.toBe(String(canceledId))
+    } finally {
+      if (previousApiKey === undefined) {
+        delete process.env.CREEM_API_KEY
+      } else {
+        process.env.CREEM_API_KEY = previousApiKey
+      }
+      if (previousMode === undefined) {
+        delete process.env.CREEM_MODE
+      } else {
+        process.env.CREEM_MODE = previousMode
+      }
+    }
+
+    const jobs = await t.run(
+      async (ctx) => await ctx.db.query("deletionJobs").collect(),
+    )
+    expect(jobs).toHaveLength(2)
+    expect(jobs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          generation: 2,
+          status: "pending",
+          supersedesJobId: canceledId,
+        }),
+      ]),
+    )
   })
 })
 

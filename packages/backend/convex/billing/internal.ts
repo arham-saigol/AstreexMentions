@@ -346,18 +346,15 @@ async function findWorkspaceForNewSubscription(
     return null
   }
 
-  const checkouts = await ctx.db
+  const matchingCheckouts = await ctx.db
     .query("billingCheckouts")
-    .withIndex("by_workspace_and_created_at", (q) =>
-      q.eq("workspaceId", workspaceId),
+    .withIndex("by_workspace_plan_and_created_at", (q) =>
+      indexEquals(q, ["workspaceId", workspaceId], ["planId", plan.planId]),
     )
-    .collect()
-  const matchingCheckout = checkouts.find(
-    (checkout) =>
-      checkout.provider === "creem" && checkout.planId === plan.planId,
-  )
+    .order("desc")
+    .take(1)
 
-  return matchingCheckout ? workspaceId : null
+  return matchingCheckouts.length > 0 ? workspaceId : null
 }
 
 async function hasPurgedWorkspaceTombstone(
