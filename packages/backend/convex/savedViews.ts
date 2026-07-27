@@ -39,6 +39,8 @@ type SavedViewResult = {
   sort: MentionSort
 }
 
+const MAX_ACTIVE_SAVED_VIEWS = 50
+
 export const SYNTHETIC_ALL_MENTIONS_VIEW_ID = "all-mentions"
 
 export const SYNTHETIC_ALL_MENTIONS_VIEW: Readonly<SavedViewResult> =
@@ -253,7 +255,14 @@ async function storedViews(
         ["deletedAt", undefined],
       ),
     )
-    .collect()
+    .take(MAX_ACTIVE_SAVED_VIEWS + 1)
+
+  if (rows.length > MAX_ACTIVE_SAVED_VIEWS) {
+    savedViewError(
+      "SAVED_VIEW_LIMIT_EXCEEDED",
+      `Saved views cannot exceed ${MAX_ACTIVE_SAVED_VIEWS} active views`,
+    )
+  }
 
   for (const row of rows) {
     if (
@@ -337,6 +346,12 @@ export const createSavedView = authenticatedMutation({
     const filters = await validatedFilters(ctx, workspace.id, args.filters)
     const icon = validatedIcon(args.icon)
     const rows = await storedViews(ctx, workspace.id, viewer.id)
+    if (rows.length >= MAX_ACTIVE_SAVED_VIEWS) {
+      savedViewError(
+        "SAVED_VIEW_LIMIT_EXCEEDED",
+        `Saved views cannot exceed ${MAX_ACTIVE_SAVED_VIEWS} active views`,
+      )
+    }
     const position =
       rows.reduce(
         (maximum, row) => Math.max(maximum, row.position as number),

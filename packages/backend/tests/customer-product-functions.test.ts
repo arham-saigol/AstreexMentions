@@ -453,6 +453,38 @@ describe("customer saved view functions", () => {
     expect(persisted).toHaveLength(1)
     expect(persisted[0]?.name).toBe("Saved mentions")
   })
+
+  it("rejects creation after fifty active saved views", async () => {
+    const { bootstrap, customer, t } = await bootstrappedCustomer()
+    await t.run(async (ctx) => {
+      for (let index = 0; index < 50; index += 1) {
+        await ctx.db.insert("savedViews", {
+          createdAt: index,
+          filters: {},
+          icon: "funnel",
+          name: `View ${index + 1}`,
+          normalizedName: `view ${index + 1}`,
+          position: index + 1,
+          sort: "newest",
+          updatedAt: index,
+          userId: bootstrap.userId,
+          workspaceId: bootstrap.workspaceId,
+        })
+      }
+    })
+
+    await expect(
+      customer.mutation(createSavedView, {
+        filters: {},
+        icon: "funnel",
+        name: "One too many",
+        sort: "newest",
+      }),
+    ).rejects.toMatchObject({
+      data: { code: "SAVED_VIEW_LIMIT_EXCEEDED" },
+    })
+    await expect(customer.query(listSavedViews, {})).resolves.toHaveLength(51)
+  })
 })
 
 describe("customer settings functions", () => {

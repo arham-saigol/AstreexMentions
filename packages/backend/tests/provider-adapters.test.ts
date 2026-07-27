@@ -383,6 +383,36 @@ describe("Algolia Hacker News adapter", () => {
       oldestPublishedAt: 1_785_056_400_000,
     })
   })
+
+  it("preserves out-of-range numeric HTML entities without failing the page", async () => {
+    const adapter = createAlgoliaHackerNewsAdapter({
+      fetch: async () =>
+        jsonResponse({
+          hits: [
+            {
+              _tags: ["story"],
+              created_at_i: 1_785_061_800,
+              objectID: "49000003",
+              story_text:
+                "Valid &#x41;; invalid &#x110000; and &#1114112; entities.",
+              title: "Numeric HTML entities",
+            },
+          ],
+          hitsPerPage: 1,
+          nbHits: 1,
+          nbPages: 1,
+          page: 0,
+          processingTimeMS: 1,
+          query: "astreex",
+        }),
+    })
+
+    const result = await adapter.search({ query: "astreex" })
+
+    expect(result.items[0]?.body).toBe(
+      "Valid A; invalid &#x110000; and &#1114112; entities.",
+    )
+  })
 })
 
 describe("typed provider failures", () => {

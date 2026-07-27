@@ -81,14 +81,28 @@ const HTML_ENTITIES: Readonly<Record<string, string>> = {
   quot: '"',
 }
 
+function decodeNumericHtmlEntity(
+  entity: string,
+  digits: string,
+  radix: 10 | 16,
+): string {
+  const validDigits =
+    radix === 16 ? /^[0-9a-f]+$/iu.test(digits) : /^[0-9]+$/u.test(digits)
+  const value = validDigits ? Number.parseInt(digits, radix) : Number.NaN
+  const isUnicodeScalar =
+    Number.isInteger(value) &&
+    value >= 0 &&
+    value <= 0x10_ffff &&
+    (value < 0xd800 || value > 0xdfff)
+  return isUnicodeScalar ? String.fromCodePoint(value) : `&${entity};`
+}
+
 function decodeHtmlEntity(entity: string): string {
   if (entity.startsWith("#x") || entity.startsWith("#X")) {
-    const value = Number.parseInt(entity.slice(2), 16)
-    return Number.isFinite(value) ? String.fromCodePoint(value) : `&${entity};`
+    return decodeNumericHtmlEntity(entity, entity.slice(2), 16)
   }
   if (entity.startsWith("#")) {
-    const value = Number.parseInt(entity.slice(1), 10)
-    return Number.isFinite(value) ? String.fromCodePoint(value) : `&${entity};`
+    return decodeNumericHtmlEntity(entity, entity.slice(1), 10)
   }
   return HTML_ENTITIES[entity] ?? `&${entity};`
 }
