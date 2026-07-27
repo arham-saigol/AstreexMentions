@@ -1,7 +1,7 @@
 "use client"
 
 import { useAction } from "convex/react"
-import { useCallback, useState } from "react"
+import { useCallback, useRef, useState } from "react"
 
 import { customerConvex, type PlanId } from "@/lib/customer-convex"
 import {
@@ -25,6 +25,7 @@ export function useBillingActions() {
   const upgradeSubscription = useAction(
     customerConvex.billing.upgradeSubscription,
   )
+  const checkoutIntentKeys = useRef<Partial<Record<PlanId, string>>>({})
   const [pending, setPending] = useState<BillingAction | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -78,13 +79,19 @@ export function useBillingActions() {
     async (planId: PlanId) => {
       setError(null)
       setPending(`checkout:${planId}`)
+      const idempotencyKey =
+        checkoutIntentKeys.current[planId] ?? checkoutIdempotencyKey()
+      checkoutIntentKeys.current[planId] = idempotencyKey
       try {
-        followBillingRedirect(
+        const redirected = followBillingRedirect(
           await createCheckout({
-            idempotencyKey: checkoutIdempotencyKey(),
+            idempotencyKey,
             planId,
           }),
         )
+        if (redirected) {
+          delete checkoutIntentKeys.current[planId]
+        }
       } catch {
         setError("Checkout could not be started. Try again shortly.")
       } finally {
