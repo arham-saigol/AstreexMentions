@@ -358,6 +358,35 @@ describe("customer user and workspace functions", () => {
 })
 
 describe("customer category functions", () => {
+  it("rejects category creation at the active catalog limit", async () => {
+    const { bootstrap, customer, t } = await bootstrappedCustomer()
+    await t.run(async (ctx) => {
+      for (let index = 0; index < 43; index += 1) {
+        const now = Date.now() + index
+        await ctx.db.insert("categories", {
+          colorToken: "blue",
+          createdAt: now,
+          description: `Custom category ${index}`,
+          enabled: true,
+          isSystem: false,
+          name: `Custom ${index}`,
+          normalizedName: `custom ${index}`,
+          sortOrder: 7 + index,
+          updatedAt: now,
+          workspaceId: bootstrap.workspaceId,
+        })
+      }
+    })
+
+    await expect(
+      customer.mutation(createCategory, {
+        colorToken: "cyan",
+        description: "One category too many",
+        name: "Overflow",
+      }),
+    ).rejects.toMatchObject({ data: { code: "CATEGORY_LIMIT_REACHED" } })
+  })
+
   it("preserves default and Other invariants while soft-deleting custom categories", async () => {
     const { bootstrap, customer, t } = await bootstrappedCustomer()
     const defaults = (await customer.query(listCategories, {})) as Array<{

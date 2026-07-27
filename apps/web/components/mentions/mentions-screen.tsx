@@ -476,7 +476,6 @@ export function MentionsScreen() {
       return
     }
     const advanceTimer = window.setTimeout(() => {
-      setCursorHistory((current) => [...current, cursor])
       setCursor(sparsePageCursor)
     }, 0)
     return () => window.clearTimeout(advanceTimer)

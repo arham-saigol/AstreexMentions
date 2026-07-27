@@ -20,6 +20,7 @@ type CategoryId = GenericId<"categories">
 type WorkspaceId = GenericId<"workspaces">
 
 const CATEGORY_REASSIGN_BATCH_SIZE = 100
+export const MAX_ACTIVE_CATEGORIES = 50
 
 type CategoryRecord = CategoryPolicyRecord & {
   colorToken: CategoryColorToken
@@ -126,7 +127,13 @@ async function currentCategories(
     .withIndex("by_workspace_deleted_enabled_and_sort_order", (q) =>
       indexEquals(q, ["workspaceId", workspaceId], ["deletedAt", undefined]),
     )
-    .collect()
+    .take(MAX_ACTIVE_CATEGORIES + 1)
+  if (rows.length > MAX_ACTIVE_CATEGORIES) {
+    categoryError(
+      "CATEGORY_LIMIT_REACHED",
+      `A workspace can have at most ${MAX_ACTIVE_CATEGORIES} active categories`,
+    )
+  }
   const categories = rows
     .map(categoryRecord)
     .sort(
@@ -242,6 +249,12 @@ export const createCategory = authenticatedMutation({
   handler: async (ctx, args) => {
     const { workspace } = await resolveCurrentCustomer(ctx, ctx.identity)
     const categories = await currentCategories(ctx, workspace.id)
+    if (categories.length >= MAX_ACTIVE_CATEGORIES) {
+      categoryError(
+        "CATEGORY_LIMIT_REACHED",
+        `A workspace can have at most ${MAX_ACTIVE_CATEGORIES} active categories`,
+      )
+    }
     const name = requiredCategoryText(args.name, "Category name", 80)
     const description = requiredCategoryText(
       args.description,
