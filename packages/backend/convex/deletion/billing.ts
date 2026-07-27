@@ -34,7 +34,8 @@ export async function readDeletionBillingSnapshot(
     subscriptionRows,
     checkoutRows,
     runningProviderRuns,
-    billingEventRows,
+    pendingBillingEventRows,
+    leasedBillingEventRows,
     activeEmailOutboxLeases,
   ] = await Promise.all([
     db
@@ -59,10 +60,16 @@ export async function readDeletionBillingSnapshot(
       .take(1),
     db
       .query("billingEvents")
-      .withIndex("by_workspace_and_received_at", (q) =>
-        q.eq("workspaceId", workspaceId),
+      .withIndex("by_workspace_status_and_received_at", (q) =>
+        indexEquals(q, ["workspaceId", workspaceId], ["status", "pending"]),
       )
-      .collect(),
+      .take(1),
+    db
+      .query("billingEvents")
+      .withIndex("by_workspace_status_and_received_at", (q) =>
+        indexEquals(q, ["workspaceId", workspaceId], ["status", "leased"]),
+      )
+      .take(1),
     db
       .query("emailOutbox")
       .withIndex("by_workspace_status_and_lease_expires_at", (q) =>
@@ -89,9 +96,8 @@ export async function readDeletionBillingSnapshot(
       expiresAt: checkout.expiresAt as number,
       status: checkout.status as string,
     })),
-    pendingBillingEventCount: billingEventRows.filter(
-      (event) => event.status === "pending" || event.status === "leased",
-    ).length,
+    pendingBillingEventCount:
+      pendingBillingEventRows.length + leasedBillingEventRows.length,
     providerConfigured: providerConfiguration.state === "configured",
     providerRuns: runningProviderRuns.map((run) => ({
       provider: run.provider as string,

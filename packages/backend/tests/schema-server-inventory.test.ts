@@ -125,9 +125,10 @@ describe("complete Convex schema", () => {
       "status",
       "publishedAt",
     ])
-    expectIndex("mentions", "by_workspace_and_engagement", [
+    expectIndex("mentions", "by_workspace_engagement_and_published_at", [
       "workspaceId",
       "engagementScore",
+      "publishedAt",
     ])
     expectIndex("mentions", "by_workspace_status_and_engagement", [
       "workspaceId",
@@ -188,6 +189,11 @@ describe("complete Convex schema", () => {
       "by_provider_operation_granularity_and_bucket",
       ["provider", "operation", "granularity", "bucketStartAt"],
     )
+    expectIndex("billingEvents", "by_workspace_status_and_received_at", [
+      "workspaceId",
+      "status",
+      "receivedAt",
+    ])
     expectIndex(
       "systemMetricBuckets",
       "by_metric_scope_workspace_granularity_and_bucket",

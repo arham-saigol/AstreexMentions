@@ -60,7 +60,7 @@ The same Clerk user ID must therefore be configured independently in the admin N
 
 ## Public read exception
 
-`changelog:listPublishedEntries` is the only deliberately anonymous Convex query. It uses the visibly named `publicQuery` wrapper and reads only rows whose status is `published` and whose `publishedAt` is numeric. Draft fields such as requested publication time, labels, and actor IDs are not returned.
+`changelog:listPublishedEntries` and `changelog:getPublishedEntry` are the only deliberately anonymous Convex queries. They use the visibly named `publicQuery` wrapper. The list reads bounded published summary pages; the detail route uses the slug index and returns at most one body after rechecking published status and numeric `publishedAt`. Draft fields such as requested publication time, labels, and actor IDs are not returned.
 
 Marketing and blog content are otherwise local application content. Customer data, admin data, mutations, and actions have no anonymous client entry point.
 

@@ -100,6 +100,9 @@ const listMyFeatureRequests = makeFunctionReference<"query">(
 const listPublishedEntries = makeFunctionReference<"query">(
   "changelog:listPublishedEntries",
 )
+const getPublishedEntry = makeFunctionReference<"query">(
+  "changelog:getPublishedEntry",
+)
 const getMetricsOverview = makeFunctionReference<"query">(
   "admin:getMetricsOverview",
 )
@@ -261,7 +264,11 @@ describe("admin feature request and changelog functions", () => {
       title: "Initial release",
     })) as { id: string; status: string }
     expect(created.status).toBe("draft")
-    await expect(t.query(listPublishedEntries, {})).resolves.toEqual([])
+    await expect(t.query(listPublishedEntries, {})).resolves.toEqual({
+      entries: [],
+      isDone: true,
+      nextCursor: null,
+    })
 
     await admin.mutation(updateChangelogEntry, {
       body: "Updated release details.",
@@ -274,12 +281,11 @@ describe("admin feature request and changelog functions", () => {
     })
     await admin.mutation(publishChangelogEntry, { entryId: created.id })
 
-    const publicEntries = (await t.query(listPublishedEntries, {})) as Array<
-      Record<string, unknown>
-    >
-    expect(publicEntries).toEqual([
+    const publicPage = (await t.query(listPublishedEntries, {})) as {
+      entries: Array<Record<string, unknown>>
+    }
+    expect(publicPage.entries).toEqual([
       {
-        body: "Updated release details.",
         publishedAt: publicationDate,
         slug: "initial-release",
         summary: "Updated release summary.",
@@ -287,12 +293,30 @@ describe("admin feature request and changelog functions", () => {
         updatedAt: expect.any(Number),
       },
     ])
-    expect(publicEntries[0]).not.toHaveProperty("createdByClerkUserId")
-    expect(publicEntries[0]).not.toHaveProperty("label")
-    expect(publicEntries[0]).not.toHaveProperty("status")
+    expect(publicPage.entries[0]).not.toHaveProperty("body")
+    expect(publicPage.entries[0]).not.toHaveProperty("createdByClerkUserId")
+    expect(publicPage.entries[0]).not.toHaveProperty("label")
+    expect(publicPage.entries[0]).not.toHaveProperty("status")
+    await expect(
+      t.query(getPublishedEntry, { slug: "initial-release" }),
+    ).resolves.toEqual({
+      body: "Updated release details.",
+      publishedAt: publicationDate,
+      slug: "initial-release",
+      summary: "Updated release summary.",
+      title: "Initial release updated",
+      updatedAt: expect.any(Number),
+    })
 
     await admin.mutation(unpublishChangelogEntry, { entryId: created.id })
-    await expect(t.query(listPublishedEntries, {})).resolves.toEqual([])
+    await expect(t.query(listPublishedEntries, {})).resolves.toEqual({
+      entries: [],
+      isDone: true,
+      nextCursor: null,
+    })
+    await expect(
+      t.query(getPublishedEntry, { slug: "initial-release" }),
+    ).resolves.toBeNull()
     await admin.mutation(deleteChangelogEntry, { entryId: created.id })
 
     await expect(admin.query(listChangelogEntries, {})).resolves.toEqual([])
@@ -315,6 +339,50 @@ describe("admin feature request and changelog functions", () => {
         expect.objectContaining({ action: "admin.changelog.deleted" }),
       ]),
     )
+  })
+
+  it("paginates public changelog summaries and looks up one published body by slug", async () => {
+    const { t } = await setup()
+    const now = Date.now()
+    await t.run(async (ctx) => {
+      for (let index = 0; index < 25; index += 1) {
+        await ctx.db.insert("changelogEntries", {
+          body: `Published body ${index}`,
+          createdAt: now + index,
+          createdByClerkUserId: adminIdentity.subject,
+          publishedAt: now + index,
+          slug: `published-entry-${index}`,
+          status: "published",
+          summary: `Published summary ${index}`,
+          title: `Published entry ${index}`,
+          updatedAt: now + index,
+          updatedByClerkUserId: adminIdentity.subject,
+        })
+      }
+    })
+
+    const first = (await t.query(listPublishedEntries, {})) as {
+      entries: Array<Record<string, unknown>>
+      isDone: boolean
+      nextCursor: string | null
+    }
+    expect(first.entries).toHaveLength(24)
+    expect(first.isDone).toBe(false)
+    expect(first.nextCursor).toEqual(expect.any(String))
+    expect(first.entries.every((entry) => !("body" in entry))).toBe(true)
+
+    const second = (await t.query(listPublishedEntries, {
+      cursor: first.nextCursor,
+    })) as {
+      entries: Array<Record<string, unknown>>
+      isDone: boolean
+      nextCursor: string | null
+    }
+    expect(second.entries).toHaveLength(1)
+    expect(second).toMatchObject({ isDone: true, nextCursor: null })
+    await expect(
+      t.query(getPublishedEntry, { slug: "published-entry-24" }),
+    ).resolves.toMatchObject({ body: "Published body 24" })
   })
 
   it("paginates the global feature request queue with opaque cursors", async () => {

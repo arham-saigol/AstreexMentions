@@ -412,6 +412,11 @@ export default defineSchema({
     .index("by_event_type_and_received_at", ["eventType", "receivedAt"])
     .index("by_status_and_received_at", ["status", "receivedAt"])
     .index("by_workspace_and_received_at", ["workspaceId", "receivedAt"])
+    .index("by_workspace_status_and_received_at", [
+      "workspaceId",
+      "status",
+      "receivedAt",
+    ])
     .index("by_workspace_redacted_and_received_at", [
       "workspaceId",
       "redactedAt",
@@ -581,7 +586,11 @@ export default defineSchema({
       "status",
       "engagementScore",
     ])
-    .index("by_workspace_and_engagement", ["workspaceId", "engagementScore"])
+    .index("by_workspace_engagement_and_published_at", [
+      "workspaceId",
+      "engagementScore",
+      "publishedAt",
+    ])
     .index("by_workspace_and_published_at", ["workspaceId", "publishedAt"])
     .index("by_workspace_category_and_published_at", [
       "workspaceId",

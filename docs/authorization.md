@@ -148,18 +148,17 @@ Admin mutations write audit events with the admin Clerk subject. Published chang
 
 ## Anonymous changelog exception
 
-`changelog:listPublishedEntries` is the only anonymous Convex query. Its authorization classification is `public_published_read`.
+`changelog:listPublishedEntries` and `changelog:getPublishedEntry` are the only anonymous Convex queries. Their authorization classification is `public_published_read`; the list returns bounded summary pages, while the slug lookup returns at most one published body.
 
-It queries `changelogEntries.by_status_and_published_at` with `status = "published"`, rechecks that status and a numeric publication timestamp, and returns only:
+The list query uses `changelogEntries.by_status_and_published_at` with `status = "published"`, rechecks that status and a numeric publication timestamp, and returns opaque-cursor pages containing only:
 
-- `body`
 - `publishedAt`
 - `slug`
 - `summary`
 - `title`
 - `updatedAt`
 
-It does not return drafts, requested publication dates, labels, or admin actor IDs. There are no anonymous mutations or actions.
+The detail query uses `changelogEntries.by_slug`, applies the same publication checks, and adds `body`. Neither query returns drafts, requested publication dates, labels, or admin actor IDs. There are no anonymous mutations or actions.
 
 ## Webhook authorization
 

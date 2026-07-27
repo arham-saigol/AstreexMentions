@@ -1,4 +1,5 @@
 import {
+  ArrowLeftIcon,
   ArrowRightIcon,
   CalendarBlankIcon,
   MegaphoneSimpleIcon,
@@ -15,6 +16,10 @@ import {
 } from "@/lib/changelog"
 
 export const dynamic = "force-dynamic"
+
+type ChangelogPageProps = {
+  searchParams: Promise<{ cursor?: string | string[] }>
+}
 
 const changelogMetadata: Metadata = {
   title: "Product changelog",
@@ -49,8 +54,12 @@ export async function generateMetadata(): Promise<Metadata> {
       }
 }
 
-export default async function ChangelogPage() {
-  const result = await getPublishedChangelogEntries()
+export default async function ChangelogPage({
+  searchParams,
+}: ChangelogPageProps) {
+  const rawCursor = (await searchParams).cursor
+  const cursor = typeof rawCursor === "string" ? rawCursor : undefined
+  const result = await getPublishedChangelogEntries(cursor)
 
   return (
     <>
@@ -110,7 +119,7 @@ export default async function ChangelogPage() {
               </div>
               <p className="text-muted-foreground text-sm">
                 {result.entries.length} published{" "}
-                {result.entries.length === 1 ? "entry" : "entries"}
+                {result.entries.length === 1 ? "entry" : "entries"} on this page
               </p>
             </div>
 
@@ -151,6 +160,37 @@ export default async function ChangelogPage() {
                 </li>
               ))}
             </ol>
+
+            {(cursor || result.nextCursor) && (
+              <nav
+                aria-label="Changelog pagination"
+                className="mt-8 flex items-center justify-between gap-4"
+              >
+                {cursor ? (
+                  <Link
+                    href="/changelog"
+                    className="border-border text-foreground hover:border-primary/40 inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-semibold transition-colors"
+                  >
+                    <ArrowLeftIcon aria-hidden="true" className="size-4" />
+                    Newest updates
+                  </Link>
+                ) : (
+                  <span />
+                )}
+                {result.nextCursor && (
+                  <Link
+                    href={{
+                      pathname: "/changelog",
+                      query: { cursor: result.nextCursor },
+                    }}
+                    className="border-border text-foreground hover:border-primary/40 inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-semibold transition-colors"
+                  >
+                    Older updates
+                    <ArrowRightIcon aria-hidden="true" className="size-4" />
+                  </Link>
+                )}
+              </nav>
+            )}
           </section>
         )}
       </div>

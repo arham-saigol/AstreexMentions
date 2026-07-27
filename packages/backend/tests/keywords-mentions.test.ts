@@ -48,7 +48,11 @@ const testSchema = defineSchema({
     .index("by_workspace_and_mention", ["workspaceId", "mentionId"]),
   mentions: defineTable(v.any())
     .index("by_workspace_and_published_at", ["workspaceId", "publishedAt"])
-    .index("by_workspace_and_engagement", ["workspaceId", "engagementScore"]),
+    .index("by_workspace_engagement_and_published_at", [
+      "workspaceId",
+      "engagementScore",
+      "publishedAt",
+    ]),
   providerMetricBuckets: defineTable(v.any()).index(
     "by_provider_operation_granularity_and_bucket",
     ["provider", "operation", "granularity", "bucketStartAt"],
@@ -818,6 +822,83 @@ describe("mention Convex functions", () => {
     expect(filtered.items.map((item) => item.id)).toEqual([
       seeded.mentionIds[0],
     ])
+  })
+
+  it("fills a filtered page across the former 100-row scan boundary", async () => {
+    const t = createBackendTest()
+    const customer = await seedCustomer(t, {
+      paid: true,
+      suffix: "mention-scan-gap",
+    })
+    const seeded = await seedMentions(t, customer)
+    const now = Date.now()
+    await t.run(async (ctx) => {
+      for (let index = 0; index < 101; index += 1) {
+        await ctx.db.insert("mentions", {
+          analysisState: "completed",
+          body: `Unrelated result ${index}`,
+          canonicalUrl: `https://example.com/unrelated/${index}`,
+          contentType: "post",
+          engagementScore: 0,
+          firstSeenAt: now,
+          lastMatchedAt: now,
+          platform: "reddit",
+          publishedAt: now + index + 1,
+          searchText: `unrelated result ${index}`,
+          status: "new",
+          updatedAt: now,
+          workspaceId: customer.workspaceId,
+        })
+      }
+    })
+
+    const page = mentionPage(
+      await customer.client.query(listMentionsReference, {
+        limit: 1,
+        query: "fresh mention",
+        sort: "newest",
+      }),
+    )
+    expect(page.items.map((item) => item.id)).toEqual([seeded.mentionIds[0]])
+  })
+
+  it("orders engagement-score ties by publication time", async () => {
+    const t = createBackendTest()
+    const customer = await seedCustomer(t, {
+      paid: true,
+      suffix: "mention-engagement-ties",
+    })
+    await seedMentions(t, customer)
+    const now = Date.now()
+    const [newerId, olderId] = await t.run(async (ctx) => {
+      const insertMention = async (suffix: string, publishedAt: number) =>
+        (await ctx.db.insert("mentions", {
+          analysisState: "completed",
+          body: `Tied engagement ${suffix}`,
+          canonicalUrl: `https://example.com/tied/${suffix}`,
+          contentType: "post",
+          engagementScore: 100,
+          firstSeenAt: now,
+          lastMatchedAt: now,
+          platform: "reddit",
+          publishedAt,
+          searchText: `tied engagement ${suffix}`,
+          status: "new",
+          updatedAt: now,
+          workspaceId: customer.workspaceId,
+        })) as MentionId
+      const newer = await insertMention("newer", now)
+      const older = await insertMention("older", now - 10_000)
+      return [newer, older] as const
+    })
+
+    const page = mentionPage(
+      await customer.client.query(listMentionsReference, {
+        limit: 2,
+        sort: "most_engaged",
+      }),
+    )
+    expect(page.items.map((item) => item.id)).toEqual([newerId, olderId])
   })
 
   it("binds cursors and mention ids to the authenticated workspace", async () => {

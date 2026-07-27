@@ -15,41 +15,50 @@ const timestampSchema = z
   .nonnegative()
   .max(MAX_DATE_TIMESTAMP)
 
-const publishedEntrySchema = z.object({
+const publishedEntrySummarySchema = z.object({
   slug: z.string().trim().min(1).max(120).regex(SLUG_PATTERN),
   title: z.string().trim().min(1).max(140),
   summary: z.string().trim().min(1).max(320),
-  body: z.string().trim().min(1).max(100_000),
   publishedAt: timestampSchema,
   updatedAt: timestampSchema.optional(),
-  status: z.literal("published").optional(),
 })
 
-const publishedEntriesResponseSchema = z.union([
-  z.array(publishedEntrySchema),
-  z.object({
-    entries: z.array(publishedEntrySchema),
-  }),
-])
+const publishedEntrySchema = publishedEntrySummarySchema.extend({
+  body: z.string().trim().min(1).max(100_000),
+})
+
+const publishedEntriesPageSchema = z.object({
+  entries: z.array(publishedEntrySummarySchema),
+  isDone: z.boolean(),
+  nextCursor: z.string().trim().min(1).nullable(),
+})
 
 const publishedEntriesQuery = convexQueryReference<
-  Record<string, never>,
+  { cursor?: string },
   unknown
 >("changelog:listPublishedEntries")
+const publishedEntryQuery = convexQueryReference<{ slug: string }, unknown>(
+  "changelog:getPublishedEntry",
+)
 
-export type PublishedChangelogEntry = {
+export type PublishedChangelogSummary = {
   slug: string
   title: string
   summary: string
-  body: string
   publishedAt: number
   updatedAt?: number
 }
 
-export type ChangelogResult =
+export type PublishedChangelogEntry = PublishedChangelogSummary & {
+  body: string
+}
+
+export type ChangelogListResult =
   | {
       state: "ready"
-      entries: PublishedChangelogEntry[]
+      entries: PublishedChangelogSummary[]
+      isDone: boolean
+      nextCursor: string | null
     }
   | {
       state: "configuration-required"
@@ -58,46 +67,41 @@ export type ChangelogResult =
       state: "error"
     }
 
-function publicEntry(
-  entry: z.infer<typeof publishedEntrySchema>,
-): PublishedChangelogEntry {
+export type ChangelogEntryResult =
+  | {
+      state: "ready"
+      entry: PublishedChangelogEntry | null
+    }
+  | {
+      state: "configuration-required"
+    }
+  | {
+      state: "error"
+    }
+
+function publicSummary(
+  entry: z.infer<typeof publishedEntrySummarySchema>,
+): PublishedChangelogSummary {
   return {
     slug: entry.slug,
     title: entry.title,
     summary: entry.summary,
-    body: entry.body,
     publishedAt: entry.publishedAt,
     ...(entry.updatedAt === undefined ? {} : { updatedAt: entry.updatedAt }),
   }
 }
 
-function parsePublishedEntries(
-  value: unknown,
-): PublishedChangelogEntry[] | null {
-  const parsed = publishedEntriesResponseSchema.safeParse(value)
-
-  if (!parsed.success) {
-    return null
+function publicEntry(
+  entry: z.infer<typeof publishedEntrySchema>,
+): PublishedChangelogEntry {
+  return {
+    ...publicSummary(entry),
+    body: entry.body,
   }
-
-  const records = Array.isArray(parsed.data) ? parsed.data : parsed.data.entries
-  const seenSlugs = new Set<string>()
-  const entries: PublishedChangelogEntry[] = []
-
-  for (const record of records) {
-    if (seenSlugs.has(record.slug)) {
-      return null
-    }
-
-    seenSlugs.add(record.slug)
-    entries.push(publicEntry(record))
-  }
-
-  return entries.sort((left, right) => right.publishedAt - left.publishedAt)
 }
 
 export const getPublishedChangelogEntries = cache(
-  async (): Promise<ChangelogResult> => {
+  async (cursor?: string): Promise<ChangelogListResult> => {
     const configuration = getRuntimeConfiguration()
 
     if (!configuration.convex.configured || !configuration.convex.url) {
@@ -108,14 +112,59 @@ export const getPublishedChangelogEntries = cache(
       const client = new ConvexHttpClient(configuration.convex.url, {
         logger: false,
       })
-      const response = await client.query(publishedEntriesQuery, {})
-      const entries = parsePublishedEntries(response)
-
-      if (!entries) {
+      const response = await client.query(publishedEntriesQuery, {
+        ...(cursor === undefined ? {} : { cursor }),
+      })
+      const parsed = publishedEntriesPageSchema.safeParse(response)
+      if (!parsed.success) {
+        return { state: "error" }
+      }
+      if (parsed.data.isDone !== (parsed.data.nextCursor === null)) {
         return { state: "error" }
       }
 
-      return { state: "ready", entries }
+      const seenSlugs = new Set<string>()
+      const entries: PublishedChangelogSummary[] = []
+      for (const record of parsed.data.entries) {
+        if (seenSlugs.has(record.slug)) {
+          return { state: "error" }
+        }
+        seenSlugs.add(record.slug)
+        entries.push(publicSummary(record))
+      }
+
+      return {
+        state: "ready",
+        entries,
+        isDone: parsed.data.isDone,
+        nextCursor: parsed.data.nextCursor,
+      }
+    } catch {
+      return { state: "error" }
+    }
+  },
+)
+
+export const getPublishedChangelogEntry = cache(
+  async (slug: string): Promise<ChangelogEntryResult> => {
+    const configuration = getRuntimeConfiguration()
+
+    if (!configuration.convex.configured || !configuration.convex.url) {
+      return { state: "configuration-required" }
+    }
+
+    try {
+      const client = new ConvexHttpClient(configuration.convex.url, {
+        logger: false,
+      })
+      const response = await client.query(publishedEntryQuery, { slug })
+      if (response === null) {
+        return { state: "ready", entry: null }
+      }
+      const parsed = publishedEntrySchema.safeParse(response)
+      return parsed.success
+        ? { state: "ready", entry: publicEntry(parsed.data) }
+        : { state: "error" }
     } catch {
       return { state: "error" }
     }

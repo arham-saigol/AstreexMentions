@@ -12,7 +12,7 @@ const MAX_PAGE_SIZE = 50
 const MAX_FILTER_VALUES = 50
 const MAX_SEARCH_LENGTH = 200
 const MAX_CURSOR_LENGTH = 20_000
-const MENTION_SCAN_BATCH_SIZE = 100
+const MENTION_SCAN_BATCH_SIZE = 250
 const CURSOR_VERSION = 1
 
 const platformValidator = v.union(
@@ -795,7 +795,7 @@ export const listMentions = authenticatedQuery({
         sort === "most_engaged"
           ? ctx.db
               .query("mentions")
-              .withIndex("by_workspace_and_engagement", (q) =>
+              .withIndex("by_workspace_engagement_and_published_at", (q) =>
                 q.eq("workspaceId", customer.workspaceId),
               )
               .order("desc")

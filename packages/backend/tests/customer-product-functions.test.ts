@@ -37,7 +37,12 @@ const customerTestSchema = defineSchema({
   ]),
   billingEvents: defineTable(v.any())
     .index("by_status_and_received_at", ["status", "receivedAt"])
-    .index("by_workspace_and_received_at", ["workspaceId", "receivedAt"]),
+    .index("by_workspace_and_received_at", ["workspaceId", "receivedAt"])
+    .index("by_workspace_status_and_received_at", [
+      "workspaceId",
+      "status",
+      "receivedAt",
+    ]),
   emailOutbox: defineTable(v.any())
     .index("by_workspace_and_created_at", ["workspaceId", "createdAt"])
     .index("by_workspace_status_and_lease_expires_at", [
@@ -511,6 +516,10 @@ describe("customer frontend function inventory", () => {
         (name) => [name, readFileSync(`${convexDirectory}/${name}.ts`, "utf8")],
       ),
     )
+    const deletionBillingSource = readFileSync(
+      `${convexDirectory}/deletion/billing.ts`,
+      "utf8",
+    )
 
     for (const name of [
       "bootstrapCurrentUser",
@@ -561,5 +570,13 @@ describe("customer frontend function inventory", () => {
     expect(keywordCountQuery).toContain('"by_workspace_status_and_created_at"')
     expect(keywordCountQuery).toContain('["active", "paused"]')
     expect(keywordCountQuery).not.toContain('"by_workspace_and_updated_at"')
+    expect(deletionBillingSource).toContain(
+      '"by_workspace_status_and_received_at"',
+    )
+    expect(deletionBillingSource).toContain('["status", "pending"]')
+    expect(deletionBillingSource).toContain('["status", "leased"]')
+    expect(deletionBillingSource).not.toContain(
+      '.query("billingEvents")\n      .withIndex("by_workspace_and_received_at"',
+    )
   })
 })

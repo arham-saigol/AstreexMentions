@@ -56,6 +56,7 @@ const knownBuilders = new Set([
 
 const explicitPublicAllowlist = new Map([
   ["billing/creemHttp:creemWebhook", "httpAction"],
+  ["changelog:getPublishedEntry", "publicQuery"],
   ["changelog:listPublishedEntries", "publicQuery"],
   ["email/resendHttp:resendWebhook", "httpAction"],
 ])

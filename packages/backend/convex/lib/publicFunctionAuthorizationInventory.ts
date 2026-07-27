@@ -132,6 +132,11 @@ export const PUBLIC_FUNCTION_AUTHORIZATION_INVENTORY = {
     kind: "query",
     wrapper: "publicQuery",
   },
+  "changelog:getPublishedEntry": {
+    authorization: "public_published_read",
+    kind: "query",
+    wrapper: "publicQuery",
+  },
   "digest/customer:getDailyDigestPreference": {
     authorization: "authenticated_identity_current_workspace",
     kind: "query",

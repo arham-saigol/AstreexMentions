@@ -15,7 +15,7 @@ import { ChangelogState } from "@/components/changelog-state"
 import {
   changelogDateTime,
   formatChangelogDate,
-  getPublishedChangelogEntries,
+  getPublishedChangelogEntry,
 } from "@/lib/changelog"
 import { getSiteUrl } from "@/lib/env"
 
@@ -29,7 +29,7 @@ export async function generateMetadata({
   params,
 }: ChangelogEntryPageProps): Promise<Metadata> {
   const { slug } = await params
-  const result = await getPublishedChangelogEntries()
+  const result = await getPublishedChangelogEntry(slug)
 
   if (result.state !== "ready") {
     return {
@@ -39,7 +39,7 @@ export async function generateMetadata({
     }
   }
 
-  const entry = result.entries.find((candidate) => candidate.slug === slug)
+  const entry = result.entry
 
   if (!entry) {
     notFound()
@@ -143,7 +143,7 @@ export default async function ChangelogEntryPage({
   params,
 }: ChangelogEntryPageProps) {
   const { slug } = await params
-  const result = await getPublishedChangelogEntries()
+  const result = await getPublishedChangelogEntry(slug)
 
   if (result.state !== "ready") {
     return (
@@ -162,7 +162,7 @@ export default async function ChangelogEntryPage({
     )
   }
 
-  const entry = result.entries.find((candidate) => candidate.slug === slug)
+  const entry = result.entry
 
   if (!entry) {
     notFound()

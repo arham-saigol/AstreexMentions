@@ -106,6 +106,7 @@ The canonical schema is `packages/backend/convex/schema.ts`. It defines 25 valid
 - `by_provider_object_and_received_at` (`provider`, `objectId`, `receivedAt`) — order events for one provider object.
 - `by_event_type_and_received_at` (`eventType`, `receivedAt`) — event-type operations/metrics.
 - `by_status_and_received_at` (`status`, `receivedAt`) — queue age and dead-letter operations.
+- `by_workspace_status_and_received_at` (`workspaceId`, `status`, `receivedAt`) — bounded deletion-readiness checks for unresolved tenant events.
 
 ### `usageCycles`
 
@@ -159,7 +160,7 @@ The canonical schema is `packages/backend/convex/schema.ts`. It defines 25 valid
 
 **Purpose.** Canonical normalized external posts/comments/tweets matched into a workspace.
 
-**Invariants.** A mention belongs to exactly one workspace and platform. Deduplication prefers `(workspaceId, platform, contentType, providerItemId)` and falls back to the equivalent tuple with `fallbackKey`. `canonicalUrl` must be a credential-free HTTP(S) URL before customer return. `searchText` is normalized searchable content. `status` is customer workflow state; `analysisState` is categorization workflow state. `firstSeenAt` is creation observation time and `lastMatchedAt` advances when rediscovered.
+**Invariants.** A mention belongs to exactly one workspace and platform. Deduplication prefers `(workspaceId, platform, contentType, providerItemId)` and falls back to the equivalent tuple with `fallbackKey`. `canonicalUrl` must be a credential-free HTTP(S) URL before customer return. `searchText` is normalized searchable content. `status` is customer workflow state; `analysisState` is categorization workflow state. `firstSeenAt` is creation observation time and `lastMatchedAt` advances when rediscovered. Customer pagination uses one bounded 250-row database scan to fill filtered pages across sparse gaps and carries unmatched continuation state in a workspace/filter-bound cursor.
 
 **Indexes.**
 
@@ -167,6 +168,7 @@ The canonical schema is `packages/backend/convex/schema.ts`. It defines 25 valid
 - `by_workspace_platform_content_fallback` (`workspaceId`, `platform`, `contentType`, `fallbackKey`) — fallback dedupe when no provider item ID exists.
 - `by_workspace_status_and_published_at` (`workspaceId`, `status`, `publishedAt`) — customer status feeds sorted by time.
 - `by_workspace_status_and_engagement` (`workspaceId`, `status`, `engagementScore`) — customer feeds sorted by engagement.
+- `by_workspace_engagement_and_published_at` (`workspaceId`, `engagementScore`, `publishedAt`) — complete tenant engagement feed with publication-time tie-breaking.
 - `by_workspace_and_published_at` (`workspaceId`, `publishedAt`) — complete tenant timeline and digest windows.
 - `by_workspace_category_and_published_at` (`workspaceId`, `categoryId`, `publishedAt`) — category filters and reassignment.
 - `by_workspace_platform_and_published_at` (`workspaceId`, `platform`, `publishedAt`) — platform filters.
@@ -317,7 +319,7 @@ The canonical schema is `packages/backend/convex/schema.ts`. It defines 25 valid
 
 **Purpose.** Global admin-authored changelog with public published read access.
 
-**Invariants.** Slugs are validated and logically unique. Drafts use `requestedPublicationAt`; publishing moves it to `publishedAt` and clears the requested field; published entries must be unpublished before editing. Creator/updater Clerk IDs are exact admin subjects. Only published rows with numeric `publishedAt` are returned publicly.
+**Invariants.** Slugs are validated and logically unique. Drafts use `requestedPublicationAt`; publishing moves it to `publishedAt` and clears the requested field; published entries must be unpublished before editing. Creator/updater Clerk IDs are exact admin subjects. Public listing returns fixed-size published summary pages without bodies; an indexed slug lookup returns at most one published body.
 
 **Indexes.**
 
