@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { parseFeatureRequests, type FeatureRequest } from "./admin-data"
+import { parseFeatureRequestPage, type FeatureRequest } from "./admin-data"
 import {
   featureRequestStatusLabels,
   filterAndSortFeatureRequests,
@@ -38,25 +38,28 @@ function request(
 
 describe("feature request queue", () => {
   it("normalizes user, workspace, and submission metadata", () => {
-    const parsed = parseFeatureRequests([
-      {
-        id: "request-1",
-        title: "Export reports",
-        body: "Add a CSV export.",
-        status: "planned",
-        createdAt: 10,
-        updatedAt: 20,
-        submitterUserId: "user-1",
-        submitterName: "Alex Rivera",
-        submitterEmail: "alex@example.com",
-        workspaceId: "workspace-1",
-        workspaceName: "Acme",
-        workspaceSlug: "acme",
-        submissionSource: "dashboard",
-      },
-    ])
+    const parsed = parseFeatureRequestPage({
+      items: [
+        {
+          id: "request-1",
+          title: "Export reports",
+          body: "Add a CSV export.",
+          status: "planned",
+          createdAt: 10,
+          updatedAt: 20,
+          submitterUserId: "user-1",
+          submitterName: "Alex Rivera",
+          submitterEmail: "alex@example.com",
+          workspaceId: "workspace-1",
+          workspaceName: "Acme",
+          workspaceSlug: "acme",
+          submissionSource: "dashboard",
+        },
+      ],
+      nextCursor: "next-page",
+    })
 
-    expect(parsed?.[0]).toMatchObject({
+    expect(parsed?.items[0]).toMatchObject({
       user: {
         id: "user-1",
         name: "Alex Rivera",
@@ -69,6 +72,7 @@ describe("feature request queue", () => {
       },
       submission: { source: "dashboard" },
     })
+    expect(parsed?.nextCursor).toBe("next-page")
   })
 
   it("uses the exact administrative status labels", () => {

@@ -148,6 +148,10 @@ const featureRequestSchema = z
         request.source,
     },
   }))
+const featureRequestPageSchema = z.object({
+  items: z.array(featureRequestSchema),
+  nextCursor: z.string().min(1).optional(),
+})
 
 const changelogStatusSchema = z.enum(["draft", "published"])
 
@@ -212,6 +216,7 @@ const deletionJobDetailSchema = z.object({
 
 export type MetricsOverview = z.infer<typeof metricsOverviewSchema>
 export type FeatureRequest = z.infer<typeof featureRequestSchema>
+export type FeatureRequestPage = z.infer<typeof featureRequestPageSchema>
 export type ChangelogEntry = z.infer<typeof changelogEntrySchema>
 export type DeletionJob = z.infer<typeof deletionJobSchema>
 export type DeletionJobDetail = z.infer<typeof deletionJobDetailSchema>
@@ -228,8 +233,10 @@ export function parseMetricsOverview(value: unknown): MetricsOverview | null {
   return parsed.success ? parsed.data : null
 }
 
-export function parseFeatureRequests(value: unknown): FeatureRequest[] | null {
-  const parsed = z.array(featureRequestSchema).safeParse(value)
+export function parseFeatureRequestPage(
+  value: unknown,
+): FeatureRequestPage | null {
+  const parsed = featureRequestPageSchema.safeParse(value)
   return parsed.success ? parsed.data : null
 }
 

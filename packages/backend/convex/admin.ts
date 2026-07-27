@@ -1185,28 +1185,45 @@ export const cancelDeletionJob = adminMutation({
 })
 
 export const listFeatureRequests = adminQuery({
-  args: { status: v.optional(featureRequestStatusValidator) },
-  returns: v.array(featureRequestResultValidator),
+  args: {
+    cursor: v.optional(v.string()),
+    limit: v.optional(v.number()),
+    sort: v.optional(v.union(v.literal("newest"), v.literal("oldest"))),
+    status: v.optional(featureRequestStatusValidator),
+  },
+  returns: v.object({
+    items: v.array(featureRequestResultValidator),
+    nextCursor: v.optional(v.string()),
+  }),
   handler: async (ctx, args) => {
-    const rows = args.status
+    const limit = args.limit ?? 25
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50) {
+      adminError(
+        "INVALID_ADMIN_INPUT",
+        "Feature request page limit must be 1 to 50",
+      )
+    }
+    const order = args.sort === "oldest" ? "asc" : "desc"
+    const result = args.status
       ? await ctx.db
           .query("featureRequests")
           .withIndex("by_status_and_created_at", (q) =>
             indexEquals(q, ["status", args.status]),
           )
-          .order("desc")
-          .collect()
-      : await ctx.db.query("featureRequests").collect()
-    const sorted = args.status
-      ? rows
-      : [...rows].sort(
-          (left, right) =>
-            (right.createdAt as number) - (left.createdAt as number),
-        )
+          .order(order)
+          .paginate({ cursor: args.cursor ?? null, numItems: limit })
+      : await ctx.db
+          .query("featureRequests")
+          .withIndex("by_created_at")
+          .order(order)
+          .paginate({ cursor: args.cursor ?? null, numItems: limit })
 
-    return await Promise.all(
-      sorted.map(async (row) => await formatFeatureRequest(ctx, row)),
-    )
+    return {
+      items: await Promise.all(
+        result.page.map(async (row) => await formatFeatureRequest(ctx, row)),
+      ),
+      ...(result.isDone ? {} : { nextCursor: result.continueCursor }),
+    }
   },
 })
 

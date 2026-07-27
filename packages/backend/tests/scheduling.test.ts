@@ -449,10 +449,18 @@ describe("Convex dispatcher boundary", () => {
       internalSource.indexOf("export const dispatchDueTrackingSources"),
       internalSource.indexOf("export const loadTrackingExecutionContext"),
     )
+    const claimant = internalSource.slice(
+      internalSource.indexOf("async function claimProviderSources"),
+      internalSource.indexOf("export const dispatchDueTrackingSources"),
+    )
     expect(internalSource).toContain("ctx.scheduler.runAfter")
     expect(dispatcher).not.toContain("createXquikAdapter")
     expect(dispatcher).not.toContain("createFetchLayerRedditAdapter")
     expect(dispatcher).not.toContain("createAlgoliaHackerNewsAdapter")
+    expect(claimant).toContain('errorCode: "lease_expired"')
+    expect(claimant.indexOf("findProviderRun")).toBeLessThan(
+      claimant.indexOf("createTrackingLease"),
+    )
   })
 
   it("rechecks persisted eligibility and configuration before provider calls", () => {

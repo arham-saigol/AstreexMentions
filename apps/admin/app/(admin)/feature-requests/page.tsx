@@ -9,7 +9,10 @@ import type { ReactNode } from "react"
 import { AccessState } from "@/components/access-state"
 import { FeatureRequestControls } from "@/components/feature-request-controls"
 import { runAdminQuery } from "@/lib/admin-convex"
-import { featureRequestStatuses, parseFeatureRequests } from "@/lib/admin-data"
+import {
+  featureRequestStatuses,
+  parseFeatureRequestPage,
+} from "@/lib/admin-data"
 import { adminConvex, type FeatureRequestStatus } from "@/lib/convex-references"
 import {
   featureRequestStatusLabels,
@@ -44,6 +47,30 @@ function parseSort(value: string | string[] | undefined): FeatureRequestSort {
 
 function parseSearch(value: string | string[] | undefined): string {
   return singleValue(value)?.trim().slice(0, 160) ?? ""
+}
+
+function parseCursor(value: string | string[] | undefined): string | undefined {
+  const cursor = singleValue(value)
+  return cursor && cursor.length <= 2_000 ? cursor : undefined
+}
+
+function featureRequestPageHref(input: {
+  cursor: string
+  query: string
+  sort: FeatureRequestSort
+  status?: FeatureRequestStatus | undefined
+}): string {
+  const params = new URLSearchParams({ cursor: input.cursor })
+  if (input.query) {
+    params.set("q", input.query)
+  }
+  if (input.sort !== "newest") {
+    params.set("sort", input.sort)
+  }
+  if (input.status) {
+    params.set("status", input.status)
+  }
+  return `/feature-requests?${params.toString()}`
 }
 
 function formatDate(timestamp: number): string {
@@ -82,19 +109,23 @@ export default async function FeatureRequestsPage({
   searchParams,
 }: {
   searchParams: Promise<{
+    cursor?: string | string[]
     q?: string | string[]
     sort?: string | string[]
     status?: string | string[]
   }>
 }) {
   const params = await searchParams
+  const cursor = parseCursor(params.cursor)
   const query = parseSearch(params.q)
   const sort = parseSort(params.sort)
   const status = parseStatus(params.status)
-  const result = await runAdminQuery(
-    adminConvex.listFeatureRequests,
-    status ? { status } : {},
-  )
+  const result = await runAdminQuery(adminConvex.listFeatureRequests, {
+    ...(cursor === undefined ? {} : { cursor }),
+    limit: 25,
+    sort,
+    ...(status === undefined ? {} : { status }),
+  })
 
   if (result.status === "access-denied") {
     return <AccessState {...result.access} />
@@ -108,14 +139,14 @@ export default async function FeatureRequestsPage({
     return <AccessState kind="unavailable" />
   }
 
-  const requests = parseFeatureRequests(result.data)
+  const page = parseFeatureRequestPage(result.data)
 
-  if (!requests) {
+  if (!page) {
     return <AccessState kind="unavailable" />
   }
 
-  const visibleRequests = filterAndSortFeatureRequests(requests, query, sort)
-  const hasFilters = Boolean(query || status || sort === "oldest")
+  const visibleRequests = filterAndSortFeatureRequests(page.items, query, sort)
+  const hasFilters = Boolean(query || status || sort === "oldest" || cursor)
 
   return (
     <div className="space-y-6">
@@ -195,8 +226,8 @@ export default async function FeatureRequestsPage({
             </h2>
             <p className="text-muted-foreground mt-1 text-sm" role="status">
               {visibleRequests.length === 1
-                ? "1 matching request"
-                : `${visibleRequests.length} matching requests`}
+                ? "1 matching request on this page"
+                : `${visibleRequests.length} matching requests on this page`}
             </p>
           </div>
           <p className="text-muted-foreground text-xs">Times shown in UTC</p>
@@ -341,6 +372,25 @@ export default async function FeatureRequestsPage({
             </p>
           </div>
         )}
+        {page.nextCursor ? (
+          <nav
+            className="flex justify-end"
+            aria-label="Feature request pagination"
+          >
+            <Button asChild variant="outline">
+              <Link
+                href={featureRequestPageHref({
+                  cursor: page.nextCursor,
+                  query,
+                  sort,
+                  status,
+                })}
+              >
+                Next page
+              </Link>
+            </Button>
+          </nav>
+        ) : null}
       </section>
     </div>
   )

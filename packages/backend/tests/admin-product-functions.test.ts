@@ -33,6 +33,7 @@ const schema = defineSchema({
     .index("by_workspace_and_created_at", ["workspaceId", "createdAt"]),
   featureRequests: defineTable(v.any())
     .index("by_creator_and_created_at", ["createdByUserId", "createdAt"])
+    .index("by_created_at", ["createdAt"])
     .index("by_status_and_created_at", ["status", "createdAt"]),
   mentions: defineTable(v.any()),
   providerMetricBuckets: defineTable(v.any()).index(
@@ -314,6 +315,36 @@ describe("admin feature request and changelog functions", () => {
         expect.objectContaining({ action: "admin.changelog.deleted" }),
       ]),
     )
+  })
+
+  it("paginates the global feature request queue with opaque cursors", async () => {
+    const { admin, customer } = await setup()
+    for (const title of ["First request", "Second request"]) {
+      await customer.mutation(createFeatureRequest, {
+        description: `A sufficiently detailed description for ${title}.`,
+        title,
+      })
+    }
+
+    const first = (await admin.query(listFeatureRequests, {
+      limit: 1,
+      sort: "newest",
+    })) as {
+      items: Array<{ id: string }>
+      nextCursor?: string
+    }
+    expect(first.items).toHaveLength(1)
+    expect(first.nextCursor).toEqual(expect.any(String))
+
+    const second = (await admin.query(listFeatureRequests, {
+      cursor: first.nextCursor,
+      limit: 1,
+      sort: "newest",
+    })) as {
+      items: Array<{ id: string }>
+    }
+    expect(second.items).toHaveLength(1)
+    expect(second.items[0]!.id).not.toBe(first.items[0]!.id)
   })
 })
 

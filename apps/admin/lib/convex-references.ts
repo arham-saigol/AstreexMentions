@@ -25,7 +25,12 @@ export const adminConvex = {
   >("admin:getMetricsOverview"),
   listFeatureRequests: makeFunctionReference<
     "query",
-    { status?: FeatureRequestStatus },
+    {
+      cursor?: string
+      limit?: number
+      sort?: "newest" | "oldest"
+      status?: FeatureRequestStatus
+    },
     unknown
   >("admin:listFeatureRequests"),
   updateFeatureRequest: makeFunctionReference<

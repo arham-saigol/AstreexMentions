@@ -413,6 +413,30 @@ async function claimProviderSources(
     }
 
     const trackingSourceId = source._id as TrackingSourceId
+    if (
+      schedule.leaseExpiresAt !== undefined &&
+      schedule.leaseExpiresAt <= now &&
+      schedule.leaseVersion > 0
+    ) {
+      const expiredRun = await findProviderRun(
+        ctx,
+        providerRunIdempotencyKey(trackingSourceId, schedule.leaseVersion),
+      )
+      if (expiredRun?.status === "running") {
+        await finishProviderRun(
+          ctx,
+          {
+            durationMs: Math.max(0, now - (expiredRun.startedAt as number)),
+            errorCode: "lease_expired",
+            errorMessage: "Tracking worker lease expired",
+            outputCount: 0,
+            run: expiredRun,
+            status: "failed",
+          },
+          now,
+        )
+      }
+    }
     const lease = createTrackingLease({
       now,
       source: schedule,

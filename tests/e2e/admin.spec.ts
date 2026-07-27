@@ -384,7 +384,7 @@ test.describe("connected admin flows", () => {
       )
     })
     await expect(
-      page.getByText("0 matching requests", { exact: true }),
+      page.getByText("0 matching requests on this page", { exact: true }),
     ).toBeVisible()
     await expect(
       page.getByRole("heading", { name: "No feature requests found" }),
