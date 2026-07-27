@@ -627,6 +627,7 @@ async function syncTrackingSources(
       : {}
     const preserveError =
       !reactivating &&
+      !providerQueryChanged &&
       desiredState.status === "active" &&
       source.status === "error"
     if (
@@ -656,13 +657,18 @@ async function syncTrackingSources(
         : desiredState.pauseReason,
       ...(providerQueryChanged
         ? {
+            backoffMs: 0,
+            backoffUntil: undefined,
+            consecutiveFailures: 0,
             inProgressCursor: undefined,
             inProgressPage: undefined,
             inProgressWindowEndAt: undefined,
             inProgressWindowStartAt: undefined,
+            lastError: undefined,
             leaseExpiresAt: undefined,
             leaseToken: undefined,
             leaseVersion: (source.leaseVersion as number) + 1,
+            nextRunAt: input.now,
           }
         : desiredState.status === "active" && !reactivating
           ? {}

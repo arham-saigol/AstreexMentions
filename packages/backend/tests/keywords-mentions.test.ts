@@ -501,6 +501,55 @@ describe("keyword Convex functions", () => {
     ).rejects.toMatchObject({ data: { code: "KEYWORD_LIMIT_REACHED" } })
   })
 
+  it("reactivates an errored source after its provider query is corrected", async () => {
+    const t = createBackendTest()
+    const customer = await seedCustomer(t, {
+      paid: true,
+      suffix: "query-correction",
+    })
+    const created = keywordResult(
+      await customer.client.mutation(createKeywordReference, {
+        phrase: "Rejected query",
+        platforms: ["x"],
+      }),
+    )
+    const sourceId = created.sources[0]!.id
+    await t.run(async (ctx) => {
+      const now = Date.now()
+      await ctx.db.patch("trackingSources", sourceId, {
+        backoffMs: 60_000,
+        backoffUntil: now + 60_000,
+        consecutiveFailures: 3,
+        lastError: "invalid_query:Provider rejected the search query",
+        nextRunAt: now + 60_000,
+        pauseReason: "config",
+        status: "error",
+      })
+    })
+
+    const updateStartedAt = Date.now()
+    await customer.client.mutation(updateKeywordReference, {
+      keywordId: created.id,
+      phrase: "Corrected query",
+      platforms: ["x"],
+    })
+    const corrected = await t.run(
+      async (ctx) => await ctx.db.get("trackingSources", sourceId),
+    )
+
+    expect(corrected).toMatchObject({
+      backoffMs: 0,
+      consecutiveFailures: 0,
+      nextRunAt: expect.any(Number),
+      providerQuery: "Corrected query",
+      status: "active",
+    })
+    expect(corrected!.nextRunAt).toBeGreaterThanOrEqual(updateStartedAt)
+    expect(corrected).not.toHaveProperty("backoffUntil")
+    expect(corrected).not.toHaveProperty("lastError")
+    expect(corrected).not.toHaveProperty("pauseReason")
+  })
+
   it("keeps keyword status and source status reversible before soft deletion", async () => {
     const t = createBackendTest()
     const customer = await seedCustomer(t, { paid: true, suffix: "lifecycle" })
