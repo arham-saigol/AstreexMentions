@@ -29,6 +29,7 @@ import {
 import {
   env,
   indexEquals,
+  indexGreaterThanOrEqual,
   internalMutation,
   internalQuery,
   type MutationCtx,
@@ -772,8 +773,43 @@ export const getCustomerBillingActionContext = internalQuery({
           )
           .unique()
       : null
+    const [openCheckouts, completeCheckouts] = await Promise.all([
+      ctx.db
+        .query("billingCheckouts")
+        .withIndex("by_workspace_status_and_expires_at", (q) =>
+          indexGreaterThanOrEqual(
+            indexEquals(
+              q,
+              ["workspaceId", args.workspaceId],
+              ["status", "open"],
+            ),
+            "expiresAt",
+            Date.now() + 1,
+          ),
+        )
+        .take(1),
+      ctx.db
+        .query("billingCheckouts")
+        .withIndex("by_workspace_status_and_expires_at", (q) =>
+          indexGreaterThanOrEqual(
+            indexEquals(
+              q,
+              ["workspaceId", args.workspaceId],
+              ["status", "complete"],
+            ),
+            "expiresAt",
+            Date.now() + 1,
+          ),
+        )
+        .take(1),
+    ])
+    const outstandingCheckout =
+      [...openCheckouts, ...completeCheckouts].sort(
+        (left, right) =>
+          (right.updatedAt as number) - (left.updatedAt as number),
+      )[0] ?? null
 
-    return { checkout, subscription }
+    return { checkout, outstandingCheckout, subscription }
   },
 })
 
@@ -964,6 +1000,78 @@ export const beginCreemProviderOperation = internalMutation({
       workspace.deletionPendingAt !== undefined
     ) {
       throw new TypeError("Workspace is unavailable for billing operations")
+    }
+    if (args.operation === "checkout") {
+      const [openCheckouts, completeCheckouts] = await Promise.all([
+        ctx.db
+          .query("billingCheckouts")
+          .withIndex("by_workspace_status_and_expires_at", (q) =>
+            indexGreaterThanOrEqual(
+              indexEquals(
+                q,
+                ["workspaceId", args.workspaceId],
+                ["status", "open"],
+              ),
+              "expiresAt",
+              now + 1,
+            ),
+          )
+          .take(1),
+        ctx.db
+          .query("billingCheckouts")
+          .withIndex("by_workspace_status_and_expires_at", (q) =>
+            indexGreaterThanOrEqual(
+              indexEquals(
+                q,
+                ["workspaceId", args.workspaceId],
+                ["status", "complete"],
+              ),
+              "expiresAt",
+              now + 1,
+            ),
+          )
+          .take(1),
+      ])
+      if (openCheckouts.length > 0 || completeCheckouts.length > 0) {
+        return { state: "outstanding" as const }
+      }
+
+      const runningCheckout = await ctx.db
+        .query("providerRuns")
+        .withIndex(
+          "by_workspace_provider_operation_status_and_started_at",
+          (q) =>
+            indexEquals(
+              q,
+              ["workspaceId", args.workspaceId],
+              ["provider", "creem"],
+              ["operation", "checkout"],
+              ["status", "running"],
+            ),
+        )
+        .order("desc")
+        .first()
+      if (runningCheckout && !providerRunIsStale(runningCheckout, now)) {
+        return { state: "running" as const }
+      }
+      if (runningCheckout) {
+        await ctx.db.patch(
+          "providerRuns",
+          runningCheckout._id as ProviderRunId,
+          {
+            durationMs: Math.max(
+              0,
+              now - (runningCheckout.startedAt as number),
+            ),
+            errorCode: "operation_abandoned",
+            errorMessage:
+              "Checkout provider operation exceeded the running timeout",
+            finishedAt: now,
+            status: "failed",
+            updatedAt: now,
+          },
+        )
+      }
     }
     await ctx.db.insert("providerRuns", {
       attempt: 1,
@@ -1429,6 +1537,7 @@ export const dispatchPendingCreemBillingEvents = internalMutation({
 
 export type CustomerBillingActionContext = {
   checkout: Record<string, unknown> | null
+  outstandingCheckout: Record<string, unknown> | null
   subscription: Record<string, unknown> | null
 }
 
@@ -1475,7 +1584,7 @@ export const beginCreemProviderOperationReference = internalMutationReference<
     operation: string
     workspaceId: WorkspaceId
   },
-  { state: "completed" | "running" | "started" }
+  { state: "completed" | "outstanding" | "running" | "started" }
 >("billing/internal:beginCreemProviderOperation")
 
 export const markCreemProviderOperationUnresolvedReference =

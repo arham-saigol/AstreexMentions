@@ -201,6 +201,11 @@ describe("complete Convex schema", () => {
       "expiresAt",
     ])
     expectIndex(
+      "providerRuns",
+      "by_workspace_provider_operation_status_and_started_at",
+      ["workspaceId", "provider", "operation", "status", "startedAt"],
+    )
+    expectIndex(
       "systemMetricBuckets",
       "by_metric_scope_workspace_granularity_and_bucket",
       ["metric", "scope", "workspaceId", "granularity", "bucketStartAt"],

@@ -948,6 +948,13 @@ export default defineSchema({
       "status",
       "startedAt",
     ])
+    .index("by_workspace_provider_operation_status_and_started_at", [
+      "workspaceId",
+      "provider",
+      "operation",
+      "status",
+      "startedAt",
+    ])
     .index("by_tracking_source_and_started_at", [
       "trackingSourceId",
       "startedAt",

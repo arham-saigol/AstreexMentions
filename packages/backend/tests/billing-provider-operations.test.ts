@@ -42,6 +42,81 @@ const dispatchBilling = makeFunctionReference<
 >("billing/internal:dispatchPendingCreemBillingEvents")
 
 describe("Creem provider operation retries", () => {
+  it("permits only one outstanding checkout per workspace", async () => {
+    const t = convexTest({ modules, schema })
+    const { userId, workspaceId } = await t.run(async (ctx) => {
+      const now = Date.now()
+      const userId = await ctx.db.insert("users", {
+        clerkUserId: "user_checkout_guard",
+        createdAt: now,
+        tokenIdentifier: "issuer|user_checkout_guard",
+        updatedAt: now,
+      })
+      const workspaceId = await ctx.db.insert("workspaces", {
+        createdAt: now,
+        kind: "personal",
+        name: "Checkout guard",
+        normalizedName: "checkout guard",
+        ownerUserId: userId,
+        updatedAt: now,
+      })
+      return { userId, workspaceId }
+    })
+
+    await expect(
+      t.mutation(beginOperation, {
+        idempotencyKey: "checkout:first",
+        operation: "checkout",
+        workspaceId,
+      }),
+    ).resolves.toEqual({ state: "started" })
+    await expect(
+      t.mutation(beginOperation, {
+        idempotencyKey: "checkout:second",
+        operation: "checkout",
+        workspaceId,
+      }),
+    ).resolves.toEqual({ state: "running" })
+
+    await t.run(async (ctx) => {
+      const first = await ctx.db
+        .query("providerRuns")
+        .withIndex("by_idempotency_key", (q) =>
+          q.eq("idempotencyKey", "checkout:first"),
+        )
+        .unique()
+      await ctx.db.patch("providerRuns", first!._id, {
+        finishedAt: Date.now(),
+        status: "failed",
+      })
+      await ctx.db.insert("billingCheckouts", {
+        createdAt: Date.now(),
+        expiresAt: Date.now() + 60_000,
+        idempotencyKey: "persisted-checkout",
+        planId: "growth",
+        provider: "creem",
+        providerCheckoutSessionId: "checkout_fixture",
+        requestedByUserId: userId,
+        status: "open",
+        updatedAt: Date.now(),
+        url: "https://checkout.example.test/fixture",
+        workspaceId,
+      })
+    })
+    await expect(
+      t.mutation(beginOperation, {
+        idempotencyKey: "checkout:third",
+        operation: "checkout",
+        workspaceId,
+      }),
+    ).resolves.toEqual({ state: "outstanding" })
+
+    const runs = await t.run(
+      async (ctx) => await ctx.db.query("providerRuns").collect(),
+    )
+    expect(runs).toHaveLength(1)
+  })
+
   it("moves retryable failures out of running and permits another attempt", async () => {
     const t = convexTest({ modules, schema })
     const workspaceId = await t.run(async (ctx) => {

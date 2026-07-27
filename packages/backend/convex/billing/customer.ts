@@ -264,6 +264,12 @@ export const createCheckout = customerAction({
         }
       }
     }
+    if (existing.outstandingCheckout) {
+      billingError(
+        "BILLING_CHECKOUT_ALREADY_EXISTS",
+        "Resume or wait for the outstanding checkout before starting another",
+      )
+    }
 
     const operationId = `checkout:${idempotencyResult.data}`
     const operation = await ctx.runMutation(
