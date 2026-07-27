@@ -745,14 +745,18 @@ export default defineSchema({
     .index("by_workspace_and_updated_at", ["workspaceId", "updatedAt"]),
 
   digestRuns: defineTable({
+    aggregationCompletedAt: v.optional(v.number()),
+    aggregationCursor: v.optional(v.string()),
     completedAt: v.optional(v.number()),
     createdAt: v.number(),
+    digestCountsJson: v.optional(v.string()),
     digestPreferenceId: v.id("digestPreferences"),
     error: v.optional(v.string()),
     idempotencyKey: v.string(),
     localDate: v.string(),
     mentionCount: v.number(),
     mentionIds: v.array(v.id("mentions")),
+    mentionLimit: v.optional(v.number()),
     outboxId: v.optional(v.id("emailOutbox")),
     scheduledFor: v.number(),
     status: digestRunStatusValidator,

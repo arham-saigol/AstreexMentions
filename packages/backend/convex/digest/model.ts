@@ -1,6 +1,7 @@
 import type { MentionCategory, Platform } from "@astreex/domain"
 import {
   createDailyDigestCounts,
+  type DailyDigestCounts,
   type DailyDigestMention,
 } from "@astreex/email"
 
@@ -158,6 +159,7 @@ export function dailyDigestEmailMention(
  * by the scheduling mutation, so rendering never silently changes the top list.
  */
 export function createDailyDigestEmailModel(input: {
+  counts?: DailyDigestCounts
   mentions: readonly DigestMentionCandidate[]
   topMentionIds: readonly string[]
 }) {
@@ -185,9 +187,9 @@ export function createDailyDigestEmailModel(input: {
   }
 
   return {
-    counts: createDailyDigestCounts(
-      input.mentions.map(dailyDigestEmailMention),
-    ),
+    counts:
+      input.counts ??
+      createDailyDigestCounts(input.mentions.map(dailyDigestEmailMention)),
     topMentions,
   }
 }

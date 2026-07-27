@@ -82,7 +82,16 @@ try {
 }
 
 const configuredPlans = new Set()
-for (const [productId, value] of Object.entries(products)) {
+const productMappings =
+  products && typeof products === "object" && !Array.isArray(products)
+    ? Object.entries(products)
+    : []
+if (productMappings.length !== 3) {
+  console.error("Creem product mapping must contain exactly three products.")
+  process.exit(1)
+}
+
+for (const [productId, value] of productMappings) {
   if (!productId.trim() || !value || typeof value !== "object") {
     console.error(
       "Every Creem product mapping must have a product ID and object value.",
@@ -98,6 +107,10 @@ for (const [productId, value] of Object.entries(products)) {
     console.error(
       `Creem product ${productId} does not match an Astreex plan limit.`,
     )
+    process.exit(1)
+  }
+  if (configuredPlans.has(value.planId)) {
+    console.error(`Creem plan ${value.planId} is mapped more than once.`)
     process.exit(1)
   }
   configuredPlans.add(value.planId)

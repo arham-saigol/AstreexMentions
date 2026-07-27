@@ -23,13 +23,16 @@ import {
   indexEquals,
   internalMutation,
   internalQuery,
-  type DatabaseReader,
   type MutationCtx,
 } from "../server"
-import { rankableDigestCandidate, type DigestMentionCandidate } from "./model"
+import {
+  digestCategory,
+  rankDigestMentions,
+  type DigestMentionCandidate,
+} from "./model"
 
 const MAX_DUE_DIGESTS = 64
-const MAX_DIGEST_WINDOW_MENTIONS = 500
+const DIGEST_AGGREGATION_PAGE_SIZE = 200
 
 type GenericRow = Record<string, unknown> & { _id: GenericId<string> }
 type DigestPreferenceId = GenericId<"digestPreferences">
@@ -38,6 +41,36 @@ type EmailOutboxId = GenericId<"emailOutbox">
 type MentionId = GenericId<"mentions">
 type UserId = GenericId<"users">
 type WorkspaceId = GenericId<"workspaces">
+
+type DigestAggregationCounts = {
+  categories: Record<string, number>
+  platforms: Record<"hacker_news" | "reddit" | "x", number>
+  total: number
+}
+
+function emptyDigestAggregationCounts(): DigestAggregationCounts {
+  return {
+    categories: {},
+    platforms: { hacker_news: 0, reddit: 0, x: 0 },
+    total: 0,
+  }
+}
+
+function parseDigestAggregationCounts(value: unknown): DigestAggregationCounts {
+  if (typeof value !== "string") {
+    return emptyDigestAggregationCounts()
+  }
+  const parsed = JSON.parse(value) as DigestAggregationCounts
+  if (
+    !parsed ||
+    typeof parsed !== "object" ||
+    !Number.isSafeInteger(parsed.total) ||
+    parsed.total < 0
+  ) {
+    throw new TypeError("Digest aggregation counts are invalid")
+  }
+  return parsed
+}
 
 function platformFromRow(row: GenericRow): "hacker_news" | "reddit" | "x" {
   if (
@@ -86,26 +119,6 @@ function candidateFromRow(row: GenericRow): DigestMentionCandidate {
   }
 }
 
-async function mentionsInWindow(
-  db: DatabaseReader,
-  workspaceId: WorkspaceId,
-  startAt: number,
-  endAt: number,
-): Promise<GenericRow[]> {
-  return (await db
-    .query("mentions")
-    .withIndex("by_workspace_and_published_at", (q) =>
-      indexWindow(
-        indexEquals(q, ["workspaceId", workspaceId]),
-        "publishedAt",
-        startAt,
-        endAt,
-      ),
-    )
-    .order("desc")
-    .take(MAX_DIGEST_WINDOW_MENTIONS)) as GenericRow[]
-}
-
 async function schedulePreference(
   ctx: MutationCtx,
   preference: GenericRow,
@@ -142,25 +155,10 @@ async function schedulePreference(
     timeZone: preference.timeZone as string,
   }
   const scheduledFor = preference.nextRunAt as number
-  const preliminary = planDailyDigest({
-    alreadyRecorded: false,
-    mentionLimit: preference.mentionLimit as number,
-    mentions: [],
-    schedule,
-    scheduledFor,
-    workspaceId: String(workspaceId),
-  })
-  const rows = await mentionsInWindow(
-    ctx.db,
-    workspaceId,
-    preliminary.window.startAt,
-    preliminary.window.endAt,
-  )
-  const candidates = rows.map(candidateFromRow)
   const plan = planDailyDigest({
     alreadyRecorded: false,
     mentionLimit: preference.mentionLimit as number,
-    mentions: candidates.map(rankableDigestCandidate),
+    mentions: [],
     schedule,
     scheduledFor,
     workspaceId: String(workspaceId),
@@ -180,39 +178,15 @@ async function schedulePreference(
     return "duplicate"
   }
 
-  if (plan.kind === "skipped_empty") {
-    await ctx.db.insert("digestRuns", {
-      completedAt: now,
-      createdAt: now,
-      digestPreferenceId: preferenceId,
-      idempotencyKey: plan.idempotencyKey,
-      localDate: plan.window.localDate,
-      mentionCount: 0,
-      mentionIds: [],
-      scheduledFor: plan.scheduledFor,
-      status: "skipped_empty",
-      updatedAt: now,
-      userId,
-      windowEndAt: plan.window.endAt,
-      windowStartAt: plan.window.startAt,
-      workspaceId,
-    })
-    return "skipped_empty"
-  }
-  if (plan.kind !== "enqueue") {
-    return "duplicate"
-  }
-
-  const mentionIds = plan.rankedMentions.map(
-    ({ candidate }) => candidate.id as MentionId,
-  )
   const digestRunId = (await ctx.db.insert("digestRuns", {
     createdAt: now,
+    digestCountsJson: JSON.stringify(emptyDigestAggregationCounts()),
     digestPreferenceId: preferenceId,
     idempotencyKey: plan.idempotencyKey,
     localDate: plan.window.localDate,
-    mentionCount: candidates.length,
-    mentionIds,
+    mentionCount: 0,
+    mentionIds: [],
+    mentionLimit: preference.mentionLimit as number,
     scheduledFor: plan.scheduledFor,
     status: "processing",
     updatedAt: now,
@@ -221,7 +195,9 @@ async function schedulePreference(
     windowStartAt: plan.window.startAt,
     workspaceId,
   })) as DigestRunId
-  await ctx.scheduler.runAfter(0, renderDailyDigestReference, { digestRunId })
+  await ctx.scheduler.runAfter(0, aggregateDailyDigestPageReference, {
+    digestRunId,
+  })
   return "enqueued"
 }
 
@@ -262,6 +238,114 @@ export const dispatchDueDailyDigests = internalMutation({
   },
 })
 
+export const aggregateDailyDigestPage = internalMutation({
+  args: { digestRunId: v.id("digestRuns") },
+  handler: async (ctx, args) => {
+    const run = (await ctx.db.get(
+      "digestRuns",
+      args.digestRunId,
+    )) as GenericRow | null
+    if (
+      !run ||
+      run.status !== "processing" ||
+      run.aggregationCompletedAt !== undefined
+    ) {
+      return { state: "not_pending" as const }
+    }
+
+    const workspaceId = run.workspaceId as WorkspaceId
+    const page = await ctx.db
+      .query("mentions")
+      .withIndex("by_workspace_and_published_at", (q) =>
+        indexWindow(
+          indexEquals(q, ["workspaceId", workspaceId]),
+          "publishedAt",
+          run.windowStartAt as number,
+          run.windowEndAt as number,
+        ),
+      )
+      .order("desc")
+      .paginate({
+        cursor:
+          typeof run.aggregationCursor === "string"
+            ? run.aggregationCursor
+            : null,
+        numItems: DIGEST_AGGREGATION_PAGE_SIZE,
+      })
+    const snapshotRows = (page.page as GenericRow[]).filter(
+      (mention) => (mention.firstSeenAt as number) <= (run.createdAt as number),
+    )
+    const previousTopRows = (
+      await Promise.all(
+        (run.mentionIds as MentionId[]).map(
+          async (mentionId) => await ctx.db.get("mentions", mentionId),
+        ),
+      )
+    ).filter(
+      (mention): mention is GenericRow =>
+        mention !== null && mention.workspaceId === workspaceId,
+    )
+    const mentionLimit =
+      typeof run.mentionLimit === "number" ? run.mentionLimit : 10
+    const ranked = rankDigestMentions(
+      [...previousTopRows, ...snapshotRows].map(candidateFromRow),
+      mentionLimit,
+    )
+    const mentionIds = ranked.map(({ candidate }) => candidate.id as MentionId)
+
+    const counts = parseDigestAggregationCounts(run.digestCountsJson)
+    for (const mention of snapshotRows) {
+      const platform = platformFromRow(mention)
+      const categoryId =
+        mention.categoryId === undefined
+          ? "uncategorized"
+          : String(mention.categoryId)
+      counts.total += 1
+      counts.platforms[platform] += 1
+      counts.categories[categoryId] = (counts.categories[categoryId] ?? 0) + 1
+    }
+    const now = Date.now()
+    const digestCountsJson = JSON.stringify(counts)
+
+    if (!page.isDone) {
+      await ctx.db.patch("digestRuns", args.digestRunId, {
+        aggregationCursor: page.continueCursor,
+        digestCountsJson,
+        mentionCount: counts.total,
+        mentionIds,
+        updatedAt: now,
+      })
+      await ctx.scheduler.runAfter(0, aggregateDailyDigestPageReference, args)
+      return { mentionCount: counts.total, state: "continued" as const }
+    }
+
+    if (counts.total === 0) {
+      await ctx.db.patch("digestRuns", args.digestRunId, {
+        aggregationCompletedAt: now,
+        aggregationCursor: undefined,
+        completedAt: now,
+        digestCountsJson,
+        mentionCount: 0,
+        mentionIds: [],
+        status: "skipped_empty",
+        updatedAt: now,
+      })
+      return { mentionCount: 0, state: "skipped_empty" as const }
+    }
+
+    await ctx.db.patch("digestRuns", args.digestRunId, {
+      aggregationCompletedAt: now,
+      aggregationCursor: undefined,
+      digestCountsJson,
+      mentionCount: counts.total,
+      mentionIds,
+      updatedAt: now,
+    })
+    await ctx.scheduler.runAfter(0, renderDailyDigestReference, args)
+    return { mentionCount: counts.total, state: "ready" as const }
+  },
+})
+
 export const loadDailyDigestRenderContext = internalQuery({
   args: { digestRunId: v.id("digestRuns") },
   handler: async (ctx, args) => {
@@ -269,7 +353,11 @@ export const loadDailyDigestRenderContext = internalQuery({
       "digestRuns",
       args.digestRunId,
     )) as GenericRow | null
-    if (!run || run.status !== "processing") {
+    if (
+      !run ||
+      run.status !== "processing" ||
+      run.aggregationCompletedAt === undefined
+    ) {
       return { state: "not_pending" as const }
     }
 
@@ -302,14 +390,16 @@ export const loadDailyDigestRenderContext = internalQuery({
       categoryRows.map((category) => [String(category._id), category]),
     )
     const snapshotRows = (
-      await mentionsInWindow(
-        ctx.db,
-        workspaceId,
-        run.windowStartAt as number,
-        run.windowEndAt as number,
+      await Promise.all(
+        (run.mentionIds as MentionId[]).map(
+          async (mentionId) => await ctx.db.get("mentions", mentionId),
+        ),
       )
     ).filter(
-      (mention) => (mention.firstSeenAt as number) <= (run.createdAt as number),
+      (mention): mention is GenericRow =>
+        mention !== null &&
+        mention.workspaceId === workspaceId &&
+        (mention.firstSeenAt as number) <= (run.createdAt as number),
     )
     const mentions = snapshotRows.map((mention) => {
       const category =
@@ -324,10 +414,33 @@ export const loadDailyDigestRenderContext = internalQuery({
           : {}),
       }
     })
-    const snapshotIds = new Set(mentions.map(({ id }) => id))
     const topMentionIds = (run.mentionIds as MentionId[]).map(String)
-    if (topMentionIds.some((mentionId) => !snapshotIds.has(mentionId))) {
+    if (topMentionIds.length !== mentions.length) {
       throw new TypeError("Digest mention snapshot is unavailable")
+    }
+    const aggregateCounts = parseDigestAggregationCounts(run.digestCountsJson)
+    const byCategory = {
+      Bug: 0,
+      Complaint: 0,
+      "Competitor Mention": 0,
+      "Feature Request": 0,
+      Other: 0,
+      Praise: 0,
+      Question: 0,
+    }
+    for (const [categoryId, count] of Object.entries(
+      aggregateCounts.categories,
+    )) {
+      const category =
+        categoryId === "uncategorized"
+          ? undefined
+          : categoryById.get(categoryId)
+      const label = digestCategory(
+        isCategorySystemKey(category?.systemKey)
+          ? category.systemKey
+          : undefined,
+      )
+      byCategory[label] += count
     }
 
     const recipientName =
@@ -337,6 +450,11 @@ export const loadDailyDigestRenderContext = internalQuery({
     return {
       localDate: run.localDate as string,
       mentions,
+      counts: {
+        byCategory,
+        byPlatform: aggregateCounts.platforms,
+        total: aggregateCounts.total,
+      },
       recipientEmail: user.email.trim(),
       state: "ready" as const,
       topMentionIds,
@@ -458,6 +576,11 @@ type DigestRunArguments = { digestRunId: DigestRunId }
 export const renderDailyDigestReference =
   internalActionReference<DigestRunArguments>(
     "digest/actions:renderDailyDigest",
+  )
+
+export const aggregateDailyDigestPageReference =
+  internalMutationReference<DigestRunArguments>(
+    "digest/internal:aggregateDailyDigestPage",
   )
 
 export const dispatchDueDailyDigestsReference = internalMutationReference<{

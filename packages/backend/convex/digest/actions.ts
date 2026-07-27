@@ -1,6 +1,6 @@
 "use node"
 
-import { renderDailyDigestEmail } from "@astreex/email"
+import { renderDailyDigestEmail, type DailyDigestCounts } from "@astreex/email"
 import { v } from "convex/values"
 
 import { readEmailCompositionConfiguration } from "../email/config"
@@ -20,6 +20,7 @@ type DigestRenderContext =
   | { state: "recipient_unavailable" }
   | {
       localDate: string
+      counts: DailyDigestCounts
       mentions: DigestMentionCandidate[]
       recipientEmail: string
       recipientName?: string | undefined
@@ -57,6 +58,7 @@ export const renderDailyDigest = internalAction({
 
     try {
       const emailModel = createDailyDigestEmailModel({
+        counts: context.counts,
         mentions: context.mentions,
         topMentionIds: context.topMentionIds,
       })

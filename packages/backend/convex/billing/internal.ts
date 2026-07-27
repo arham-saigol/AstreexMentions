@@ -12,6 +12,7 @@ import {
   type CreemWebhookEvent,
 } from "../integrations/creem"
 import {
+  internalActionReference,
   internalMutationReference,
   internalQueryReference,
 } from "../lib/functionReferences"
@@ -966,7 +967,12 @@ export const recordCreemProviderOperation = internalMutation({
 
 async function ingestCreemWebhookBody(
   ctx: GenericMutationContext,
-  args: { rawBody: string; receivedAt: number },
+  args: {
+    authoritativeSubscriptionJson?: string
+    rawBody: string
+    receivedAt: number
+    scheduleIncompleteReconciliation?: boolean
+  },
 ) {
   let event = parseCreemWebhookEvent(args.rawBody)
   const existing = await ctx.db
@@ -1004,6 +1010,21 @@ async function ingestCreemWebhookBody(
       status: "pending",
       updatedAt: args.receivedAt,
     })) as BillingEventId
+  }
+
+  if (args.authoritativeSubscriptionJson !== undefined) {
+    if (!isCreemSubscriptionWebhookEvent(event)) {
+      throw new TypeError("Billing event is not a subscription event")
+    }
+    const parsed = creemSubscriptionSchema.safeParse(
+      JSON.parse(args.authoritativeSubscriptionJson) as unknown,
+    )
+    if (!parsed.success || parsed.data.id !== event.object.id) {
+      throw new TypeError(
+        "Authoritative subscription does not match the billing event",
+      )
+    }
+    event = { ...event, object: parsed.data }
   }
 
   const allowlist = productAllowlistOrUnconfigured()
@@ -1044,6 +1065,32 @@ async function ingestCreemWebhookBody(
       trigger: "webhook",
       ...(workspaceId === undefined ? {} : { workspaceId }),
     })
+    return { kind: "pending" as const }
+  }
+
+  if (result.kind === "incomplete_period") {
+    await ctx.db.patch("billingEvents", billingEventId, {
+      lastError: "INCOMPLETE_SUBSCRIPTION_PERIOD",
+      nextAttemptAt: args.receivedAt + WEBHOOK_RETRY_DELAY_MS,
+      status: "pending",
+      updatedAt: args.receivedAt,
+    })
+    await recordProviderRunAndMetric(ctx, {
+      durationMs,
+      errorCode: "INCOMPLETE_SUBSCRIPTION_PERIOD",
+      idempotencyKey: `creem-webhook:${event.id}:${attempt}`,
+      operation: "webhook",
+      status: "failed",
+      trigger: "webhook",
+      ...(workspaceId === undefined ? {} : { workspaceId }),
+    })
+    if (args.scheduleIncompleteReconciliation !== false) {
+      await ctx.scheduler.runAfter(
+        0,
+        reconcileIncompleteCreemBillingEventReference,
+        { billingEventId },
+      )
+    }
     return { kind: "pending" as const }
   }
 
@@ -1121,6 +1168,54 @@ export const ingestCreemWebhook = internalMutation({
     receivedAt: v.number(),
   },
   handler: ingestCreemWebhookBody,
+})
+
+export const loadIncompleteCreemBillingEvent = internalQuery({
+  args: { billingEventId: v.id("billingEvents") },
+  handler: async (ctx, args) => {
+    const row = await ctx.db.get("billingEvents", args.billingEventId)
+    if (
+      !row ||
+      row.provider !== "creem" ||
+      row.status !== "pending" ||
+      row.lastError !== "INCOMPLETE_SUBSCRIPTION_PERIOD"
+    ) {
+      return { state: "not_pending" as const }
+    }
+    const event = parseCreemWebhookEvent(row.payloadJson)
+    if (!isCreemSubscriptionWebhookEvent(event)) {
+      return { state: "not_pending" as const }
+    }
+    return {
+      providerSubscriptionId: event.object.id,
+      state: "ready" as const,
+    }
+  },
+})
+
+export const applyIncompleteCreemBillingEvent = internalMutation({
+  args: {
+    authoritativeSubscriptionJson: v.string(),
+    billingEventId: v.id("billingEvents"),
+    receivedAt: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const row = await ctx.db.get("billingEvents", args.billingEventId)
+    if (
+      !row ||
+      row.provider !== "creem" ||
+      row.status !== "pending" ||
+      row.lastError !== "INCOMPLETE_SUBSCRIPTION_PERIOD"
+    ) {
+      return { kind: "duplicate" as const }
+    }
+    return await ingestCreemWebhookBody(ctx, {
+      authoritativeSubscriptionJson: args.authoritativeSubscriptionJson,
+      rawBody: row.payloadJson,
+      receivedAt: args.receivedAt,
+      scheduleIncompleteReconciliation: false,
+    })
+  },
 })
 
 const MAX_BILLING_EVENT_RETRIES_PER_DISPATCH = 16
@@ -1227,6 +1322,28 @@ export const ingestCreemWebhookReference = internalMutationReference<
   { rawBody: string; receivedAt: number },
   { kind: string; missing?: readonly string[]; status?: string }
 >("billing/internal:ingestCreemWebhook")
+
+type BillingEventReconciliationArguments = {
+  billingEventId: BillingEventId
+}
+
+export const reconcileIncompleteCreemBillingEventReference =
+  internalActionReference<BillingEventReconciliationArguments>(
+    "billing/reconciliation:reconcileIncompleteCreemBillingEvent",
+  )
+
+export const loadIncompleteCreemBillingEventReference = internalQueryReference<
+  BillingEventReconciliationArguments,
+  { state: "not_pending" } | { providerSubscriptionId: string; state: "ready" }
+>("billing/internal:loadIncompleteCreemBillingEvent")
+
+export const applyIncompleteCreemBillingEventReference =
+  internalMutationReference<
+    BillingEventReconciliationArguments & {
+      authoritativeSubscriptionJson: string
+      receivedAt: number
+    }
+  >("billing/internal:applyIncompleteCreemBillingEvent")
 
 export const dispatchPendingCreemBillingEventsReference =
   internalMutationReference<{ now?: number }>(
