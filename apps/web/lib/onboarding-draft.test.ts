@@ -102,6 +102,15 @@ describe("onboarding draft", () => {
     expect(
       canReuseOnboardingCheckout({ ...checkout, startedAt: now + 1 }, now),
     ).toBe(false)
+    expect(
+      onboardingDraftSchema.safeParse({
+        ...createOnboardingDraft("Astreex"),
+        checkout: {
+          ...checkout,
+          url: "javascript:alert(document.domain)",
+        },
+      }).success,
+    ).toBe(false)
   })
 
   it("recognizes completed checkout statuses without opening another session", () => {

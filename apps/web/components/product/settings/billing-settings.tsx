@@ -11,6 +11,7 @@ import { Button } from "@astreex/ui/components/button"
 
 import { useProductContext } from "@/components/product/product-context"
 import { useBillingActions } from "@/components/product/settings/use-billing-actions"
+import { subscriptionAllowsNewCheckout } from "@/lib/billing-status"
 import type { PlanId } from "@/lib/customer-convex"
 
 const plans = [
@@ -47,6 +48,9 @@ export function BillingSettings() {
   const providerReady = billing.providerState === "configured"
   const activePlan = subscription?.planId ?? null
   const entitlementActive = subscription?.entitlementStatus === "active"
+  const canStartCheckout = subscriptionAllowsNewCheckout(
+    subscription?.status ?? null,
+  )
 
   return (
     <div className="space-y-8">
@@ -205,7 +209,7 @@ export function BillingSettings() {
                     )}
                     Upgrade to {plan.label}
                   </Button>
-                ) : !entitlementActive ? (
+                ) : canStartCheckout ? (
                   <Button
                     variant="outline"
                     size="sm"
@@ -219,7 +223,9 @@ export function BillingSettings() {
                   </Button>
                 ) : (
                   <span className="text-muted-foreground text-xs">
-                    Manage plan changes in Creem
+                    {entitlementActive
+                      ? "Manage plan changes in Creem"
+                      : "Resume billing in the Creem portal above"}
                   </span>
                 )}
               </div>

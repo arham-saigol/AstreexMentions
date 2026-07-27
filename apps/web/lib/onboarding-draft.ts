@@ -53,7 +53,13 @@ const pendingCheckoutSchema = z.object({
   planId: z.enum(["starter", "growth", "scale"]),
   startedAt: z.number().finite().nonnegative(),
   status: z.string().trim().min(1),
-  url: z.string().url().optional(),
+  url: z
+    .string()
+    .url()
+    .refine((value) => value.startsWith("https://"), {
+      message: "Checkout redirects must use HTTPS.",
+    })
+    .optional(),
 })
 
 export const onboardingDraftSchema = z

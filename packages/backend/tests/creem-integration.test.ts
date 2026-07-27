@@ -77,6 +77,36 @@ describe("Creem HTTP integration", () => {
     expect(fetchMock).toHaveBeenCalledOnce()
   })
 
+  it("rejects non-HTTPS checkout redirects from the provider", async () => {
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          checkout_url: "javascript:alert(document.domain)",
+          id: "ch_unsafe_redirect",
+          mode: "test",
+          object: "checkout",
+          product: "prod_growth",
+          status: "pending",
+        }),
+        { status: 200 },
+      )
+    })
+
+    await expect(
+      createCreemClient({
+        apiKey: "creem_test_fixture",
+        fetch: fetchMock as typeof fetch,
+        mode: "test",
+      }).createCheckout({
+        productId: "prod_growth",
+        requestId: "checkout-unsafe-redirect",
+        successUrl: "https://app.example.test/billing/return",
+      }),
+    ).rejects.toMatchObject({
+      code: "INVALID_RESPONSE",
+    })
+  })
+
   it("uses the documented immediate-proration upgrade endpoint", async () => {
     const response = JSON.parse(fixture("subscription-upgrade.json")).object
     const fetchMock = vi.fn(

@@ -133,6 +133,12 @@ const creemCheckoutStatusSchema = z.enum([
   "completed",
   "expired",
 ])
+const httpsUrlSchema = z
+  .string()
+  .url()
+  .refine((value) => value.startsWith("https://"), {
+    message: "Creem redirects must use HTTPS",
+  })
 
 const creemCheckoutResponseSchema = z
   .object({
@@ -142,7 +148,7 @@ const creemCheckoutResponseSchema = z
     status: creemCheckoutStatusSchema,
     product: creemReferenceSchema(creemProductSchema),
     request_id: nonEmptyStringSchema.optional(),
-    checkout_url: z.string().url().optional(),
+    checkout_url: httpsUrlSchema.optional(),
   })
   .passthrough()
 

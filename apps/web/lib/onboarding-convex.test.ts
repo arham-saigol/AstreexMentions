@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import {
   categoryListResultSchema,
+  checkoutResultSchema,
   keywordListResultSchema,
 } from "./onboarding-convex"
 
@@ -49,6 +50,18 @@ describe("onboarding category contracts", () => {
           status: "active",
         },
       ]).success,
+    ).toBe(false)
+  })
+
+  it("rejects non-HTTPS checkout redirects", () => {
+    expect(
+      checkoutResultSchema.safeParse({
+        checkoutId: "checkout_unsafe",
+        reused: false,
+        state: "configured",
+        status: "pending",
+        url: "javascript:alert(document.domain)",
+      }).success,
     ).toBe(false)
   })
 })

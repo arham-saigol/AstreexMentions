@@ -185,7 +185,12 @@ export const checkoutResultSchema = z.discriminatedUnion("state", [
       reused: z.boolean(),
       state: z.literal("configured"),
       status: z.string().trim().min(1),
-      url: z.string().url(),
+      url: z
+        .string()
+        .url()
+        .refine((value) => value.startsWith("https://"), {
+          message: "Checkout redirects must use HTTPS.",
+        }),
     })
     .passthrough(),
   z
