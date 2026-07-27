@@ -38,7 +38,7 @@ const MENTION_METRIC = "mentions_ingested"
 const DELIVERY_METRIC_PREFIX = "email_delivery_"
 const MAX_ACTIVE_WORKSPACE_COUNT = 10_000
 const MAX_FEATURE_REQUEST_SEARCH_RESULTS = 500
-const FEATURE_REQUEST_SEARCH_CURSOR_PREFIX = "fr1:"
+const FEATURE_REQUEST_SEARCH_CURSOR_PREFIX = "fr2:"
 
 const featureRequestStatusValidator = v.union(
   v.literal("new"),
@@ -233,13 +233,18 @@ type FeatureRequestStatus =
   "new" | "planned" | "in_progress" | "completed" | "declined"
 type ChangelogStatus = "draft" | "published"
 type FeatureRequestSort = "newest" | "oldest"
-type FeatureRequestSearchCursor = {
-  offset: number
+type FeatureRequestSearchCursorInput = {
   query: string
   sort: FeatureRequestSort
   status: FeatureRequestStatus | null
-  version: 1
 }
+type FeatureRequestSearchCursor = {
+  afterCreatedAt: number
+  afterId: string
+  snapshotCreatedAt: number
+  snapshotId: string
+  version: 2
+} & FeatureRequestSearchCursorInput
 
 type ProviderAggregate = {
   failureCount: number
@@ -271,7 +276,7 @@ function encodeFeatureRequestSearchCursor(
 
 function decodeFeatureRequestSearchCursor(
   cursor: string,
-  expected: Omit<FeatureRequestSearchCursor, "offset" | "version">,
+  expected: FeatureRequestSearchCursorInput,
 ): FeatureRequestSearchCursor {
   if (
     cursor.length > 2_000 ||
@@ -293,11 +298,23 @@ function decodeFeatureRequestSearchCursor(
     typeof parsed !== "object" ||
     parsed === null ||
     !("version" in parsed) ||
-    parsed.version !== 1 ||
-    !("offset" in parsed) ||
-    !Number.isSafeInteger(parsed.offset) ||
-    (parsed.offset as number) < 0 ||
-    (parsed.offset as number) > MAX_FEATURE_REQUEST_SEARCH_RESULTS ||
+    parsed.version !== 2 ||
+    !("afterCreatedAt" in parsed) ||
+    !Number.isSafeInteger(parsed.afterCreatedAt) ||
+    (parsed.afterCreatedAt as number) < 0 ||
+    (parsed.afterCreatedAt as number) > MAX_TIMESTAMP ||
+    !("afterId" in parsed) ||
+    typeof parsed.afterId !== "string" ||
+    parsed.afterId.length === 0 ||
+    parsed.afterId.length > 512 ||
+    !("snapshotCreatedAt" in parsed) ||
+    !Number.isSafeInteger(parsed.snapshotCreatedAt) ||
+    (parsed.snapshotCreatedAt as number) < 0 ||
+    (parsed.snapshotCreatedAt as number) > MAX_TIMESTAMP ||
+    !("snapshotId" in parsed) ||
+    typeof parsed.snapshotId !== "string" ||
+    parsed.snapshotId.length === 0 ||
+    parsed.snapshotId.length > 512 ||
     !("query" in parsed) ||
     parsed.query !== expected.query ||
     !("sort" in parsed) ||
@@ -308,6 +325,15 @@ function decodeFeatureRequestSearchCursor(
     featureRequestSearchCursorError()
   }
   return parsed as FeatureRequestSearchCursor
+}
+
+function compareFeatureRequestSearchKeys(
+  leftCreatedAt: number,
+  leftId: string,
+  rightCreatedAt: number,
+  rightId: string,
+): number {
+  return leftCreatedAt - rightCreatedAt || leftId.localeCompare(rightId, "en")
 }
 
 function optionalTrimmedText(
@@ -1289,35 +1315,77 @@ export const listFeatureRequests = adminQuery({
           "Feature request search matched too many rows; narrow the search",
         )
       }
-      matches.sort((left, right) => {
-        const chronological =
-          (left.createdAt as number) - (right.createdAt as number)
-        const stable =
-          chronological ||
-          String(left._id).localeCompare(String(right._id), "en")
-        return sort === "oldest" ? stable : -stable
-      })
-      const cursorInput = {
+      const cursorInput: FeatureRequestSearchCursorInput = {
         query: searchQuery,
         sort,
         status: (args.status ?? null) as FeatureRequestStatus | null,
       }
-      const offset = args.cursor
-        ? decodeFeatureRequestSearchCursor(args.cursor, cursorInput).offset
-        : 0
-      const page = matches.slice(offset, offset + limit)
-      const nextOffset = offset + page.length
+      const cursor = args.cursor
+        ? decodeFeatureRequestSearchCursor(args.cursor, cursorInput)
+        : undefined
+      const chronologicalMatches = matches.sort((left, right) =>
+        compareFeatureRequestSearchKeys(
+          left.createdAt as number,
+          String(left._id),
+          right.createdAt as number,
+          String(right._id),
+        ),
+      )
+      const snapshot = cursor
+        ? {
+            createdAt: cursor.snapshotCreatedAt,
+            id: cursor.snapshotId,
+          }
+        : chronologicalMatches.length === 0
+          ? undefined
+          : {
+              createdAt: chronologicalMatches.at(-1)!.createdAt as number,
+              id: String(chronologicalMatches.at(-1)!._id),
+            }
+      const remainingMatches =
+        snapshot === undefined
+          ? []
+          : chronologicalMatches
+              .filter(
+                (row) =>
+                  compareFeatureRequestSearchKeys(
+                    row.createdAt as number,
+                    String(row._id),
+                    snapshot.createdAt,
+                    snapshot.id,
+                  ) <= 0,
+              )
+              .filter((row) => {
+                if (!cursor) {
+                  return true
+                }
+                const boundary = compareFeatureRequestSearchKeys(
+                  row.createdAt as number,
+                  String(row._id),
+                  cursor.afterCreatedAt,
+                  cursor.afterId,
+                )
+                return sort === "oldest" ? boundary > 0 : boundary < 0
+              })
+      if (sort === "newest") {
+        remainingMatches.reverse()
+      }
+      const page = remainingMatches.slice(0, limit)
+      const last = page.at(-1)
       return {
         items: await Promise.all(
           page.map(async (row) => await formatFeatureRequest(ctx, row)),
         ),
-        ...(nextOffset >= matches.length
+        ...(last === undefined || page.length >= remainingMatches.length
           ? {}
           : {
               nextCursor: encodeFeatureRequestSearchCursor({
                 ...cursorInput,
-                offset: nextOffset,
-                version: 1,
+                afterCreatedAt: last.createdAt as number,
+                afterId: String(last._id),
+                snapshotCreatedAt: snapshot!.createdAt,
+                snapshotId: snapshot!.id,
+                version: 2,
               }),
             }),
       }

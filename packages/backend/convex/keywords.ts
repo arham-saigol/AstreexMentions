@@ -16,6 +16,7 @@ import { resolveCurrentCustomer } from "./users"
 
 export const MAX_DRAFT_KEYWORDS = 10
 const MAX_KEYWORD_LENGTH = 160
+const MAX_ACTIVE_SAVED_VIEWS = 50
 
 const platformValidator = v.union(
   v.literal("x"),
@@ -101,6 +102,14 @@ type KeywordStatus = "active" | "paused" | "deleted"
 type TrackingPauseReason = "paid" | "user" | "usage" | "config"
 type TrackingSourceStatus = "active" | "paused" | "error" | "deleted"
 type GenericRow = Record<string, unknown> & { _id: GenericId<string> }
+type SavedViewFilters = {
+  categoryIds?: GenericId<"categories">[]
+  keywordIds?: KeywordId[]
+  mentionStatuses?: Array<"new" | "saved" | "dismissed">
+  platforms?: Platform[]
+  publishedAfter?: number
+  publishedBefore?: number
+}
 
 type CustomerDatabaseCtx = {
   db: QueryCtx["db"] | MutationCtx["db"]
@@ -127,6 +136,35 @@ type DesiredTrackingState = {
 
 function keywordError(code: string, message: string): never {
   throw new ConvexError({ code, message })
+}
+
+function removeKeywordFromSavedViewFilters(
+  filters: SavedViewFilters,
+  keywordId: KeywordId,
+): SavedViewFilters {
+  const keywordIds = filters.keywordIds?.filter(
+    (candidate) => candidate !== keywordId,
+  )
+  return {
+    ...(filters.categoryIds === undefined
+      ? {}
+      : { categoryIds: filters.categoryIds }),
+    ...(keywordIds === undefined || keywordIds.length === 0
+      ? {}
+      : { keywordIds }),
+    ...(filters.mentionStatuses === undefined
+      ? {}
+      : { mentionStatuses: filters.mentionStatuses }),
+    ...(filters.platforms === undefined
+      ? {}
+      : { platforms: filters.platforms }),
+    ...(filters.publishedAfter === undefined
+      ? {}
+      : { publishedAfter: filters.publishedAfter }),
+    ...(filters.publishedBefore === undefined
+      ? {}
+      : { publishedBefore: filters.publishedBefore }),
+  }
 }
 
 export function normalizeKeywordPhrase(value: string): string {
@@ -1118,6 +1156,32 @@ export const deleteKeyword = authenticatedMutation({
     await keywordForWorkspace(ctx, customer.workspaceId, keywordId)
     const now = Date.now()
 
+    const savedViews = await ctx.db
+      .query("savedViews")
+      .withIndex("by_workspace_deleted_and_updated_at", (q) =>
+        indexEquals(
+          q,
+          ["workspaceId", customer.workspaceId],
+          ["deletedAt", undefined],
+        ),
+      )
+      .take(MAX_ACTIVE_SAVED_VIEWS + 1)
+    if (savedViews.length > MAX_ACTIVE_SAVED_VIEWS) {
+      keywordError(
+        "KEYWORD_DELETE_FAILED",
+        "Saved view count exceeds the supported maximum",
+      )
+    }
+    for (const savedView of savedViews) {
+      const filters = savedView.filters as SavedViewFilters
+      if (!filters.keywordIds?.includes(keywordId)) {
+        continue
+      }
+      await ctx.db.patch("savedViews", savedView._id, {
+        filters: removeKeywordFromSavedViewFilters(filters, keywordId),
+        updatedAt: now,
+      })
+    }
     await ctx.db.patch("keywords", keywordId, {
       deletedAt: now,
       status: "deleted",

@@ -61,6 +61,10 @@ const testSchema = defineSchema({
   providerRuns: defineTable(v.any()).index("by_idempotency_key", [
     "idempotencyKey",
   ]),
+  savedViews: defineTable(v.any()).index(
+    "by_workspace_deleted_and_updated_at",
+    ["workspaceId", "deletedAt", "updatedAt"],
+  ),
   subscriptions: defineTable(v.any()).index("by_workspace", ["workspaceId"]),
   systemMetricBuckets: defineTable(v.any()).index(
     "by_metric_scope_workspace_granularity_and_bucket",
@@ -644,6 +648,21 @@ describe("keyword Convex functions", () => {
       true,
     )
 
+    const savedViewId = await t.run(
+      async (ctx) =>
+        await ctx.db.insert("savedViews", {
+          createdAt: Date.now(),
+          filters: {
+            keywordIds: [created.id],
+            platforms: ["x"],
+          },
+          name: "Keyword view",
+          position: 0,
+          updatedAt: Date.now(),
+          userId: customer.userId,
+          workspaceId: customer.workspaceId,
+        }),
+    )
     await customer.client.mutation(deleteKeywordReference, {
       keywordId: created.id,
     })
@@ -652,9 +671,11 @@ describe("keyword Convex functions", () => {
     ).toEqual([])
     const persisted = await t.run(async (ctx) => ({
       keyword: await ctx.db.get("keywords", created.id),
+      savedView: await ctx.db.get("savedViews", savedViewId),
       sources: await ctx.db.query("trackingSources").collect(),
     }))
     expect(persisted.keyword).toMatchObject({ status: "deleted" })
+    expect(persisted.savedView?.filters).toEqual({ platforms: ["x"] })
     expect(
       persisted.sources.every((source) => source.status === "deleted"),
     ).toBe(true)
@@ -1024,10 +1045,12 @@ describe("frontend function inventory", () => {
     expect(mentionSource).toContain("authenticatedMutation")
   })
 
-  it("does not mutate saved views or provider telemetry", () => {
+  it("only cleans saved views during keyword deletion", () => {
+    expect(keywordSource).not.toContain('db.insert("savedViews"')
+    expect(keywordSource).toContain('db.patch("savedViews"')
+    expect(mentionSource).not.toContain('db.insert("savedViews"')
+    expect(mentionSource).not.toContain('db.patch("savedViews"')
     for (const source of [keywordSource, mentionSource]) {
-      expect(source).not.toContain('db.insert("savedViews"')
-      expect(source).not.toContain('db.patch("savedViews"')
       expect(source).not.toContain('db.insert("providerRuns"')
       expect(source).not.toContain('db.insert("providerMetricBuckets"')
     }

@@ -534,6 +534,12 @@ describe("admin feature request and changelog functions", () => {
     ])
     expect(first.nextCursor).toEqual(expect.any(String))
 
+    await customer.mutation(createFeatureRequest, {
+      description:
+        "A sufficiently detailed description for a later chronology marker.",
+      title: "Chronology marker added later",
+    })
+
     const second = (await admin.query(listFeatureRequests, {
       cursor: first.nextCursor,
       limit: 1,
