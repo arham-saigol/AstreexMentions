@@ -824,7 +824,7 @@ describe("mention Convex functions", () => {
     ])
   })
 
-  it("fills a filtered page across the former 100-row scan boundary", async () => {
+  it("fills a filtered page beyond the first scan batch", async () => {
     const t = createBackendTest()
     const customer = await seedCustomer(t, {
       paid: true,
@@ -833,7 +833,7 @@ describe("mention Convex functions", () => {
     const seeded = await seedMentions(t, customer)
     const now = Date.now()
     await t.run(async (ctx) => {
-      for (let index = 0; index < 101; index += 1) {
+      for (let index = 0; index < 251; index += 1) {
         await ctx.db.insert("mentions", {
           analysisState: "completed",
           body: `Unrelated result ${index}`,

@@ -11,8 +11,9 @@ const DEFAULT_PAGE_SIZE = 12
 const MAX_PAGE_SIZE = 50
 const MAX_FILTER_VALUES = 50
 const MAX_SEARCH_LENGTH = 200
-const MAX_CURSOR_LENGTH = 20_000
-const MENTION_SCAN_BATCH_SIZE = 250
+const MAX_CURSOR_LENGTH = 100_000
+const MENTION_SCAN_MAX_BYTES = 4 * 1024 * 1024
+const MENTION_SCAN_MAX_ROWS = 1_000
 const CURSOR_VERSION = 1
 
 const platformValidator = v.union(
@@ -378,7 +379,7 @@ function decodeMentionCursor(
     typeof parsed.databaseDone !== "boolean" ||
     !("bufferedMentionIds" in parsed) ||
     !Array.isArray(parsed.bufferedMentionIds) ||
-    parsed.bufferedMentionIds.length > MENTION_SCAN_BATCH_SIZE ||
+    parsed.bufferedMentionIds.length > MENTION_SCAN_MAX_ROWS ||
     parsed.bufferedMentionIds.some(
       (mentionId) => typeof mentionId !== "string" || mentionId.length === 0,
     )
@@ -807,7 +808,9 @@ export const listMentions = authenticatedQuery({
               .order(sort === "oldest" ? "asc" : "desc")
       const scanned = await scanQuery.paginate({
         cursor: continueCursor,
-        numItems: MENTION_SCAN_BATCH_SIZE,
+        maximumBytesRead: MENTION_SCAN_MAX_BYTES,
+        maximumRowsRead: MENTION_SCAN_MAX_ROWS,
+        numItems: MENTION_SCAN_MAX_ROWS,
       })
       continueCursor = scanned.continueCursor
       databaseDone = scanned.isDone
