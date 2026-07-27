@@ -13,6 +13,7 @@ import { readProviderRuntimeConfiguration } from "./config"
 import { ProviderResultContractError } from "./contracts"
 import {
   boundCursorResultToWindow,
+  boundProviderPagesResultToWindow,
   createProviderApplyBatches,
 } from "./ingestion"
 import { MAX_FETCHLAYER_CUMULATIVE_PAGES } from "./model"
@@ -95,9 +96,14 @@ async function searchProvider(
         query: context.providerQuery,
         sort: "new" as const,
       }
-      return context.sourceType === "reddit_posts"
-        ? await adapter.searchPosts(input)
-        : await adapter.searchComments(input)
+      const result =
+        context.sourceType === "reddit_posts"
+          ? await adapter.searchPosts(input)
+          : await adapter.searchComments(input)
+      return boundProviderPagesResultToWindow(result, {
+        endAt: context.windowEndAt,
+        startAt: context.windowStartAt,
+      })
     }
     case "hacker_news": {
       const adapter = createAlgoliaHackerNewsAdapter({

@@ -18,8 +18,17 @@ import { resolveCurrentCustomer } from "./users"
 
 type CategoryId = GenericId<"categories">
 type WorkspaceId = GenericId<"workspaces">
+type SavedViewFilters = {
+  categoryIds?: CategoryId[]
+  keywordIds?: GenericId<"keywords">[]
+  mentionStatuses?: Array<"new" | "saved" | "dismissed">
+  platforms?: Array<"x" | "reddit" | "hacker_news">
+  publishedAfter?: number
+  publishedBefore?: number
+}
 
 const CATEGORY_REASSIGN_BATCH_SIZE = 100
+const MAX_ACTIVE_SAVED_VIEWS = 50
 export const MAX_ACTIVE_CATEGORIES = 50
 
 type CategoryRecord = CategoryPolicyRecord & {
@@ -91,6 +100,35 @@ function categoryRecord(category: Record<string, unknown>): CategoryRecord {
     name: category.name as string,
     sortOrder: category.sortOrder as number,
     ...(systemKey === undefined ? {} : { systemKey }),
+  }
+}
+
+function removeCategoryFromSavedViewFilters(
+  filters: SavedViewFilters,
+  categoryId: CategoryId,
+): SavedViewFilters {
+  const categoryIds = filters.categoryIds?.filter(
+    (candidate) => candidate !== categoryId,
+  )
+  return {
+    ...(categoryIds === undefined || categoryIds.length === 0
+      ? {}
+      : { categoryIds }),
+    ...(filters.keywordIds === undefined
+      ? {}
+      : { keywordIds: filters.keywordIds }),
+    ...(filters.mentionStatuses === undefined
+      ? {}
+      : { mentionStatuses: filters.mentionStatuses }),
+    ...(filters.platforms === undefined
+      ? {}
+      : { platforms: filters.platforms }),
+    ...(filters.publishedAfter === undefined
+      ? {}
+      : { publishedAfter: filters.publishedAfter }),
+    ...(filters.publishedBefore === undefined
+      ? {}
+      : { publishedBefore: filters.publishedBefore }),
   }
 }
 
@@ -416,6 +454,28 @@ export const deleteCategory = authenticatedMutation({
     }
 
     const now = Date.now()
+    const savedViews = await ctx.db
+      .query("savedViews")
+      .withIndex("by_workspace_deleted_and_updated_at", (q) =>
+        indexEquals(q, ["workspaceId", workspace.id], ["deletedAt", undefined]),
+      )
+      .take(MAX_ACTIVE_SAVED_VIEWS + 1)
+    if (savedViews.length > MAX_ACTIVE_SAVED_VIEWS) {
+      categoryError(
+        "CATEGORY_DELETE_FAILED",
+        "Saved view count exceeds the supported maximum",
+      )
+    }
+    for (const savedView of savedViews) {
+      const filters = savedView.filters as SavedViewFilters
+      if (!filters.categoryIds?.includes(categoryId)) {
+        continue
+      }
+      await ctx.db.patch("savedViews", savedView._id, {
+        filters: removeCategoryFromSavedViewFilters(filters, categoryId),
+        updatedAt: now,
+      })
+    }
     await ctx.db.patch("categories", categoryId, {
       deletionPendingAt: row.deletionPendingAt ?? now,
       enabled: false,

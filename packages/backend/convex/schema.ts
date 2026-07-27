@@ -725,6 +725,11 @@ export default defineSchema({
       "userId",
       "updatedAt",
     ])
+    .index("by_workspace_deleted_and_updated_at", [
+      "workspaceId",
+      "deletedAt",
+      "updatedAt",
+    ])
     .index("by_workspace_and_updated_at", ["workspaceId", "updatedAt"]),
 
   categorizationJobs: defineTable({

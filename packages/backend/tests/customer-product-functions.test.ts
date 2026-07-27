@@ -96,6 +96,11 @@ const customerTestSchema = defineSchema({
       "userId",
       "deletedAt",
       "position",
+    ])
+    .index("by_workspace_deleted_and_updated_at", [
+      "workspaceId",
+      "deletedAt",
+      "updatedAt",
     ]),
   subscriptions: defineTable(v.any())
     .index("by_workspace", ["workspaceId"])
@@ -519,6 +524,12 @@ describe("customer category functions", () => {
         name: " sales lead ",
       }),
     ).rejects.toMatchObject({ data: { code: "CATEGORY_NAME_CONFLICT" } })
+    await customer.mutation(createSavedView, {
+      filters: { categoryIds: [custom.id, other!.id] },
+      icon: "funnel",
+      name: "Sales leads",
+      sort: "newest",
+    })
 
     await t.run(async (ctx) => {
       for (let index = 0; index < 205; index += 1) {
@@ -544,6 +555,14 @@ describe("customer category functions", () => {
     expect(
       reassigned.every((mention) => mention.categoryId === other?.id),
     ).toBe(true)
+    const savedViews = (await customer.query(listSavedViews, {})) as Array<{
+      filters: { categoryIds?: string[] }
+      name: string
+    }>
+    expect(
+      savedViews.find(({ name }) => name === "Sales leads")?.filters
+        .categoryIds,
+    ).toEqual([other?.id])
   })
 })
 

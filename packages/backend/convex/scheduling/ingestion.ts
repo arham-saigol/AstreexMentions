@@ -81,6 +81,38 @@ export function boundCursorResultToWindow(
   }
 }
 
+export function boundProviderPagesResultToWindow(
+  result: ProviderSearchResult,
+  window: { endAt: number; startAt: number },
+): ProviderSearchResult {
+  if (
+    !Number.isSafeInteger(window.startAt) ||
+    !Number.isSafeInteger(window.endAt) ||
+    window.startAt < 0 ||
+    window.endAt < window.startAt
+  ) {
+    throw new RangeError("Provider result window is invalid")
+  }
+  if (result.pagination.kind !== "provider_pages") {
+    return result
+  }
+  const crossedWindowStart = result.items.some(
+    ({ publishedAt }) => publishedAt <= window.startAt,
+  )
+  const items = result.items.filter(
+    ({ publishedAt }) =>
+      publishedAt >= window.startAt && publishedAt <= window.endAt,
+  )
+  return {
+    checkpoint: observeProviderCheckpoint(items),
+    items,
+    pagination: crossedWindowStart
+      ? { ...result.pagination, hasMore: false }
+      : result.pagination,
+    state: "ok",
+  }
+}
+
 /**
  * Converts one validated provider page into deterministic atomic-ingestion
  * chunks. startPosition fences a partially consumed provider page after quota

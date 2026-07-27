@@ -165,6 +165,11 @@ describe("complete Convex schema", () => {
       "deletedAt",
       "position",
     ])
+    expectIndex("savedViews", "by_workspace_deleted_and_updated_at", [
+      "workspaceId",
+      "deletedAt",
+      "updatedAt",
+    ])
     expectIndex("categorizationJobs", "by_mention", ["mentionId"])
     expectIndex("categorizationJobs", "by_idempotency_key", ["idempotencyKey"])
     expectIndex("digestPreferences", "by_enabled_and_next_run_at", [

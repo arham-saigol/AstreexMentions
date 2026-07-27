@@ -10,6 +10,7 @@ import {
 import { parseProviderSearchResultJson } from "../convex/scheduling/contracts"
 import {
   boundCursorResultToWindow,
+  boundProviderPagesResultToWindow,
   createProviderApplyBatches,
 } from "../convex/scheduling/ingestion"
 import {
@@ -519,6 +520,63 @@ describe("configuration and normalized result contracts", () => {
       hasMore: false,
       kind: "cursor",
       requestCursor: "current-page",
+    })
+  })
+
+  it("clips FetchLayer pages and stops after crossing the window start", () => {
+    const startAt = fixture.now - 5 * MINUTE_MS
+    const result = parseProviderSearchResultJson(
+      JSON.stringify({
+        checkpoint: {},
+        items: [
+          {
+            body: "In window",
+            canonicalUrl: "https://reddit.com/r/fixture/in-window",
+            contentType: "post",
+            engagementScore: 0,
+            platform: "reddit",
+            providerItemId: "reddit-in-window",
+            publishedAt: startAt + 1,
+            searchText: "In window",
+          },
+          {
+            body: "Too old",
+            canonicalUrl: "https://reddit.com/r/fixture/too-old",
+            contentType: "post",
+            engagementScore: 0,
+            platform: "reddit",
+            providerItemId: "reddit-too-old",
+            publishedAt: startAt - 1,
+            searchText: "Too old",
+          },
+        ],
+        pagination: {
+          hasMore: true,
+          kind: "provider_pages",
+          pagesRequested: 2,
+          pagesScraped: 2,
+        },
+        state: "ok",
+      }),
+    )
+
+    const bounded = boundProviderPagesResultToWindow(result, {
+      endAt: fixture.now,
+      startAt,
+    })
+
+    expect(bounded.items.map(({ providerItemId }) => providerItemId)).toEqual([
+      "reddit-in-window",
+    ])
+    expect(bounded.checkpoint).toMatchObject({
+      newestPublishedAt: startAt + 1,
+      oldestPublishedAt: startAt + 1,
+    })
+    expect(bounded.pagination).toEqual({
+      hasMore: false,
+      kind: "provider_pages",
+      pagesRequested: 2,
+      pagesScraped: 2,
     })
   })
 

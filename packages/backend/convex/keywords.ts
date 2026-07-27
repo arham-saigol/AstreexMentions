@@ -1033,13 +1033,45 @@ export const resumeKeyword = authenticatedMutation({
   handler: async (ctx, args) => {
     const customer = await requireCurrentCustomer(ctx)
     const keywordId = args.keywordId as KeywordId
-    await keywordForWorkspace(ctx, customer.workspaceId, keywordId)
+    const existingKeyword = await keywordForWorkspace(
+      ctx,
+      customer.workspaceId,
+      keywordId,
+    )
     const now = Date.now()
     const billing = await readBillingKeywordState(
       ctx,
       customer.workspaceId,
       now,
     )
+    if (
+      existingKeyword.status !== "active" &&
+      billing.hasActiveSubscription &&
+      billing.keywordLimit <= MAX_DRAFT_KEYWORDS
+    ) {
+      if (billing.keywordLimit === 0) {
+        keywordError(
+          "KEYWORD_LIMIT_REACHED",
+          "The active plan keyword limit has been reached",
+        )
+      }
+      const activeKeywords = await ctx.db
+        .query("keywords")
+        .withIndex("by_workspace_status_and_created_at", (q) =>
+          indexEquals(
+            q,
+            ["workspaceId", customer.workspaceId],
+            ["status", "active"],
+          ),
+        )
+        .take(billing.keywordLimit)
+      if (activeKeywords.length >= billing.keywordLimit) {
+        keywordError(
+          "KEYWORD_LIMIT_REACHED",
+          "The active plan keyword limit has been reached",
+        )
+      }
+    }
     const trackingState = trackingStateFor(billing, "active")
 
     await ctx.db.patch("keywords", keywordId, {

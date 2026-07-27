@@ -464,6 +464,39 @@ describe("keyword Convex functions", () => {
     ).toHaveLength(1)
   })
 
+  it("does not resume a paused keyword beyond the active plan limit", async () => {
+    const t = createBackendTest()
+    const customer = await seedCustomer(t, {
+      keywordLimit: 1,
+      paid: true,
+      suffix: "resume-limit",
+    })
+    await customer.client.mutation(createKeywordReference, {
+      phrase: "Retained active keyword",
+      platforms: ["x"],
+    })
+    const pausedKeywordId = await t.run(
+      async (ctx) =>
+        (await ctx.db.insert("keywords", {
+          createdAt: Date.now(),
+          createdByUserId: customer.userId,
+          normalizedPhrase: "paused excess keyword",
+          pausedAt: Date.now(),
+          phrase: "Paused excess keyword",
+          platforms: ["x"],
+          status: "paused",
+          updatedAt: Date.now(),
+          workspaceId: customer.workspaceId,
+        })) as KeywordId,
+    )
+
+    await expect(
+      customer.client.mutation(resumeKeywordReference, {
+        keywordId: pausedKeywordId,
+      }),
+    ).rejects.toMatchObject({ data: { code: "KEYWORD_LIMIT_REACHED" } })
+  })
+
   it("keeps keyword status and source status reversible before soft deletion", async () => {
     const t = createBackendTest()
     const customer = await seedCustomer(t, { paid: true, suffix: "lifecycle" })
