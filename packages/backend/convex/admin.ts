@@ -36,6 +36,7 @@ const MAX_TIMESTAMP = 8_640_000_000_000_000
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const MENTION_METRIC = "mentions_ingested"
 const DELIVERY_METRIC_PREFIX = "email_delivery_"
+const MAX_ACTIVE_WORKSPACE_COUNT = 10_000
 
 const featureRequestStatusValidator = v.union(
   v.literal("new"),
@@ -693,6 +694,7 @@ export const getMetricsOverview = adminQuery({
       systemRows,
       categorizationGaugeRows,
       operationalGaugeRows,
+      activeWorkspaceRows,
     ] = (await Promise.all([
       ctx.db
         .query("providerMetricBuckets")
@@ -706,9 +708,9 @@ export const getMetricsOverview = adminQuery({
         .collect(),
       ctx.db
         .query("systemMetricBuckets")
-        .withIndex("by_granularity_and_bucket", (q) =>
+        .withIndex("by_scope_granularity_and_bucket", (q) =>
           indexGreaterThanOrEqual(
-            q.eq("granularity", "hour"),
+            indexEquals(q, ["scope", "global"], ["granularity", "hour"]),
             "bucketStartAt",
             metricReadStartAt,
           ),
@@ -754,11 +756,16 @@ export const getMetricsOverview = adminQuery({
               .unique()) as GenericRow | null,
         ),
       ),
+      ctx.db
+        .query("workspaces")
+        .withIndex("by_last_mention_at", (q) => q.gte("lastMentionAt", startAt))
+        .take(MAX_ACTIVE_WORKSPACE_COUNT + 1),
     ])) as [
       GenericRow[],
       GenericRow[],
       Array<GenericRow | null>,
       Array<GenericRow | null>,
+      GenericRow[],
     ]
 
     const relevantSystemRows = systemRows.filter(
@@ -874,17 +881,6 @@ export const getMetricsOverview = adminQuery({
       }),
     )
 
-    const activeWorkspaceIds = new Set(
-      relevantSystemRows
-        .filter(
-          (row) =>
-            row.scope === "workspace" &&
-            row.metric === MENTION_METRIC &&
-            (row.bucketStartAt as number) >= startAt &&
-            row.workspaceId !== undefined,
-        )
-        .map((row) => String(row.workspaceId)),
-    )
     const delivery = digestDelivery(relevantSystemRows, startAt)
 
     return {
@@ -904,7 +900,10 @@ export const getMetricsOverview = adminQuery({
       providerHealth: providerHealth(providerRows, startAt),
       range: { days: args.days, endAt, startAt },
       stats: {
-        activeWorkspaces: activeWorkspaceIds.size,
+        activeWorkspaces: Math.min(
+          activeWorkspaceRows.length,
+          MAX_ACTIVE_WORKSPACE_COUNT,
+        ),
         emailsDelivered: delivery.delivered,
         mentions: sumMetric(relevantSystemRows, MENTION_METRIC, startAt),
         workspaces: operationalCounts.get(WORKSPACE_COUNT_METRIC) ?? 0,

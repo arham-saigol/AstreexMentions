@@ -763,6 +763,11 @@ export async function applyIngestionChunkAtomically(
     }
 
     inserted += 1
+    if (inserted === 1) {
+      await ctx.db.patch("workspaces", workspaceId, {
+        lastMentionAt: options.now,
+      })
+    }
     if (mentionsUsed >= mentionLimit && !sourcesPaused) {
       pausedSourceCount = await pauseWorkspaceSourcesForUsage(
         ctx,

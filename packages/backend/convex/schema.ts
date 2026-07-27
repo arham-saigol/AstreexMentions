@@ -299,6 +299,7 @@ export default defineSchema({
     deletedAt: v.optional(v.number()),
     deletionPendingAt: v.optional(v.number()),
     kind: workspaceKindValidator,
+    lastMentionAt: v.optional(v.number()),
     name: v.string(),
     normalizedName: v.string(),
     ownerUserId: v.id("users"),
@@ -308,6 +309,7 @@ export default defineSchema({
     .index("by_owner_and_deleted_at", ["ownerUserId", "deletedAt"])
     .index("by_kind_and_created_at", ["kind", "createdAt"])
     .index("by_created_at", ["createdAt"])
+    .index("by_last_mention_at", ["lastMentionAt"])
     .index("by_deletion_pending_at", ["deletionPendingAt"])
     .index("by_deleted_at", ["deletedAt"]),
 
@@ -1000,6 +1002,11 @@ export default defineSchema({
     ])
     .index("by_metric_granularity_and_bucket", [
       "metric",
+      "granularity",
+      "bucketStartAt",
+    ])
+    .index("by_scope_granularity_and_bucket", [
+      "scope",
       "granularity",
       "bucketStartAt",
     ])

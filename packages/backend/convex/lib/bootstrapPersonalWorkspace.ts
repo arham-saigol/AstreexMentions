@@ -7,6 +7,11 @@ type ClerkProfile = {
   name?: string
 }
 
+type ClerkProfilePatch = {
+  email?: string | undefined
+  imageUrl?: string | undefined
+}
+
 export type BootstrapUser<UserId extends string, WorkspaceId extends string> = {
   clerkUserId: string
   deletedAt?: number | undefined
@@ -91,7 +96,7 @@ export interface PersonalWorkspaceBootstrapStore<
   ): Promise<void>
   patchUser(
     userId: UserId,
-    patch: ClerkProfile & {
+    patch: ClerkProfilePatch & {
       clerkUserId?: string
       personalWorkspaceId?: WorkspaceId | undefined
       tokenIdentifier?: string
@@ -114,6 +119,14 @@ function profileFromIdentity(identity: UserIdentity): ClerkProfile {
   }
 
   return profile
+}
+
+function recurringProfilePatch(identity: UserIdentity): ClerkProfilePatch {
+  return {
+    email: typeof identity.email === "string" ? identity.email : undefined,
+    imageUrl:
+      typeof identity.pictureUrl === "string" ? identity.pictureUrl : undefined,
+  }
 }
 
 async function ensurePersonalWorkspace<
@@ -222,8 +235,6 @@ export async function bootstrapPersonalWorkspace<
   }
 
   const existingUser = byTokenIdentifier ?? byClerkUserId
-  const profile = profileFromIdentity(identity)
-
   if (existingUser) {
     if (
       existingUser.disabledAt !== undefined ||
@@ -243,7 +254,7 @@ export async function bootstrapPersonalWorkspace<
     )
 
     await store.patchUser(existingUser.id, {
-      ...profile,
+      ...recurringProfilePatch(identity),
       clerkUserId: identity.subject,
       personalWorkspaceId: workspaceId,
       tokenIdentifier: identity.tokenIdentifier,
@@ -253,6 +264,7 @@ export async function bootstrapPersonalWorkspace<
     return { created: false, userId: existingUser.id, workspaceId }
   }
 
+  const profile = profileFromIdentity(identity)
   const userId = await store.insertUser({
     ...profile,
     clerkUserId: identity.subject,

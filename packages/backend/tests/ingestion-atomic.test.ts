@@ -250,6 +250,7 @@ async function snapshot(t: BackendTest, seeded: SeededWorkspace) {
       ),
     ),
     usage: await ctx.db.get("usageCycles", seeded.usageCycleId),
+    workspace: await ctx.db.get("workspaces", seeded.workspaceId),
   }))
 }
 
@@ -346,6 +347,7 @@ describe("serializable atomic ingestion", () => {
     expect(state.jobs).toHaveLength(1)
     expect(state.matches).toHaveLength(2)
     expect(state.outbox).toHaveLength(0)
+    expect(state.workspace?.lastMentionAt).toBe(NOW)
     expect(state.metrics).toHaveLength(5)
     expect(state.metrics.map(({ value }) => value)).toEqual([1, 1, 1, 1, 1])
   })

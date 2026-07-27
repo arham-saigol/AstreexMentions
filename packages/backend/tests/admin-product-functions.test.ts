@@ -44,6 +44,11 @@ const schema = defineSchema({
   subscriptions: defineTable(v.any()),
   systemMetricBuckets: defineTable(v.any())
     .index("by_granularity_and_bucket", ["granularity", "bucketStartAt"])
+    .index("by_scope_granularity_and_bucket", [
+      "scope",
+      "granularity",
+      "bucketStartAt",
+    ])
     .index("by_metric_scope_workspace_granularity_and_bucket", [
       "metric",
       "scope",
@@ -59,10 +64,9 @@ const schema = defineSchema({
     "workspaceId",
     "userId",
   ]),
-  workspaces: defineTable(v.any()).index("by_owner_and_kind", [
-    "ownerUserId",
-    "kind",
-  ]),
+  workspaces: defineTable(v.any())
+    .index("by_owner_and_kind", ["ownerUserId", "kind"])
+    .index("by_last_mention_at", ["lastMentionAt"]),
 })
 
 const modules = {
@@ -466,12 +470,6 @@ describe("admin metrics", () => {
           value: 5,
         },
         {
-          metric: "mentions_ingested",
-          scope: "workspace",
-          value: 5,
-          workspaceId: bootstrap.workspaceId,
-        },
-        {
           metric: "mentions_ingested_platform:x",
           scope: "global",
           value: 1,
@@ -527,6 +525,9 @@ describe("admin metrics", () => {
       await ctx.db.insert("mentions", {
         firstSeenAt: now,
         platform: "reddit",
+      })
+      await ctx.db.patch("workspaces", bootstrap.workspaceId, {
+        lastMentionAt: now,
       })
       await ctx.db.insert("categorizationJobs", { status: "completed" })
       await ctx.db.insert("categorizationJobs", { status: "pending" })
