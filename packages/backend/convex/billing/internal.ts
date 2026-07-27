@@ -832,7 +832,7 @@ async function applySubscriptionEvent(
   const kind = await persistSubscriptionTransition(ctx, {
     existingRow: existing,
     plan,
-    providerCreatedAt: event.created_at,
+    providerCreatedAt: Math.max(event.created_at, normalized.updatedAt),
     subscription: normalized,
     workspaceId,
   })

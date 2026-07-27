@@ -403,7 +403,7 @@ describe("Creem webhook reconciliation", () => {
     expect(state.usage).toMatchObject({ keywordLimit: 3 })
   })
 
-  it("keeps incomplete periods pending and applies authoritative subscription data", async () => {
+  it("orders reconciled incomplete periods by the authoritative subscription version", async () => {
     process.env.CREEM_PRODUCT_ALLOWLIST_JSON = JSON.stringify({
       prod_growth: {
         keywordLimit: 6,
@@ -463,6 +463,10 @@ describe("Creem webhook reconciliation", () => {
 
     paidEvent.object.metadata.internal_customer_id = String(seeded.workspaceId)
     const authoritativeSubscription = structuredClone(paidEvent.object)
+    const authoritativeUpdatedAt = Date.parse("2026-07-03T00:00:00.000Z")
+    authoritativeSubscription.updated_at = new Date(
+      authoritativeUpdatedAt,
+    ).toISOString()
     delete paidEvent.object.current_period_start_date
     delete paidEvent.object.current_period_end_date
 
@@ -498,6 +502,22 @@ describe("Creem webhook reconciliation", () => {
       }),
     ).resolves.toEqual({ kind: "applied" })
 
+    const delayedEvent = structuredClone(paidEvent)
+    const delayedCreatedAt = Date.parse("2026-07-02T00:00:00.000Z")
+    delayedEvent.id = "evt_delayed_after_reconciliation"
+    delayedEvent.created_at = delayedCreatedAt
+    delayedEvent.object = structuredClone(authoritativeSubscription)
+    delayedEvent.object.product.id = "prod_starter"
+    delayedEvent.object.items[0].product_id = "prod_starter"
+    delayedEvent.object.updated_at = new Date(delayedCreatedAt).toISOString()
+
+    await expect(
+      t.mutation(ingestWebhook, {
+        rawBody: JSON.stringify(delayedEvent),
+        receivedAt: authoritativeUpdatedAt + 1,
+      }),
+    ).resolves.toEqual({ kind: "stale" })
+
     const state = await t.run(async (ctx) => ({
       event: await ctx.db.get("billingEvents", pending!._id),
       subscriptions: await ctx.db.query("subscriptions").collect(),
@@ -506,6 +526,7 @@ describe("Creem webhook reconciliation", () => {
     expect(state.subscriptions).toEqual([
       expect.objectContaining({
         entitlementStatus: "active",
+        lastSyncedAt: authoritativeUpdatedAt,
         planId: "growth",
         workspaceId: seeded.workspaceId,
       }),
