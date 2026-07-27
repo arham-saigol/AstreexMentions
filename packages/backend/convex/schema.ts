@@ -350,6 +350,12 @@ export default defineSchema({
     workspaceId: v.id("workspaces"),
   })
     .index("by_workspace", ["workspaceId"])
+    .index("by_workspace_and_last_synced_at", ["workspaceId", "lastSyncedAt"])
+    .index("by_workspace_plan_and_last_synced_at", [
+      "workspaceId",
+      "planId",
+      "lastSyncedAt",
+    ])
     .index("by_workspace_and_entitlement", ["workspaceId", "entitlementStatus"])
     .index("by_provider_customer", ["provider", "providerCustomerId"])
     .index("by_provider_subscription", ["provider", "providerSubscriptionId"])
@@ -387,6 +393,12 @@ export default defineSchema({
       "workspaceId",
       "status",
       "expiresAt",
+    ])
+    .index("by_workspace_status_plan_and_completed_at", [
+      "workspaceId",
+      "status",
+      "planId",
+      "completedAt",
     ])
     .index("by_user_and_created_at", ["requestedByUserId", "createdAt"])
     .index("by_status_and_expires_at", ["status", "expiresAt"])

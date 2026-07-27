@@ -24,6 +24,19 @@ const beginOperation = makeFunctionReference<
   { state: string }
 >("billing/internal:beginCreemProviderOperation")
 
+const getBillingContext = makeFunctionReference<
+  "query",
+  {
+    idempotencyKey?: string
+    workspaceId: GenericId<"workspaces">
+  },
+  {
+    checkout: Record<string, unknown> | null
+    outstandingCheckout: Record<string, unknown> | null
+    subscription: Record<string, unknown> | null
+  }
+>("billing/internal:getCustomerBillingActionContext")
+
 const markRetryable = makeFunctionReference<
   "mutation",
   {
@@ -42,6 +55,122 @@ const dispatchBilling = makeFunctionReference<
 >("billing/internal:dispatchPendingCreemBillingEvents")
 
 describe("Creem provider operation retries", () => {
+  it("keeps completed checkout payment blocked until subscription reconciliation", async () => {
+    const t = convexTest({ modules, schema })
+    const now = Date.now()
+    const completedAt = now - 10_000
+    const { checkoutId, workspaceId } = await t.run(async (ctx) => {
+      const userId = await ctx.db.insert("users", {
+        clerkUserId: "user_completed_checkout_guard",
+        createdAt: now,
+        tokenIdentifier: "issuer|user_completed_checkout_guard",
+        updatedAt: now,
+      })
+      const workspaceId = await ctx.db.insert("workspaces", {
+        createdAt: now,
+        kind: "personal",
+        name: "Completed checkout guard",
+        normalizedName: "completed checkout guard",
+        ownerUserId: userId,
+        updatedAt: now,
+      })
+      const checkoutId = await ctx.db.insert("billingCheckouts", {
+        completedAt,
+        createdAt: completedAt - 86_400_000,
+        expiresAt: now - 1,
+        idempotencyKey: "completed-checkout",
+        planId: "growth",
+        provider: "creem",
+        providerCheckoutSessionId: "checkout_completed_fixture",
+        requestedByUserId: userId,
+        status: "complete",
+        updatedAt: completedAt,
+        workspaceId,
+      })
+      return { checkoutId, workspaceId }
+    })
+
+    await expect(
+      t.query(getBillingContext, { workspaceId }),
+    ).resolves.toMatchObject({
+      outstandingCheckout: { _id: checkoutId },
+      subscription: null,
+    })
+    await expect(
+      t.mutation(beginOperation, {
+        idempotencyKey: "checkout:before-reconciliation",
+        operation: "checkout",
+        workspaceId,
+      }),
+    ).resolves.toEqual({ state: "outstanding" })
+
+    const subscriptionId = await t.run(async (ctx) => {
+      const subscriptionId = await ctx.db.insert("subscriptions", {
+        cancelAtPeriodEnd: false,
+        canceledAt: completedAt - 1,
+        createdAt: completedAt - 20_000,
+        currentPeriodEnd: completedAt - 1,
+        currentPeriodStart: completedAt - 30_000,
+        endedAt: completedAt - 1,
+        entitlementStatus: "inactive",
+        lastSyncedAt: completedAt - 1,
+        planId: "growth",
+        provider: "creem",
+        providerCustomerId: "customer_completed_fixture",
+        providerSubscriptionId: "subscription_completed_fixture",
+        status: "canceled",
+        updatedAt: completedAt - 1,
+        workspaceId,
+      })
+      await ctx.db.insert("subscriptions", {
+        cancelAtPeriodEnd: false,
+        canceledAt: completedAt + 1,
+        createdAt: completedAt - 20_000,
+        currentPeriodEnd: completedAt + 1,
+        currentPeriodStart: completedAt - 30_000,
+        endedAt: completedAt + 1,
+        entitlementStatus: "inactive",
+        lastSyncedAt: completedAt + 1,
+        planId: "scale",
+        provider: "creem",
+        providerCustomerId: "customer_unrelated_fixture",
+        providerSubscriptionId: "subscription_unrelated_fixture",
+        status: "canceled",
+        updatedAt: completedAt + 1,
+        workspaceId,
+      })
+      return subscriptionId
+    })
+    await expect(
+      t.mutation(beginOperation, {
+        idempotencyKey: "checkout:stale-subscription",
+        operation: "checkout",
+        workspaceId,
+      }),
+    ).resolves.toEqual({ state: "outstanding" })
+
+    await t.run(
+      async (ctx) =>
+        await ctx.db.patch("subscriptions", subscriptionId, {
+          lastSyncedAt: completedAt,
+          updatedAt: completedAt,
+        }),
+    )
+    await expect(
+      t.query(getBillingContext, { workspaceId }),
+    ).resolves.toMatchObject({
+      outstandingCheckout: null,
+      subscription: { planId: "scale" },
+    })
+    await expect(
+      t.mutation(beginOperation, {
+        idempotencyKey: "checkout:after-reconciliation",
+        operation: "checkout",
+        workspaceId,
+      }),
+    ).resolves.toEqual({ state: "started" })
+  })
+
   it("permits only one outstanding checkout per workspace", async () => {
     const t = convexTest({ modules, schema })
     const { userId, workspaceId } = await t.run(async (ctx) => {

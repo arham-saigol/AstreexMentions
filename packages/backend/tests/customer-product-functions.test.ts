@@ -47,6 +47,12 @@ const customerTestSchema = defineSchema({
       "workspaceId",
       "status",
       "expiresAt",
+    ])
+    .index("by_workspace_status_plan_and_completed_at", [
+      "workspaceId",
+      "status",
+      "planId",
+      "completedAt",
     ]),
   billingEvents: defineTable(v.any())
     .index("by_status_and_received_at", ["status", "receivedAt"])
@@ -91,7 +97,14 @@ const customerTestSchema = defineSchema({
       "deletedAt",
       "position",
     ]),
-  subscriptions: defineTable(v.any()).index("by_workspace", ["workspaceId"]),
+  subscriptions: defineTable(v.any())
+    .index("by_workspace", ["workspaceId"])
+    .index("by_workspace_and_last_synced_at", ["workspaceId", "lastSyncedAt"])
+    .index("by_workspace_plan_and_last_synced_at", [
+      "workspaceId",
+      "planId",
+      "lastSyncedAt",
+    ]),
   systemMetricBuckets: defineTable(v.any()).index(
     "by_metric_scope_workspace_granularity_and_bucket",
     ["metric", "scope", "workspaceId", "granularity", "bucketStartAt"],

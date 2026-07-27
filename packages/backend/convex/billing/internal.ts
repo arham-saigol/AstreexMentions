@@ -33,6 +33,7 @@ import {
   internalMutation,
   internalQuery,
   type MutationCtx,
+  type QueryCtx,
 } from "../server"
 import { finalizeInvalidatedTrackingProviderRun } from "../scheduling/providerRuns"
 import {
@@ -44,6 +45,7 @@ import {
 import {
   completeCheckoutWithoutEntitlement,
   planCreemSubscriptionTransition,
+  subscriptionStatusAllowsCheckout,
   type BillingSubscriptionState,
   type BillingUsageCycleState,
 } from "./lifecycle"
@@ -53,6 +55,7 @@ const planIdValidator = v.union(
   v.literal("growth"),
   v.literal("scale"),
 )
+const BILLING_PLAN_IDS = ["starter", "growth", "scale"] as const
 
 const CHECKOUT_RECORD_TTL_MS = 24 * 60 * 60 * 1_000
 const WEBHOOK_RETRY_DELAY_MS = 30_000
@@ -73,6 +76,7 @@ type ProviderRunId = GenericId<"providerRuns">
 type GenericRow = Record<string, unknown> & { _id: GenericId<string> }
 
 type GenericMutationContext = MutationCtx
+type DatabaseContext = Pick<MutationCtx | QueryCtx, "db">
 
 function metadataJson(value: Record<string, unknown>): string {
   return JSON.stringify(value)
@@ -80,6 +84,68 @@ function metadataJson(value: Record<string, unknown>): string {
 
 function eventMode(event: CreemWebhookEvent): string {
   return event.object.mode
+}
+
+async function findOutstandingCheckout(
+  ctx: DatabaseContext,
+  workspaceId: WorkspaceId,
+  now: number,
+): Promise<Record<string, unknown> | null> {
+  const openCheckout = await ctx.db
+    .query("billingCheckouts")
+    .withIndex("by_workspace_status_and_expires_at", (q) =>
+      indexGreaterThanOrEqual(
+        indexEquals(q, ["workspaceId", workspaceId], ["status", "open"]),
+        "expiresAt",
+        now + 1,
+      ),
+    )
+    .first()
+  if (openCheckout) {
+    return openCheckout
+  }
+
+  const completeCheckouts = await Promise.all(
+    BILLING_PLAN_IDS.map(async (planId) => {
+      const [checkout, subscription] = await Promise.all([
+        ctx.db
+          .query("billingCheckouts")
+          .withIndex("by_workspace_status_plan_and_completed_at", (q) =>
+            indexEquals(
+              q,
+              ["workspaceId", workspaceId],
+              ["status", "complete"],
+              ["planId", planId],
+            ),
+          )
+          .order("desc")
+          .first(),
+        ctx.db
+          .query("subscriptions")
+          .withIndex("by_workspace_plan_and_last_synced_at", (q) =>
+            indexEquals(q, ["workspaceId", workspaceId], ["planId", planId]),
+          )
+          .order("desc")
+          .first(),
+      ])
+      if (!checkout) {
+        return null
+      }
+      return typeof checkout.completedAt !== "number" ||
+        typeof subscription?.lastSyncedAt !== "number" ||
+        subscription.lastSyncedAt < checkout.completedAt
+        ? checkout
+        : null
+    }),
+  )
+  return (
+    completeCheckouts
+      .filter((checkout) => checkout !== null)
+      .sort(
+        (left, right) =>
+          (right.updatedAt as number) - (left.updatedAt as number),
+      )[0] ?? null
+  )
 }
 
 async function insertAuditEvent(
@@ -756,15 +822,13 @@ export const getCustomerBillingActionContext = internalQuery({
     workspaceId: v.id("workspaces"),
   },
   handler: async (ctx, args) => {
-    const subscriptions = await ctx.db
+    const subscription = await ctx.db
       .query("subscriptions")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
-      .collect()
-    const subscription =
-      subscriptions.sort(
-        (left, right) =>
-          (right.lastSyncedAt as number) - (left.lastSyncedAt as number),
-      )[0] ?? null
+      .withIndex("by_workspace_and_last_synced_at", (q) =>
+        q.eq("workspaceId", args.workspaceId),
+      )
+      .order("desc")
+      .first()
     const checkout = args.idempotencyKey
       ? await ctx.db
           .query("billingCheckouts")
@@ -773,41 +837,11 @@ export const getCustomerBillingActionContext = internalQuery({
           )
           .unique()
       : null
-    const [openCheckouts, completeCheckouts] = await Promise.all([
-      ctx.db
-        .query("billingCheckouts")
-        .withIndex("by_workspace_status_and_expires_at", (q) =>
-          indexGreaterThanOrEqual(
-            indexEquals(
-              q,
-              ["workspaceId", args.workspaceId],
-              ["status", "open"],
-            ),
-            "expiresAt",
-            Date.now() + 1,
-          ),
-        )
-        .take(1),
-      ctx.db
-        .query("billingCheckouts")
-        .withIndex("by_workspace_status_and_expires_at", (q) =>
-          indexGreaterThanOrEqual(
-            indexEquals(
-              q,
-              ["workspaceId", args.workspaceId],
-              ["status", "complete"],
-            ),
-            "expiresAt",
-            Date.now() + 1,
-          ),
-        )
-        .take(1),
-    ])
-    const outstandingCheckout =
-      [...openCheckouts, ...completeCheckouts].sort(
-        (left, right) =>
-          (right.updatedAt as number) - (left.updatedAt as number),
-      )[0] ?? null
+    const outstandingCheckout = await findOutstandingCheckout(
+      ctx,
+      args.workspaceId,
+      Date.now(),
+    )
 
     return { checkout, outstandingCheckout, subscription }
   },
@@ -1002,37 +1036,23 @@ export const beginCreemProviderOperation = internalMutation({
       throw new TypeError("Workspace is unavailable for billing operations")
     }
     if (args.operation === "checkout") {
-      const [openCheckouts, completeCheckouts] = await Promise.all([
-        ctx.db
-          .query("billingCheckouts")
-          .withIndex("by_workspace_status_and_expires_at", (q) =>
-            indexGreaterThanOrEqual(
-              indexEquals(
-                q,
-                ["workspaceId", args.workspaceId],
-                ["status", "open"],
-              ),
-              "expiresAt",
-              now + 1,
-            ),
-          )
-          .take(1),
-        ctx.db
-          .query("billingCheckouts")
-          .withIndex("by_workspace_status_and_expires_at", (q) =>
-            indexGreaterThanOrEqual(
-              indexEquals(
-                q,
-                ["workspaceId", args.workspaceId],
-                ["status", "complete"],
-              ),
-              "expiresAt",
-              now + 1,
-            ),
-          )
-          .take(1),
-      ])
-      if (openCheckouts.length > 0 || completeCheckouts.length > 0) {
+      const subscription = await ctx.db
+        .query("subscriptions")
+        .withIndex("by_workspace_and_last_synced_at", (q) =>
+          q.eq("workspaceId", args.workspaceId),
+        )
+        .order("desc")
+        .first()
+      const outstandingCheckout = await findOutstandingCheckout(
+        ctx,
+        args.workspaceId,
+        now,
+      )
+      if (
+        outstandingCheckout ||
+        (subscription &&
+          !subscriptionStatusAllowsCheckout(String(subscription.status)))
+      ) {
         return { state: "outstanding" as const }
       }
 

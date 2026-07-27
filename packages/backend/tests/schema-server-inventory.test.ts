@@ -206,6 +206,20 @@ describe("complete Convex schema", () => {
       "expiresAt",
     ])
     expectIndex(
+      "billingCheckouts",
+      "by_workspace_status_plan_and_completed_at",
+      ["workspaceId", "status", "planId", "completedAt"],
+    )
+    expectIndex("subscriptions", "by_workspace_and_last_synced_at", [
+      "workspaceId",
+      "lastSyncedAt",
+    ])
+    expectIndex("subscriptions", "by_workspace_plan_and_last_synced_at", [
+      "workspaceId",
+      "planId",
+      "lastSyncedAt",
+    ])
+    expectIndex(
       "providerRuns",
       "by_workspace_provider_operation_status_and_started_at",
       ["workspaceId", "provider", "operation", "status", "startedAt"],
