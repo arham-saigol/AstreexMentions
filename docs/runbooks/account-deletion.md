@@ -24,7 +24,10 @@ only a retained `deletionJobs` row with `status = "completed"` and
    and revoking the owner membership.
 7. Tenant data is purged in batches of 50. Provider schedules and producers
    reject deletion-pending/deleted tenants. Billing event payloads are
-   redacted rather than treated as active tenant data.
+   redacted rather than treated as active tenant data. The retained deletion
+   job also acts as a post-purge tombstone: late subscription webhooks for an
+   already-removed workspace are settled and redacted without restoring a
+   workspace ID or raw payload.
 8. Convex verifies tenant rows and the workspace are absent and the retained
    user tombstone is scrubbed before the internal action can delete Clerk.
 9. Clerk `404` and a verified delete both converge. The user tombstone remains

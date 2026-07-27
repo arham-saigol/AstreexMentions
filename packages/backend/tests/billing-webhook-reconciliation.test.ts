@@ -43,6 +43,88 @@ afterEach(() => {
 })
 
 describe("Creem webhook reconciliation", () => {
+  it("settles and redacts subscription events for already-purged workspaces", async () => {
+    delete process.env.CREEM_PRODUCT_ALLOWLIST_JSON
+    const paidEvent = JSON.parse(
+      readFileSync(
+        fileURLToPath(
+          new URL("./fixtures/creem/subscription-paid.json", import.meta.url),
+        ),
+        "utf8",
+      ),
+    ) as Record<string, any>
+    paidEvent.id = "evt_after_workspace_purge"
+    paidEvent.object.id = "sub_after_workspace_purge"
+
+    const t = convexTest({ modules, schema })
+    const workspaceId = await t.run(async (ctx) => {
+      const now = paidEvent.created_at as number
+      const userId = await ctx.db.insert("users", {
+        clerkUserId: "purged-billing-user",
+        createdAt: now,
+        tokenIdentifier: "issuer|purged-billing-user",
+        updatedAt: now,
+      })
+      const purgedWorkspaceId = await ctx.db.insert("workspaces", {
+        createdAt: now,
+        kind: "personal",
+        name: "Purged billing",
+        normalizedName: "purged billing",
+        ownerUserId: userId,
+        updatedAt: now,
+      })
+      await ctx.db.insert("deletionJobs", {
+        accountUserId: userId,
+        attempts: 1,
+        billingGuardStatus: "confirmed_inactive",
+        createdAt: now - 1,
+        idempotencyKey: "delete-purged-billing-workspace",
+        kind: "account",
+        maxAttempts: 10,
+        phase: "purge",
+        purgeStage: "user_tombstone",
+        requestedByUserId: userId,
+        scheduledAt: now - 1,
+        status: "leased",
+        updatedAt: now,
+        workspaceId: purgedWorkspaceId,
+      })
+      await ctx.db.delete("workspaces", purgedWorkspaceId)
+      return purgedWorkspaceId
+    })
+    paidEvent.object.metadata.internal_customer_id = String(workspaceId)
+
+    await expect(
+      t.mutation(ingestWebhook, {
+        rawBody: JSON.stringify(paidEvent),
+        receivedAt: paidEvent.created_at,
+      }),
+    ).resolves.toEqual({ kind: "ignored" })
+
+    const state = await t.run(async (ctx) => ({
+      auditEvents: await ctx.db.query("auditEvents").collect(),
+      billingEvents: await ctx.db.query("billingEvents").collect(),
+      providerRuns: await ctx.db.query("providerRuns").collect(),
+      subscriptions: await ctx.db.query("subscriptions").collect(),
+    }))
+    expect(state.billingEvents).toEqual([
+      expect.objectContaining({
+        payloadJson: "{}",
+        redactedAt: paidEvent.created_at,
+        status: "processed",
+      }),
+    ])
+    expect(state.billingEvents[0]).not.toHaveProperty("objectId")
+    expect(state.billingEvents[0]).not.toHaveProperty("workspaceId")
+    expect(state.subscriptions).toEqual([])
+    expect(state.providerRuns).toEqual([
+      expect.objectContaining({ status: "succeeded" }),
+    ])
+    expect(state.providerRuns[0]).not.toHaveProperty("workspaceId")
+    expect(state.auditEvents).toHaveLength(1)
+    expect(state.auditEvents[0]).not.toHaveProperty("workspaceId")
+  })
+
   it("keeps incomplete periods pending and applies authoritative subscription data", async () => {
     process.env.CREEM_PRODUCT_ALLOWLIST_JSON = JSON.stringify({
       prod_growth: {

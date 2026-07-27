@@ -11,6 +11,7 @@ import {
 import { env, internalAction } from "../server"
 import { readProviderRuntimeConfiguration } from "./config"
 import { ProviderResultContractError } from "./contracts"
+import { createProviderApplyBatches } from "./ingestion"
 import {
   applyTrackingProviderPageReference,
   failTrackingProviderRunReference,
@@ -155,11 +156,21 @@ export const executeTrackingSource = internalAction({
     try {
       const result = await searchProvider(context, configuration)
       providerDurationMs = Math.max(0, Date.now() - startedAt)
-      return await ctx.runMutation(applyTrackingProviderPageReference, {
-        ...args,
-        durationMs: providerDurationMs,
-        resultJson: JSON.stringify(result),
-      })
+      const batches = createProviderApplyBatches(result)
+      let outcome: { state: string } = { state: "stale_run" }
+      for (const batch of batches) {
+        outcome = await ctx.runMutation(applyTrackingProviderPageReference, {
+          ...args,
+          durationMs: providerDurationMs,
+          finalize: batch.finalize,
+          providerOutputCount: result.items.length,
+          resultJson: JSON.stringify(batch.result),
+        })
+        if (!batch.finalize && outcome.state !== "batch_applied") {
+          return outcome
+        }
+      }
+      return outcome
     } catch (error) {
       providerDurationMs = Math.max(0, Date.now() - startedAt)
       const failure = safeFailure(error)

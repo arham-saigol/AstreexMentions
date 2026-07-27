@@ -5,6 +5,7 @@ import {
   applyIngestionChunkAtomically,
   type IngestionChunkResult,
 } from "../ingestion/service"
+import { MAX_INGESTION_CHUNK_SIZE } from "../ingestion/contracts"
 import {
   internalActionReference,
   internalMutationReference,
@@ -708,9 +709,11 @@ async function ingestProviderPage(
 export const applyTrackingProviderPage = internalMutation({
   args: {
     durationMs: v.number(),
+    finalize: v.boolean(),
     leaseExpiresAt: v.number(),
     leaseToken: v.string(),
     leaseVersion: v.number(),
+    providerOutputCount: v.number(),
     resultJson: v.string(),
     trackingSourceId: v.id("trackingSources"),
   },
@@ -735,6 +738,13 @@ export const applyTrackingProviderPage = internalMutation({
     }
 
     const result = parseProviderSearchResultJson(args.resultJson)
+    if (
+      result.items.length > MAX_INGESTION_CHUNK_SIZE ||
+      !Number.isSafeInteger(args.providerOutputCount) ||
+      args.providerOutputCount < result.items.length
+    ) {
+      throw new RangeError("Provider apply batch is invalid")
+    }
     const eligibility = await readTrackingEligibility(ctx.db, args, now)
     if (eligibility.state !== "ready") {
       await ctx.db.patch("trackingSources", args.trackingSourceId, {
@@ -752,7 +762,7 @@ export const applyTrackingProviderPage = internalMutation({
           durationMs: args.durationMs,
           errorCode: "eligibility_changed",
           errorMessage: "Tracking eligibility changed before persistence",
-          outputCount: result.items.length,
+          outputCount: args.providerOutputCount,
           run,
           status: "failed",
         },
@@ -776,7 +786,7 @@ export const applyTrackingProviderPage = internalMutation({
           durationMs: args.durationMs,
           errorCode: "resend_provider_unconfigured",
           errorMessage: "Resend email sender is not configured",
-          outputCount: result.items.length,
+          outputCount: args.providerOutputCount,
           run,
           status: "failed",
         },
@@ -800,7 +810,7 @@ export const applyTrackingProviderPage = internalMutation({
       now,
     )
 
-    if (ingestion.unprocessedPosition !== undefined) {
+    if (ingestion.usageExhausted) {
       await ctx.db.patch("trackingSources", args.trackingSourceId, {
         backoffMs: 0,
         backoffUntil: undefined,
@@ -815,7 +825,7 @@ export const applyTrackingProviderPage = internalMutation({
         status: "paused",
         updatedAt: now,
       })
-    } else {
+    } else if (args.finalize) {
       const transition = planCheckpointTransition({
         checkpointVersion: source.checkpointVersion as number,
         completedAt: now,
@@ -862,13 +872,21 @@ export const applyTrackingProviderPage = internalMutation({
           settledWatermarkItemId: transition.settledWatermarkItemId,
         })
       }
+    } else {
+      return {
+        associationsAdded: ingestion.associationsAdded,
+        categorizationJobsEnqueued: ingestion.categorizationJobsEnqueued,
+        inserted: ingestion.inserted,
+        rediscovered: ingestion.rediscovered,
+        state: "batch_applied" as const,
+      }
     }
 
     await finishTrackingProviderRun(
       ctx,
       {
         durationMs: args.durationMs,
-        outputCount: result.items.length,
+        outputCount: args.providerOutputCount,
         run,
         status: "succeeded",
       },
@@ -1001,7 +1019,13 @@ export const startTrackingProviderRunReference =
   )
 
 export const applyTrackingProviderPageReference = internalMutationReference<
-  LeaseArguments & { durationMs: number; resultJson: string }
+  LeaseArguments & {
+    durationMs: number
+    finalize: boolean
+    providerOutputCount: number
+    resultJson: string
+  },
+  { state: string }
 >("scheduling/internal:applyTrackingProviderPage")
 
 export const failTrackingProviderRunReference = internalMutationReference<

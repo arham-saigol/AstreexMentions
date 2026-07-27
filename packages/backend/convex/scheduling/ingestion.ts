@@ -4,6 +4,7 @@ import {
   type IngestionCandidate,
   type IngestionChunk,
 } from "../ingestion/contracts"
+import type { ProviderSearchResult } from "../integrations/providers"
 import type { ValidatedProviderSearchResult } from "./contracts"
 
 function candidateFromProviderItem(
@@ -79,4 +80,32 @@ export function createProviderIngestionChunks(input: {
     )
   }
   return chunks
+}
+
+export function createProviderApplyBatches(
+  result: ProviderSearchResult,
+): Array<{ finalize: boolean; result: ProviderSearchResult }> {
+  if (result.items.length === 0) {
+    return [{ finalize: true, result }]
+  }
+
+  const batches: Array<{
+    finalize: boolean
+    result: ProviderSearchResult
+  }> = []
+  for (
+    let position = 0;
+    position < result.items.length;
+    position += MAX_INGESTION_CHUNK_SIZE
+  ) {
+    const items = result.items.slice(
+      position,
+      position + MAX_INGESTION_CHUNK_SIZE,
+    )
+    batches.push({
+      finalize: position + items.length === result.items.length,
+      result: { ...result, items },
+    })
+  }
+  return batches
 }

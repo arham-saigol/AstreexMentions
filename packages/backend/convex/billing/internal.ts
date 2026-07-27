@@ -50,6 +50,12 @@ const planIdValidator = v.union(
 
 const CHECKOUT_RECORD_TTL_MS = 24 * 60 * 60 * 1_000
 const WEBHOOK_RETRY_DELAY_MS = 30_000
+const POST_PURGE_DELETION_PHASES = new Set([
+  "verify_data",
+  "identity_delete",
+  "security_fence",
+  "done",
+])
 
 type WorkspaceId = GenericId<"workspaces">
 type UserId = GenericId<"users">
@@ -347,6 +353,28 @@ async function findWorkspaceForNewSubscription(
   return matchingCheckout ? workspaceId : null
 }
 
+async function hasPurgedWorkspaceTombstone(
+  ctx: GenericMutationContext,
+  workspaceId: WorkspaceId,
+): Promise<boolean> {
+  if (await ctx.db.get("workspaces", workspaceId)) {
+    return false
+  }
+  const job = await ctx.db
+    .query("deletionJobs")
+    .withIndex("by_workspace_and_created_at", (q) =>
+      q.eq("workspaceId", workspaceId),
+    )
+    .order("desc")
+    .first()
+  return (
+    job?.kind === "account" &&
+    ((job.phase === "purge" && job.purgeStage === "user_tombstone") ||
+      (typeof job.phase === "string" &&
+        POST_PURGE_DELETION_PHASES.has(job.phase)))
+  )
+}
+
 async function synchronizeTrackingSourcesForBilling(
   ctx: GenericMutationContext,
   input: {
@@ -616,7 +644,8 @@ async function applySubscriptionEvent(
   plans: ReadonlyMap<string, CreemPlanMapping>,
 ): Promise<{
   errorCode?: string
-  kind: "applied" | "dead" | "incomplete_period" | "pending" | "stale"
+  kind:
+    "applied" | "dead" | "incomplete_period" | "pending" | "purged" | "stale"
   workspaceId?: WorkspaceId
 }> {
   const normalized = normalizeCreemSubscription(event.object)
@@ -632,10 +661,17 @@ async function applySubscriptionEvent(
   const workspaceId = existing
     ? (existing.workspaceId as WorkspaceId)
     : await findWorkspaceForNewSubscription(ctx, normalized, plan)
-  const attributedWorkspaceId =
-    workspaceId ??
-    (normalized.metadataInternalCustomerId as WorkspaceId | undefined)
+  const metadataWorkspaceId = normalized.metadataInternalCustomerId
+    ? ctx.db.normalizeId("workspaces", normalized.metadataInternalCustomerId)
+    : null
+  const attributedWorkspaceId = workspaceId ?? metadataWorkspaceId ?? undefined
   if (!workspaceId) {
+    if (
+      attributedWorkspaceId !== undefined &&
+      (await hasPurgedWorkspaceTombstone(ctx, attributedWorkspaceId))
+    ) {
+      return { kind: "purged" }
+    }
     return {
       kind: "pending",
       ...(attributedWorkspaceId === undefined
@@ -665,7 +701,13 @@ async function processWebhookEvent(
 ): Promise<{
   errorCode?: string
   kind:
-    "applied" | "dead" | "incomplete_period" | "ignored" | "pending" | "stale"
+    | "applied"
+    | "dead"
+    | "incomplete_period"
+    | "ignored"
+    | "pending"
+    | "purged"
+    | "stale"
   workspaceId?: WorkspaceId
 }> {
   if (event.eventType === "checkout.completed") {
@@ -678,6 +720,23 @@ async function processWebhookEvent(
   // Refund and dispute events are recorded and audited. They do not invent a
   // subscription state transition; Creem's subscription events remain canonical.
   return { kind: "ignored" }
+}
+
+async function subscriptionTargetsPurgedWorkspace(
+  ctx: GenericMutationContext,
+  event: CreemWebhookEvent,
+): Promise<boolean> {
+  if (!isCreemSubscriptionWebhookEvent(event)) {
+    return false
+  }
+  const normalized = normalizeCreemSubscription(event.object)
+  const workspaceId = normalized.metadataInternalCustomerId
+    ? ctx.db.normalizeId("workspaces", normalized.metadataInternalCustomerId)
+    : null
+  return (
+    workspaceId !== null &&
+    (await hasPurgedWorkspaceTombstone(ctx, workspaceId))
+  )
 }
 
 export const getCustomerBillingActionContext = internalQuery({
@@ -1062,6 +1121,46 @@ async function ingestCreemWebhookBody(
     event = { ...event, object: parsed.data }
   }
 
+  const startedAt = Date.now()
+  const settlePurgedEvent = async () => {
+    const durationMs = Date.now() - startedAt
+    await ctx.db.patch("billingEvents", billingEventId, {
+      lastError: undefined,
+      nextAttemptAt: undefined,
+      objectId: undefined,
+      payloadJson: "{}",
+      processedAt: args.receivedAt,
+      redactedAt: args.receivedAt,
+      status: "processed",
+      updatedAt: args.receivedAt,
+      workspaceId: undefined,
+    })
+    await recordProviderRunAndMetric(ctx, {
+      durationMs,
+      idempotencyKey: `creem-webhook:${event.id}:${attempt}`,
+      operation: "webhook",
+      status: "succeeded",
+      trigger: "webhook",
+    })
+    await insertAuditEvent(ctx, {
+      action: "billing.creem.webhook",
+      actorType: "provider",
+      metadata: {
+        eventType: event.eventType,
+        mode: eventMode(event),
+        result: "purged",
+      },
+      outcome: "success",
+      requestId: event.id,
+      targetType: "billing_event",
+    })
+    return { kind: "ignored" as const }
+  }
+
+  if (await subscriptionTargetsPurgedWorkspace(ctx, event)) {
+    return await settlePurgedEvent()
+  }
+
   const allowlist = productAllowlistOrUnconfigured()
   if (isProviderUnconfigured(allowlist)) {
     await ctx.db.patch("billingEvents", billingEventId, {
@@ -1076,12 +1175,15 @@ async function ingestCreemWebhookBody(
     }
   }
 
-  const startedAt = Date.now()
   const result = await processWebhookEvent(ctx, event, allowlist)
   const durationMs = Date.now() - startedAt
   const workspaceId = result.workspaceId
   if (workspaceId !== undefined) {
     await ctx.db.patch("billingEvents", billingEventId, { workspaceId })
+  }
+
+  if (result.kind === "purged") {
+    return await settlePurgedEvent()
   }
 
   if (result.kind === "pending") {

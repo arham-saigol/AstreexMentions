@@ -92,7 +92,7 @@ The shared request body accepts:
 - optional `subreddit`;
 - optional `time`: `all`, `year`, `month`, `week`, `day`, or `hour`.
 
-The scheduler sends `limit: 25` and `sort: "new"` independently to posts and comments. It begins with `pages: 1`; while FetchLayer reports another page, it durably increases the requested page depth and reruns the same search window. Previously returned items are deduplicated during ingestion.
+The scheduler sends `limit: 25` and `sort: "new"` independently to posts and comments. It begins with `pages: 1`; while FetchLayer reports another page, it durably increases the requested page depth and reruns the same search window. Previously returned items are deduplicated during ingestion. Because FetchLayer returns all requested pages cumulatively, the action splits each normalized response into at-most-25-item Convex mutations. Intermediate batches retain the lease and provider run; only the final batch advances the checkpoint. A retry can safely reapply earlier batches through ingestion idempotency.
 
 Posts require enough data to derive stable ID, title/body, creation time, and Reddit permalink. Comments require stable ID, body, creation time, and permalink. Permalinks are accepted only for `reddit.com` or its subdomains and are canonicalized to `https://www.reddit.com/...`.
 

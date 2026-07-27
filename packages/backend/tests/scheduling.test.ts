@@ -8,6 +8,7 @@ import {
   readSchedulingDispatchConfiguration,
 } from "../convex/scheduling/config"
 import { parseProviderSearchResultJson } from "../convex/scheduling/contracts"
+import { createProviderApplyBatches } from "../convex/scheduling/ingestion"
 import {
   HOUR_MS,
   MAX_DISPATCH_DELAY_MS,
@@ -421,6 +422,51 @@ describe("deterministic retry and checkpoint transitions", () => {
 })
 
 describe("configuration and normalized result contracts", () => {
+  it("splits cumulative provider results into bounded durable apply batches", () => {
+    const result = parseProviderSearchResultJson(
+      JSON.stringify({
+        checkpoint: {},
+        items: Array.from({ length: 53 }, (_, index) => ({
+          body: `Mention ${index}`,
+          canonicalUrl: `https://example.com/mentions/${index}`,
+          contentType: "post",
+          engagementScore: 0,
+          platform: "reddit",
+          providerItemId: `reddit-${index}`,
+          publishedAt: fixture.now - index,
+          searchText: `Mention ${index}`,
+        })),
+        pagination: {
+          hasMore: true,
+          kind: "provider_pages",
+          pagesRequested: 3,
+        },
+        state: "ok",
+      }),
+    )
+
+    const batches = createProviderApplyBatches(result)
+
+    expect(batches.map(({ result: batch }) => batch.items.length)).toEqual([
+      25, 25, 3,
+    ])
+    expect(batches.map(({ finalize }) => finalize)).toEqual([
+      false,
+      false,
+      true,
+    ])
+    expect(
+      batches.flatMap(({ result: batch }) =>
+        batch.items.map(({ providerItemId }) => providerItemId),
+      ),
+    ).toEqual(result.items.map(({ providerItemId }) => providerItemId))
+    expect(
+      batches.every(
+        ({ result: batch }) => batch.checkpoint === result.checkpoint,
+      ),
+    ).toBe(true)
+  })
+
   it("reports honest provider_unconfigured states without exposing secrets", () => {
     expect(readProviderRuntimeConfiguration({}, "x")).toEqual({
       missing: ["XQUIK_API_KEY"],
