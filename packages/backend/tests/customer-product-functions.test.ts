@@ -46,10 +46,13 @@ const customerTestSchema = defineSchema({
     "workspaceId",
     "userId",
   ]),
-  keywords: defineTable(v.any()).index("by_workspace_and_updated_at", [
-    "workspaceId",
-    "updatedAt",
-  ]),
+  keywords: defineTable(v.any())
+    .index("by_workspace_status_and_created_at", [
+      "workspaceId",
+      "status",
+      "createdAt",
+    ])
+    .index("by_workspace_and_updated_at", ["workspaceId", "updatedAt"]),
   mentions: defineTable(v.any()).index(
     "by_workspace_category_and_published_at",
     ["workspaceId", "categoryId", "publishedAt"],
@@ -205,6 +208,37 @@ describe("customer user and workspace functions", () => {
     await expect(
       customer.mutation(updateCurrentWorkspace, { name: "  Launch Watch  " }),
     ).resolves.toMatchObject({ name: "Launch Watch" })
+  })
+
+  it("counts only indexed live keyword states during workspace bootstrap", async () => {
+    const { bootstrap, customer, t } = await bootstrappedCustomer()
+    await t.run(async (ctx) => {
+      const now = Date.now()
+      for (let index = 0; index < 100; index += 1) {
+        await ctx.db.insert("keywords", {
+          createdAt: now - index,
+          deletedAt: now,
+          status: "deleted",
+          updatedAt: now,
+          workspaceId: bootstrap.workspaceId,
+        })
+      }
+      for (const [index, status] of ["active", "paused"].entries()) {
+        await ctx.db.insert("keywords", {
+          createdAt: now + index,
+          status,
+          updatedAt: now + index,
+          workspaceId: bootstrap.workspaceId,
+        })
+      }
+    })
+
+    await expect(
+      customer.query(getCurrentWorkspace, {}),
+    ).resolves.toMatchObject({
+      keywordCount: 2,
+      onboardingComplete: true,
+    })
   })
 
   it("derives billing context without a client-supplied workspace id", async () => {
@@ -517,5 +551,12 @@ describe("customer frontend function inventory", () => {
     }
     expect(sources.workspaces).toContain('"deletionJobs"')
     expect(sources.workspaces).toContain("withoutUndefinedValues")
+    const keywordCountQuery = sources.workspaces.slice(
+      sources.workspaces.indexOf("async function activeKeywordCount"),
+      sources.workspaces.indexOf("export const getCurrentWorkspace"),
+    )
+    expect(keywordCountQuery).toContain('"by_workspace_status_and_created_at"')
+    expect(keywordCountQuery).toContain('["active", "paused"]')
+    expect(keywordCountQuery).not.toContain('"by_workspace_and_updated_at"')
   })
 })

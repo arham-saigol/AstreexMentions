@@ -158,6 +158,38 @@ async function findOutboxByProviderMessage(
     .unique()) as GenericRow | null
 }
 
+async function workspaceRejectsDeliveryEvents(
+  ctx: MutationCtx,
+  outbox: GenericRow,
+): Promise<boolean> {
+  const workspace = (await ctx.db.get(
+    "workspaces",
+    outbox.workspaceId as WorkspaceId,
+  )) as GenericRow | null
+  return (
+    !workspace ||
+    workspace.deletedAt !== undefined ||
+    workspace.deletionPendingAt !== undefined
+  )
+}
+
+async function discardEventForDeletingWorkspace(
+  ctx: MutationCtx,
+  eventRowId: EmailWebhookEventId,
+  now: number,
+): Promise<"ignored_stale"> {
+  await ctx.db.patch("emailWebhookEvents", eventRowId, {
+    lastError: "workspace_deleting",
+    nextAttemptAt: undefined,
+    outboxId: undefined,
+    processedAt: now,
+    status: "ignored_stale",
+    updatedAt: now,
+    workspaceId: undefined,
+  })
+  return "ignored_stale"
+}
+
 export const ingestResendWebhookEvent = internalMutation({
   args: {
     createdAt: v.number(),
@@ -199,6 +231,11 @@ export const ingestResendWebhookEvent = internalMutation({
     })) as EmailWebhookEventId
 
     if (outbox) {
+      if (await workspaceRejectsDeliveryEvents(ctx, outbox)) {
+        return {
+          state: await discardEventForDeletingWorkspace(ctx, eventRowId, now),
+        }
+      }
       return {
         state: await applyEventToOutbox(ctx, eventRowId, event, outbox, now),
       }
@@ -230,6 +267,15 @@ export const reconcileResendWebhookEvent = internalMutation({
     )
     const now = Date.now()
     if (outbox) {
+      if (await workspaceRejectsDeliveryEvents(ctx, outbox)) {
+        return {
+          state: await discardEventForDeletingWorkspace(
+            ctx,
+            args.eventRowId,
+            now,
+          ),
+        }
+      }
       const state = await applyEventToOutbox(
         ctx,
         args.eventRowId,

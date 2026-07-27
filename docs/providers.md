@@ -237,7 +237,7 @@ Supported outbound delivery event types are:
 
 A successfully verified event outside that schema, such as `email.received`, returns 202 `ignored` and is not persisted.
 
-The Svix ID is the durable event idempotency key `(provider = resend, eventId)`. Events match an outbox row by Resend message ID. A webhook that arrives before send completion is retained as `pending_match`, retried every 30 seconds, and becomes `dead` after eight matching attempts if no outbox row appears.
+The Svix ID is the durable event idempotency key `(provider = resend, eventId)`. Events match an outbox row by Resend message ID. A webhook that arrives before send completion is retained as `pending_match`, retried every 30 seconds, and becomes `dead` after eight matching attempts if no outbox row appears. If the matched outbox belongs to a deletion-pending, deleted, or already-removed workspace, the event is settled as ignored without an outbox/workspace link or delivery metric; reconciliation applies the same fence.
 
 Out-of-order events cannot regress delivery state. A later provider timestamp wins. At the same timestamp, precedence is:
 

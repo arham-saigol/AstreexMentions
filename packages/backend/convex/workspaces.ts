@@ -11,7 +11,7 @@ import {
 import { authenticatedMutation, authenticatedQuery } from "./lib/authorization"
 import { assertAccountDeletionAllowed } from "./lib/workspaceDeletion"
 import { withoutUndefinedValues } from "./lib/jobRuntime"
-import { type MutationCtx, type QueryCtx } from "./server"
+import { indexEquals, type MutationCtx, type QueryCtx } from "./server"
 import {
   currentUserResult,
   resolveCurrentCustomer,
@@ -420,17 +420,19 @@ async function activeKeywordCount(
   ctx: Parameters<typeof resolveCurrentCustomer>[0],
   workspaceId: CurrentCustomer["workspace"]["id"],
 ): Promise<number> {
-  const keywords = await ctx.db
-    .query("keywords")
-    .withIndex("by_workspace_and_updated_at", (q) =>
-      q.eq("workspaceId", workspaceId),
-    )
-    .collect()
-
-  return keywords.filter(
-    (keyword) =>
-      keyword.deletedAt === undefined && keyword.status !== "deleted",
-  ).length
+  const counts = await Promise.all(
+    (["active", "paused"] as const).map(async (status) => {
+      const keywords = await ctx.db
+        .query("keywords")
+        .withIndex("by_workspace_status_and_created_at", (q) =>
+          indexEquals(q, ["workspaceId", workspaceId], ["status", status]),
+        )
+        .collect()
+      return keywords.filter((keyword) => keyword.deletedAt === undefined)
+        .length
+    }),
+  )
+  return counts.reduce((total, count) => total + count, 0)
 }
 
 export const getCurrentWorkspace = authenticatedQuery({
