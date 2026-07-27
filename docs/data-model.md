@@ -142,7 +142,7 @@ The canonical schema is `packages/backend/convex/schema.ts`. It defines 25 valid
 
 **Purpose.** Provider-specific scheduler state for a keyword. Reddit is split into post and comment sources; X and Hacker News each use one source.
 
-**Invariants.** Logical uniqueness is one row per `(keywordId, sourceType)` after duplicate cleanup. `workspaceId` must match the parent keyword. Status, pause reason, next run, exponential backoff, cursor/page/window progress, settled watermark, checkpoint/lease versions, and lease token/expiry form the durable scheduler state. Soft-deleted sources cannot be claimed.
+**Invariants.** Logical uniqueness is one row per `(keywordId, sourceType)` after duplicate cleanup. `workspaceId` must match the parent keyword. Status, pause reason, next run, exponential backoff, cursor/page/window progress, settled watermark, checkpoint/lease versions, and lease token/expiry form the durable scheduler state. A temporary account-deletion pause records the exact fence timestamp so pre-quiescence cancellation can reconcile only fence-induced state. Soft-deleted sources cannot be claimed.
 
 **Indexes.**
 
@@ -251,7 +251,7 @@ The canonical schema is `packages/backend/convex/schema.ts`. It defines 25 valid
 
 ### `digestPreferences`
 
-**Purpose.** Per-workspace/per-user daily digest schedule.
+**Purpose.** Per-workspace/per-user daily digest schedule. A deletion-fenced recipient records the exact fence timestamp so pre-quiescence recovery does not confuse it with an explicit user disable.
 
 **Invariants.** The logical `(workspaceId, userId)` pair is singular. Hour is 0–23, minute is 0–59, mention limit is 1–100, timezone must be a valid IANA timezone, and `nextRunAt` is deterministically derived from local schedule. Bootstrap creates a default enabled 09:00 UTC preference.
 

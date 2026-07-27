@@ -143,6 +143,9 @@ export const executeTrackingSource = internalAction({
       await ctx.runMutation(releaseIneligibleTrackingLeaseReference, {
         ...args,
         reason: context.state,
+        ...(context.state === "workspace_deleting"
+          ? { deletionPausedAt: context.deletionPausedAt }
+          : {}),
       })
       return { state: context.state }
     }

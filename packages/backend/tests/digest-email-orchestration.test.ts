@@ -342,6 +342,9 @@ describe("Convex digest and email boundaries", () => {
     expect(cronSource).toContain("dispatchDueDailyDigestsReference")
     expect(cronSource).toContain("dispatchPendingEmailsReference")
     expect(digestSource).toContain("ctx.scheduler.runAfter")
+    expect(digestSource).toContain(
+      "deletionPausedAt: workspace.deletionPendingAt",
+    )
     expect(emailSource).toContain("ctx.scheduler.runAfter")
     expect(digestSource).not.toContain("createResendClient")
     expect(emailSource).not.toContain("fetch(")

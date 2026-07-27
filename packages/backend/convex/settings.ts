@@ -156,6 +156,7 @@ export const updateDigestPreferences = authenticatedMutation({
 
     await ctx.db.patch("digestPreferences", existing._id, {
       ...preference,
+      deletionPausedAt: undefined,
       updatedAt: Date.now(),
     })
 

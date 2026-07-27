@@ -24,10 +24,9 @@ const schema = defineSchema({
     .index("by_status_and_published_at", ["status", "publishedAt"])
     .index("by_status_and_updated_at", ["status", "updatedAt"])
     .index("by_updated_at", ["updatedAt"]),
-  digestPreferences: defineTable(v.any()).index("by_workspace_and_user", [
-    "workspaceId",
-    "userId",
-  ]),
+  digestPreferences: defineTable(v.any())
+    .index("by_workspace_and_user", ["workspaceId", "userId"])
+    .index("by_workspace_and_updated_at", ["workspaceId", "updatedAt"]),
   deletionJobs: defineTable(v.any())
     .index("by_resource_key_and_created_at", ["resourceKey", "createdAt"])
     .index("by_kind_and_created_at", ["kind", "createdAt"])
@@ -46,11 +45,15 @@ const schema = defineSchema({
       filterFields: ["status"],
     }),
   mentions: defineTable(v.any()),
+  keywords: defineTable(v.any()),
   providerMetricBuckets: defineTable(v.any()).index(
     "by_granularity_and_bucket",
     ["granularity", "bucketStartAt"],
   ),
-  subscriptions: defineTable(v.any()),
+  subscriptions: defineTable(v.any()).index("by_workspace_and_last_synced_at", [
+    "workspaceId",
+    "lastSyncedAt",
+  ]),
   systemMetricBuckets: defineTable(v.any())
     .index("by_granularity_and_bucket", ["granularity", "bucketStartAt"])
     .index("by_scope_granularity_and_bucket", [
@@ -65,7 +68,14 @@ const schema = defineSchema({
       "granularity",
       "bucketStartAt",
     ]),
-  trackingSources: defineTable(v.any()),
+  trackingSources: defineTable(v.any()).index("by_workspace_and_created_at", [
+    "workspaceId",
+    "createdAt",
+  ]),
+  usageCycles: defineTable(v.any()).index(
+    "by_workspace_status_and_period_end",
+    ["workspaceId", "status", "periodEndAt"],
+  ),
   users: defineTable(v.any())
     .index("by_clerk_user_id", ["clerkUserId"])
     .index("by_token_identifier", ["tokenIdentifier"]),
@@ -844,7 +854,7 @@ describe("admin account deletion controls", () => {
   it("allows exact-confirmed cancellation only before quiescence and restores only its own access fence", async () => {
     const { admin, bootstrap, t } = await setup()
     const now = Date.now()
-    await t.run(async (ctx) => {
+    const recoveryRows = await t.run(async (ctx) => {
       await ctx.db.patch(bootstrap.userId as never, {
         disabledAt: now,
         updatedAt: now,
@@ -853,6 +863,65 @@ describe("admin account deletion controls", () => {
         deletionPendingAt: now,
         updatedAt: now,
       })
+      const preference = await ctx.db
+        .query("digestPreferences")
+        .withIndex("by_workspace_and_user", (q) =>
+          q
+            .eq("workspaceId", bootstrap.workspaceId as never)
+            .eq("userId", bootstrap.userId as never),
+        )
+        .unique()
+      await ctx.db.patch(preference!._id, {
+        deletionPausedAt: now,
+        enabled: false,
+        updatedAt: now + 1,
+      })
+      const keywordId = await ctx.db.insert("keywords", {
+        createdAt: now - 1,
+        deletedAt: undefined,
+        status: "active",
+        updatedAt: now - 1,
+        workspaceId: bootstrap.workspaceId,
+      })
+      const sourceId = await ctx.db.insert("trackingSources", {
+        createdAt: now - 1,
+        deletionPausedAt: now,
+        keywordId,
+        pauseReason: "user",
+        status: "paused",
+        updatedAt: now + 1,
+        workspaceId: bootstrap.workspaceId,
+      })
+      const userPausedSourceId = await ctx.db.insert("trackingSources", {
+        createdAt: now,
+        keywordId,
+        pauseReason: "user",
+        status: "paused",
+        updatedAt: now,
+        workspaceId: bootstrap.workspaceId,
+      })
+      const subscriptionId = await ctx.db.insert("subscriptions", {
+        currentPeriodEnd: now + 86_400_000,
+        currentPeriodStart: now - 86_400_000,
+        entitlementStatus: "active",
+        lastSyncedAt: now,
+        status: "active",
+        workspaceId: bootstrap.workspaceId,
+      })
+      await ctx.db.insert("usageCycles", {
+        mentionLimit: 100,
+        mentionsUsed: 5,
+        periodEndAt: now + 86_400_000,
+        periodStartAt: now - 86_400_000,
+        status: "open",
+        subscriptionId,
+        workspaceId: bootstrap.workspaceId,
+      })
+      return {
+        digestPreferenceId: preference!._id,
+        sourceId,
+        userPausedSourceId,
+      }
     })
     const pendingId = await t.run(
       async (ctx) =>
@@ -888,11 +957,23 @@ describe("admin account deletion controls", () => {
       }),
     ).resolves.toMatchObject({ status: "canceled" })
     const restored = await t.run(async (ctx) => ({
+      digest: await ctx.db.get(recoveryRows.digestPreferenceId),
+      source: await ctx.db.get(recoveryRows.sourceId),
+      userPausedSource: await ctx.db.get(recoveryRows.userPausedSourceId),
       user: await ctx.db.get(bootstrap.userId as never),
       workspace: await ctx.db.get(bootstrap.workspaceId as never),
     }))
     expect(restored.user?.disabledAt).toBeUndefined()
     expect(restored.workspace?.deletionPendingAt).toBeUndefined()
+    expect(restored.source).toMatchObject({ status: "active" })
+    expect(restored.source?.pauseReason).toBeUndefined()
+    expect(restored.source?.deletionPausedAt).toBeUndefined()
+    expect(restored.digest).toMatchObject({ enabled: true })
+    expect(restored.digest?.deletionPausedAt).toBeUndefined()
+    expect(restored.userPausedSource).toMatchObject({
+      pauseReason: "user",
+      status: "paused",
+    })
 
     const quiescedId = await t.run(
       async (ctx) =>

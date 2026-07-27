@@ -239,11 +239,45 @@ describe("Creem provider operation retries", () => {
         workspaceId,
       }),
     ).resolves.toEqual({ state: "outstanding" })
+    await expect(
+      t.query(getBillingContext, {
+        idempotencyKey: "new-browser-checkout-key",
+        workspaceId,
+      }),
+    ).resolves.toMatchObject({
+      checkout: null,
+      outstandingCheckout: {
+        providerCheckoutSessionId: "checkout_fixture",
+        url: "https://checkout.example.test/fixture",
+      },
+    })
 
     const runs = await t.run(
       async (ctx) => await ctx.db.query("providerRuns").collect(),
     )
     expect(runs).toHaveLength(1)
+  })
+
+  it("returns an outstanding checkout URL before rejecting a new browser key", () => {
+    const customerSource = readFileSync(
+      new URL("../convex/billing/customer.ts", import.meta.url),
+      "utf8",
+    )
+    const outstanding = customerSource.indexOf(
+      "if (existing.outstandingCheckout)",
+    )
+    const reusableResult = customerSource.indexOf(
+      "checkoutId: String(",
+      outstanding,
+    )
+    const conflict = customerSource.indexOf(
+      '"BILLING_CHECKOUT_ALREADY_EXISTS"',
+      outstanding,
+    )
+
+    expect(outstanding).toBeGreaterThan(-1)
+    expect(reusableResult).toBeGreaterThan(outstanding)
+    expect(conflict).toBeGreaterThan(reusableResult)
   })
 
   it("moves retryable failures out of running and permits another attempt", async () => {

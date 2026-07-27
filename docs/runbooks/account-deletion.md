@@ -99,7 +99,11 @@ retried by this control.
 
 Cancellation requires exact admin authorization, literal `CANCEL`, current
 workflow version, and no `quiescedAt`. It clears only access markers equal to
-the job's fence timestamp and records an audit event. Cancellation is rejected
+the job's fence timestamp. Tracking sources and digest preferences disabled by
+that exact fence carry the same timestamp; cancellation (or an automatic
+billing block) clears those markers and reconciles them against current
+keyword, entitlement, usage, and recipient state. User-paused rows without the
+marker remain unchanged. Cancellation records an audit event and is rejected
 after quiescence, including purge, data verification, Clerk deletion, security
 fence, and completion.
 

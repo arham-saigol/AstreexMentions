@@ -85,6 +85,17 @@ const beginPurgeReference = makeFunctionReference<
   },
   { code?: string; state: string }
 >("deletion/internal:beginAccountDeletionPurge")
+const blockForBillingReference = makeFunctionReference<
+  "mutation",
+  {
+    code: string
+    deletionJobId: DeletionJobId
+    leaseToken: string
+    leaseVersion: number
+    now?: number
+  },
+  { state: string }
+>("deletion/internal:blockAccountDeletionForBilling")
 const purgeBatchReference = makeFunctionReference<
   "mutation",
   {
@@ -386,7 +397,49 @@ describe("account deletion request and billing boundary", () => {
   it("rechecks billing transactionally before quiescence and catches a checkout race", async () => {
     const t = createBackendTest()
     const { accepted, account } = await acceptedDeletion(t)
+    const deletionJob = (await persistedJob(t, accepted.deletionJobId))!
     await t.run(async (ctx) => {
+      const keywordId = await ctx.db.insert("keywords", {
+        createdAt: NOW,
+        createdByUserId: account.userId as GenericId<"users">,
+        normalizedPhrase: "fence recovery",
+        phrase: "Fence recovery",
+        platforms: ["x"],
+        status: "active",
+        updatedAt: NOW,
+        workspaceId: account.workspaceId as GenericId<"workspaces">,
+      })
+      await ctx.db.insert("trackingSources", {
+        backoffMs: 0,
+        checkpointVersion: 1,
+        consecutiveFailures: 0,
+        createdAt: NOW,
+        deletionPausedAt: deletionJob.accessFencedAt,
+        intervalMs: 60_000,
+        keywordId,
+        leaseVersion: 1,
+        nextRunAt: NOW,
+        pauseReason: "user",
+        providerQuery: "fence recovery",
+        sourceType: "x",
+        status: "paused",
+        totalFailures: 0,
+        updatedAt: NOW,
+        workspaceId: account.workspaceId as GenericId<"workspaces">,
+      })
+      const digest = await ctx.db
+        .query("digestPreferences")
+        .withIndex("by_workspace_and_user", (q) =>
+          q
+            .eq("workspaceId", account.workspaceId as GenericId<"workspaces">)
+            .eq("userId", account.userId as GenericId<"users">),
+        )
+        .unique()
+      await ctx.db.patch(digest!._id, {
+        deletionPausedAt: deletionJob.accessFencedAt,
+        enabled: false,
+        updatedAt: NOW,
+      })
       await ctx.db.insert("billingCheckouts", {
         createdAt: NOW,
         expiresAt: NOW + 60_000,
@@ -419,6 +472,36 @@ describe("account deletion request and billing boundary", () => {
       code: "BILLING_RECONCILIATION_REQUIRED",
       state: "billing_blocked",
     })
+    await expect(
+      t.mutation(blockForBillingReference, {
+        ...lease,
+        code: "BILLING_RECONCILIATION_REQUIRED",
+        now: NOW,
+      }),
+    ).resolves.toEqual({ state: "blocked" })
+    const restored = await t.run(async (ctx) => ({
+      digest: await ctx.db
+        .query("digestPreferences")
+        .withIndex("by_workspace_and_user", (q) =>
+          q
+            .eq("workspaceId", account.workspaceId as GenericId<"workspaces">)
+            .eq("userId", account.userId as GenericId<"users">),
+        )
+        .unique(),
+      source: await ctx.db
+        .query("trackingSources")
+        .withIndex("by_workspace_and_created_at", (q) =>
+          q.eq("workspaceId", account.workspaceId as GenericId<"workspaces">),
+        )
+        .first(),
+    }))
+    expect(restored.source).toMatchObject({
+      pauseReason: "paid",
+      status: "paused",
+    })
+    expect(restored.source?.deletionPausedAt).toBeUndefined()
+    expect(restored.digest).toMatchObject({ enabled: true })
+    expect(restored.digest?.deletionPausedAt).toBeUndefined()
   })
 })
 

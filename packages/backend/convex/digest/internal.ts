@@ -132,10 +132,18 @@ async function schedulePreference(
     ctx.db.get("users", userId),
   ])) as [GenericRow | null, GenericRow | null]
 
+  if (workspace && typeof workspace.deletionPendingAt === "number") {
+    await ctx.db.patch("digestPreferences", preferenceId, {
+      deletionPausedAt: workspace.deletionPendingAt,
+      enabled: false,
+      updatedAt: now,
+    })
+    return "skipped_recipient"
+  }
+
   if (
     !workspace ||
     workspace.deletedAt !== undefined ||
-    workspace.deletionPendingAt !== undefined ||
     !user ||
     user.deletedAt !== undefined ||
     user.disabledAt !== undefined ||
@@ -143,6 +151,7 @@ async function schedulePreference(
     user.email.trim().length === 0
   ) {
     await ctx.db.patch("digestPreferences", preferenceId, {
+      deletionPausedAt: undefined,
       enabled: false,
       updatedAt: now,
     })

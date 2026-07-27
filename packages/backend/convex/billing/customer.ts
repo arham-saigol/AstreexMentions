@@ -265,6 +265,22 @@ export const createCheckout = customerAction({
       }
     }
     if (existing.outstandingCheckout) {
+      const outstandingUrl = existing.outstandingCheckout.url
+      if (
+        existing.outstandingCheckout.status === "open" &&
+        typeof outstandingUrl === "string" &&
+        outstandingUrl.length > 0
+      ) {
+        return {
+          checkoutId: String(
+            existing.outstandingCheckout.providerCheckoutSessionId,
+          ),
+          reused: true,
+          state: "configured" as const,
+          status: String(existing.outstandingCheckout.status),
+          url: outstandingUrl,
+        }
+      }
       billingError(
         "BILLING_CHECKOUT_ALREADY_EXISTS",
         "Resume or wait for the outstanding checkout before starting another",

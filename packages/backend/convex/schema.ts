@@ -510,6 +510,7 @@ export default defineSchema({
     checkpointVersion: v.number(),
     consecutiveFailures: v.number(),
     createdAt: v.number(),
+    deletionPausedAt: v.optional(v.number()),
     deletedAt: v.optional(v.number()),
     inProgressCursor: v.optional(v.string()),
     inProgressPage: v.optional(v.number()),
@@ -792,6 +793,7 @@ export default defineSchema({
 
   digestPreferences: defineTable({
     createdAt: v.number(),
+    deletionPausedAt: v.optional(v.number()),
     enabled: v.boolean(),
     hour: v.number(),
     mentionLimit: v.number(),

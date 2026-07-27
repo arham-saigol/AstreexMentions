@@ -70,6 +70,7 @@ The idempotency key is both the Creem `request_id` and the Convex `billingChecko
 - the internal record path also rejects reuse for a different requester or plan;
 - checkout records carry a 24-hour `expiresAt`, although no current job actively expires them;
 - onboarding reuses a saved URL only while its intent is younger than 24 hours and nonterminal. Expired or canceled intents receive a fresh key, while completed intents wait for authoritative subscription reconciliation instead of opening another payment session.
+- Billing Settings also resumes the workspace's durable outstanding checkout URL when the browser returns with a new client key; it does not strand the customer behind the one-open-checkout guard.
 
 ### Upgrade
 

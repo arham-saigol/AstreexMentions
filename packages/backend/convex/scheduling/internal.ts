@@ -50,6 +50,7 @@ const releaseReasonValidator = v.union(
   v.literal("paid_inactive"),
   v.literal("provider_unconfigured"),
   v.literal("usage_exhausted"),
+  v.literal("workspace_deleting"),
 )
 
 const HOUR_MS = 3_600_000
@@ -218,6 +219,7 @@ type TrackingEligibility =
   | { state: "paid_inactive" }
   | { state: "stale_lease" }
   | { state: "usage_exhausted" }
+  | { deletionPausedAt: number; state: "workspace_deleting" }
   | {
       cursor?: string | undefined
       intervalMs: number
@@ -261,10 +263,15 @@ async function readTrackingEligibility(
   const sourceType = sourceTypeFromRow(source)
   const platform = platformForSourceType(sourceType)
 
+  if (workspace && typeof workspace.deletionPendingAt === "number") {
+    return {
+      deletionPausedAt: workspace.deletionPendingAt,
+      state: "workspace_deleting",
+    }
+  }
   if (
     !workspace ||
     workspace.deletedAt !== undefined ||
-    workspace.deletionPendingAt !== undefined ||
     !keyword ||
     keyword.workspaceId !== workspaceId ||
     keyword.status !== "active" ||
@@ -568,7 +575,9 @@ function pausePatchForReason(
     | "keyword_inactive"
     | "paid_inactive"
     | "provider_unconfigured"
-    | "usage_exhausted",
+    | "usage_exhausted"
+    | "workspace_deleting",
+  deletionPausedAt?: number,
 ): Record<string, Value> {
   switch (reason) {
     case "keyword_inactive":
@@ -579,6 +588,15 @@ function pausePatchForReason(
       return { pauseReason: "config", status: "paused" }
     case "usage_exhausted":
       return { pauseReason: "usage", status: "paused" }
+    case "workspace_deleting":
+      if (deletionPausedAt === undefined) {
+        throw new TypeError("Deletion pause requires its access fence")
+      }
+      return {
+        deletionPausedAt,
+        pauseReason: "user",
+        status: "paused",
+      }
   }
 }
 
@@ -588,6 +606,7 @@ export const releaseIneligibleTrackingLease = internalMutation({
     leaseToken: v.string(),
     leaseVersion: v.number(),
     reason: releaseReasonValidator,
+    deletionPausedAt: v.optional(v.number()),
     trackingSourceId: v.id("trackingSources"),
   },
   handler: async (ctx, args) => {
@@ -600,8 +619,18 @@ export const releaseIneligibleTrackingLease = internalMutation({
       return { state: "stale_lease" as const }
     }
 
+    if (args.reason === "workspace_deleting") {
+      const workspace = await ctx.db.get(
+        "workspaces",
+        source.workspaceId as WorkspaceId,
+      )
+      if (!workspace || workspace.deletionPendingAt !== args.deletionPausedAt) {
+        return { state: "stale_lease" as const }
+      }
+    }
+
     await ctx.db.patch("trackingSources", args.trackingSourceId, {
-      ...pausePatchForReason(args.reason),
+      ...pausePatchForReason(args.reason, args.deletionPausedAt),
       leaseExpiresAt: undefined,
       leaseToken: undefined,
       updatedAt: now,
@@ -971,7 +1000,12 @@ export const applyNextTrackingProviderPage = internalMutation({
       await ctx.db.patch("trackingSources", args.trackingSourceId, {
         ...(eligibility.state === "stale_lease"
           ? {}
-          : pausePatchForReason(eligibility.state)),
+          : pausePatchForReason(
+              eligibility.state,
+              eligibility.state === "workspace_deleting"
+                ? eligibility.deletionPausedAt
+                : undefined,
+            )),
         leaseExpiresAt: undefined,
         leaseToken: undefined,
         lastRunAt: now,
@@ -1236,11 +1270,13 @@ export const loadTrackingExecutionContextReference = internalQueryReference<
 >("scheduling/internal:loadTrackingExecutionContext")
 
 type ReleaseIneligibleTrackingLeaseArguments = LeaseArguments & {
+  deletionPausedAt?: number
   reason:
     | "keyword_inactive"
     | "paid_inactive"
     | "provider_unconfigured"
     | "usage_exhausted"
+    | "workspace_deleting"
 }
 
 export const releaseIneligibleTrackingLeaseReference =

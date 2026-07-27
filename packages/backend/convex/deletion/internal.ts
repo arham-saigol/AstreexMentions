@@ -38,6 +38,7 @@ import {
   planDeletionFailure,
   safeDeletionErrorCode,
 } from "./model"
+import { restoreDeletionFenceState } from "./recovery"
 
 const MAX_DELETION_CLAIMS = 8
 const MAX_DUE_SCAN_PER_STATUS = 32
@@ -404,15 +405,21 @@ export const blockAccountDeletionForBilling = internalMutation({
         updatedAt: now,
       })
     }
-    if (
+    const restoresWorkspaceFence =
       workspace &&
       workspace.deletedAt === undefined &&
       workspace.deletionPendingAt === job.accessFencedAt
-    ) {
+    if (restoresWorkspaceFence) {
       await ctx.db.patch("workspaces", workspace._id as WorkspaceId, {
         deletionPendingAt: undefined,
         updatedAt: now,
       })
+      await restoreDeletionFenceState(
+        ctx,
+        workspace._id as WorkspaceId,
+        job.accessFencedAt as number,
+        now,
+      )
     }
     await ctx.db.patch("deletionJobs", args.deletionJobId, {
       billingCheckedAt: now,

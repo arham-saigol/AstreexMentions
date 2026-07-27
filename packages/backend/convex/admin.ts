@@ -12,6 +12,7 @@ import {
   ACCOUNT_DELETION_WORKFLOW_VERSION,
   accountDeletionOperationId,
 } from "./deletion/model"
+import { restoreDeletionFenceState } from "./deletion/recovery"
 import {
   CATEGORIZED_MENTION_METRIC_PREFIX,
   ingestedMentionPlatformMetric,
@@ -1233,11 +1234,19 @@ export const cancelDeletionJob = adminMutation({
         updatedAt: now,
       })
     }
-    if (workspace && workspace.deletionPendingAt === job.accessFencedAt) {
+    const restoresWorkspaceFence =
+      workspace?.deletionPendingAt === job.accessFencedAt
+    if (restoresWorkspaceFence) {
       await ctx.db.patch("workspaces", job.workspaceId as WorkspaceId, {
         deletionPendingAt: undefined,
         updatedAt: now,
       })
+      await restoreDeletionFenceState(
+        ctx,
+        job.workspaceId as WorkspaceId,
+        job.accessFencedAt as number,
+        now,
+      )
     }
     await ctx.db.patch("deletionJobs", args.deletionJobId, {
       lastError: "CANCELED_BY_OPERATOR",

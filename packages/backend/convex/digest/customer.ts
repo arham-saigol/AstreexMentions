@@ -115,6 +115,7 @@ export const updateDailyDigestPreference = customerMutation({
     const now = Date.now()
     await ctx.db.patch("digestPreferences", preference._id, {
       ...parsed.data,
+      deletionPausedAt: undefined,
       nextRunAt,
       updatedAt: now,
     })

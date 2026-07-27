@@ -751,5 +751,7 @@ describe("Convex dispatcher boundary", () => {
     expect(internalSource).toContain(
       'ctx.db.patch(\n        "trackingProviderPages"',
     )
+    expect(internalSource).toContain('state: "workspace_deleting"')
+    expect(internalSource).toContain("deletionPausedAt")
   })
 })
