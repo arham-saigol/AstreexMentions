@@ -805,6 +805,11 @@ export default defineSchema({
     .index("by_idempotency_key", ["idempotencyKey"])
     .index("by_status_and_next_attempt_at", ["status", "nextAttemptAt"])
     .index("by_status_and_lease_expires_at", ["status", "leaseExpiresAt"])
+    .index("by_workspace_status_and_lease_expires_at", [
+      "workspaceId",
+      "status",
+      "leaseExpiresAt",
+    ])
     .index("by_provider_message", ["provider", "providerMessageId"])
     .index("by_workspace_and_created_at", ["workspaceId", "createdAt"])
     .index("by_digest_run", ["digestRunId"])

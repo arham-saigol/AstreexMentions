@@ -657,16 +657,19 @@ async function readMentionMonitoringState(
   workspaceId: WorkspaceId,
   now: number,
 ): Promise<MentionMonitoringState> {
-  const keywords = (await ctx.db
-    .query("keywords")
-    .withIndex("by_workspace_and_updated_at", (q) =>
-      q.eq("workspaceId", workspaceId),
+  const configuredKeywords = (
+    await Promise.all(
+      (["active", "paused"] as const).map(
+        async (status) =>
+          (await ctx.db
+            .query("keywords")
+            .withIndex("by_workspace_status_and_created_at", (q) =>
+              indexEquals(q, ["workspaceId", workspaceId], ["status", status]),
+            )
+            .collect()) as GenericRow[],
+      ),
     )
-    .collect()) as GenericRow[]
-  const configuredKeywords = keywords.filter(
-    (keyword) =>
-      keyword.status !== "deleted" && keyword.deletedAt === undefined,
-  )
+  ).flat()
   if (configuredKeywords.length === 0) {
     return "setup_required"
   }

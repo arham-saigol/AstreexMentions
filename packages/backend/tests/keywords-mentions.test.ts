@@ -930,5 +930,17 @@ describe("frontend function inventory", () => {
     expect(configuredKeywordQuery).not.toContain(
       '"by_workspace_and_updated_at"',
     )
+
+    const mentionMonitoringQuery = mentionSource.slice(
+      mentionSource.indexOf("async function readMentionMonitoringState"),
+      mentionSource.indexOf("export const listMentions"),
+    )
+    expect(mentionMonitoringQuery).toContain(
+      '"by_workspace_status_and_created_at"',
+    )
+    expect(mentionMonitoringQuery).toContain('["active", "paused"]')
+    expect(mentionMonitoringQuery).not.toContain(
+      '"by_workspace_and_updated_at"',
+    )
   })
 })

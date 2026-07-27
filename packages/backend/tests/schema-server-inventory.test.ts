@@ -170,6 +170,11 @@ describe("complete Convex schema", () => {
       "status",
       "nextAttemptAt",
     ])
+    expectIndex("emailOutbox", "by_workspace_status_and_lease_expires_at", [
+      "workspaceId",
+      "status",
+      "leaseExpiresAt",
+    ])
     expectIndex("emailWebhookEvents", "by_provider_event", [
       "provider",
       "eventId",

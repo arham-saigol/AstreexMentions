@@ -35,7 +35,7 @@ export async function readDeletionBillingSnapshot(
     checkoutRows,
     runningProviderRuns,
     billingEventRows,
-    emailOutboxRows,
+    activeEmailOutboxLeases,
   ] = await Promise.all([
     db
       .query("subscriptions")
@@ -65,10 +65,14 @@ export async function readDeletionBillingSnapshot(
       .collect(),
     db
       .query("emailOutbox")
-      .withIndex("by_workspace_and_created_at", (q) =>
-        q.eq("workspaceId", workspaceId),
+      .withIndex("by_workspace_status_and_lease_expires_at", (q) =>
+        indexGreaterThanOrEqual(
+          indexEquals(q, ["workspaceId", workspaceId], ["status", "leased"]),
+          "leaseExpiresAt",
+          checkedAt + 1,
+        ),
       )
-      .collect(),
+      .take(1),
   ])
 
   const subscriptions = subscriptionRows.map((subscription) => ({
@@ -79,12 +83,7 @@ export async function readDeletionBillingSnapshot(
   }))
   const providerConfiguration = readCreemApiConfiguration(env)
   const guard = evaluateCompositeDeletionBillingGuard({
-    activeSideEffectCount: emailOutboxRows.filter(
-      (row) =>
-        row.status === "leased" &&
-        typeof row.leaseExpiresAt === "number" &&
-        row.leaseExpiresAt > checkedAt,
-    ).length,
+    activeSideEffectCount: activeEmailOutboxLeases.length,
     checkedAt,
     checkouts: checkoutRows.map((checkout) => ({
       expiresAt: checkout.expiresAt as number,

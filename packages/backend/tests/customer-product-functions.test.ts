@@ -38,10 +38,13 @@ const customerTestSchema = defineSchema({
   billingEvents: defineTable(v.any())
     .index("by_status_and_received_at", ["status", "receivedAt"])
     .index("by_workspace_and_received_at", ["workspaceId", "receivedAt"]),
-  emailOutbox: defineTable(v.any()).index("by_workspace_and_created_at", [
-    "workspaceId",
-    "createdAt",
-  ]),
+  emailOutbox: defineTable(v.any())
+    .index("by_workspace_and_created_at", ["workspaceId", "createdAt"])
+    .index("by_workspace_status_and_lease_expires_at", [
+      "workspaceId",
+      "status",
+      "leaseExpiresAt",
+    ]),
   digestPreferences: defineTable(v.any()).index("by_workspace_and_user", [
     "workspaceId",
     "userId",

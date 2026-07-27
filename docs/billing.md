@@ -169,8 +169,8 @@ Warnings are enqueued once per cycle at 80% and 100%:
 
 - keys are `email:usage:{usageCycleId}:80` and `email:usage:{usageCycleId}:100`;
 - crossing directly from below 80% to 100% can enqueue both warnings in the same transaction;
-- the warning timestamp is written when the durable email is enqueued, not when Resend confirms delivery;
-- warning composition requires `RESEND_FROM_EMAIL` and a deliverable workspace-owner email.
+- the warning timestamp records that the threshold was handled, not that Resend confirmed delivery;
+- warning composition requires `RESEND_FROM_EMAIL`; when the workspace owner has no deliverable email, ingestion continues and records the handled threshold without creating an outbox row.
 
 When the next new mention would exceed the cap, that candidate and later candidates are not inserted. The atomic ingestion mutation records the first unprocessed provider position, returns `checkpoint: "hold"`, and pauses every active tracking source in the workspace with `pauseReason: "usage"`. It finalizes concurrent in-flight tracking runs before clearing their leases; the run that reached the cap is finalized by its owning scheduling mutation. Re-running the same provider page can safely resume from that position without double-counting earlier items.
 
@@ -184,7 +184,7 @@ Deletion always evaluates every stored subscription for the workspace. It is all
 - is not `cancelAtPeriodEnd`;
 - has terminal status `canceled`, `cancelled`, `expired`, or `inactive`.
 
-No subscription rows means there is no entitlement to retain. Active, scheduled-cancel, unknown, or other nonterminal state fails closed. Deletion also blocks on an unexpired open/complete checkout, pending or leased billing event, a provider operation started within the last 15 minutes, active leased side effect, or unavailable Creem configuration. Older running rows are abandoned evidence rather than active work and are failed by the billing cron.
+No subscription rows means there is no entitlement to retain. Active, scheduled-cancel, unknown, or other nonterminal state fails closed. Deletion also blocks on an unexpired open/complete checkout, pending or leased billing event, a provider operation started within the last 15 minutes, active leased side effect, or unavailable Creem configuration. Active email side effects are selected through the workspace/status/lease-expiry index, so retained sent-email history is not read during readiness checks. Older running rows are abandoned evidence rather than active work and are failed by the billing cron.
 
 Active entitlement creates or updates an idempotent blocked account job, returns `BILLING_PORTAL_REQUIRED`, and instructs the customer to cancel in Creem and wait for a terminal signed webhook. Other provider uncertainty returns a support-required result.
 

@@ -275,6 +275,7 @@ The canonical schema is `packages/backend/convex/schema.ts`. It defines 25 valid
 - `by_idempotency_key` (`idempotencyKey`) — enqueue/send idempotency and fingerprint conflict detection.
 - `by_status_and_next_attempt_at` (`status`, `nextAttemptAt`) — claim due sends.
 - `by_status_and_lease_expires_at` (`status`, `leaseExpiresAt`) — recover abandoned delivery leases.
+- `by_workspace_status_and_lease_expires_at` (`workspaceId`, `status`, `leaseExpiresAt`) — bounded deletion-readiness checks for live tenant leases.
 - `by_provider_message` (`provider`, `providerMessageId`) — match Resend webhook events.
 - `by_workspace_and_created_at` (`workspaceId`, `createdAt`) — tenant email history.
 - `by_digest_run` (`digestRunId`) — enforce/find the message for a digest run.

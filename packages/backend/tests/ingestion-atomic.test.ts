@@ -122,6 +122,7 @@ async function seedWorkspace(
   options: {
     mentionLimit: number
     mentionsUsed?: number
+    ownerEmail?: string | null
     sourceCount?: number
   },
 ): Promise<SeededWorkspace> {
@@ -129,10 +130,12 @@ async function seedWorkspace(
     const userId = await ctx.db.insert("users", {
       clerkUserId: "clerk_owner",
       createdAt: NOW - 10_000,
-      email: "owner@example.com",
       name: "Workspace Owner",
       tokenIdentifier: "https://clerk.example|owner",
       updatedAt: NOW - 10_000,
+      ...(options.ownerEmail === null
+        ? {}
+        : { email: options.ownerEmail ?? "owner@example.com" }),
     })
     const workspaceId = await ctx.db.insert("workspaces", {
       createdAt: NOW - 9_000,
@@ -503,6 +506,35 @@ describe("serializable atomic ingestion", () => {
     expect(replayedState.metrics.map(({ value }) => value)).toEqual([
       2, 2, 2, 2, 2, 1, 1,
     ])
+  })
+
+  it("does not roll back threshold-crossing ingestion when the owner has no email", async () => {
+    const t = createBackendTest()
+    const seeded = await seedWorkspace(t, {
+      mentionLimit: 10,
+      mentionsUsed: 7,
+      ownerEmail: null,
+    })
+
+    await expect(
+      applyChunk(
+        t,
+        chunk(seeded, { candidates: [candidate("providerCandidate")] }),
+      ),
+    ).resolves.toMatchObject({
+      inserted: 1,
+      state: "applied",
+      usage: { mentionLimit: 10, mentionsUsed: 8 },
+      warningThresholdsEnqueued: [],
+    })
+
+    const state = await snapshot(t, seeded)
+    expect(state.mentions).toHaveLength(1)
+    expect(state.outbox).toHaveLength(0)
+    expect(state.usage).toMatchObject({
+      mentionsUsed: 8,
+      warning80SentAt: NOW,
+    })
   })
 
   it("serializes concurrent unique candidates so only one can consume the last slot", async () => {

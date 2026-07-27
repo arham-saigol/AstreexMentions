@@ -7,7 +7,7 @@ Use this runbook when a workspace stops ingesting because `mentionsUsed` reaches
 - Only a newly inserted canonical mention consumes one unit. Rediscovery does not.
 - When a new mention reaches the limit, that mention is inserted, the cycle count is updated, and active workspace sources are paused with `pauseReason: "usage"`.
 - If the cycle is already at the limit before a candidate, that candidate and later candidates are not inserted. The result records the first unprocessed position and holds the provider checkpoint.
-- 80% and 100% warning timestamps are written when the durable email is enqueued, not when Resend delivers it.
+- 80% and 100% warning timestamps record that each threshold was handled, not that Resend delivered an email. An owner without a deliverable email produces no outbox row and does not block ingestion.
 - A current active subscription without a valid open usage cycle fails closed as usage-exhausted.
 
 The backend admin query calculates `usagePausedWorkspaces`, but the current admin frontend does not display it.
@@ -22,7 +22,7 @@ The backend admin query calculates `usagePausedWorkspaces`, but the current admi
 2. Inspect all non-deleted `trackingSources` for the workspace. Usage-capped rows are `paused` with `pauseReason: "usage"` and no active lease.
 3. Inspect the source checkpoint/window. A cap in the middle of a page must retain the unprocessed point; do not advance it manually.
 4. Inspect the warning outbox keys `email:usage:<usageCycleId>:80` and `:100` and the cycle warning timestamps.
-5. Confirm whether missing `RESEND_FROM_EMAIL` or an owner without a deliverable email caused ingestion retries around a warning threshold. Usage-warning enqueue is in the same atomic ingestion mutation.
+5. Confirm whether missing `RESEND_FROM_EMAIL` caused ingestion retries around a warning threshold. If the owner has no deliverable email, expect the warning timestamp without a matching outbox row; ingestion must continue.
 
 ## Resume paths
 

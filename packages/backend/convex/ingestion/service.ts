@@ -383,10 +383,7 @@ async function ensureUsageWarningEmail(
     typeof recipientEmail !== "string" ||
     recipientEmail.trim().length === 0
   ) {
-    throw new IngestionInvariantError(
-      "EMAIL_RECIPIENT_UNCONFIGURED",
-      "Workspace owner does not have a deliverable email address",
-    )
+    return false
   }
   const payload = buildUsageWarningEmail({
     from: input.emailFrom,
