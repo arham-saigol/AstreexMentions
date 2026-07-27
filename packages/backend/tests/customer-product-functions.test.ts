@@ -29,10 +29,9 @@ const customerTestSchema = defineSchema({
     "workspaceId",
     "createdAt",
   ]),
-  billingEvents: defineTable(v.any()).index("by_status_and_received_at", [
-    "status",
-    "receivedAt",
-  ]),
+  billingEvents: defineTable(v.any())
+    .index("by_status_and_received_at", ["status", "receivedAt"])
+    .index("by_workspace_and_received_at", ["workspaceId", "receivedAt"]),
   emailOutbox: defineTable(v.any()).index("by_workspace_and_created_at", [
     "workspaceId",
     "createdAt",

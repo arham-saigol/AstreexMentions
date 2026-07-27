@@ -155,6 +155,22 @@ export const billingRedirectResultSchema = z.union([
     .passthrough(),
 ])
 
+export const billingUpgradeResultSchema = z.union([
+  z
+    .object({
+      kind: z.string().trim().min(1),
+      planId: z.enum(["starter", "growth", "scale"]),
+      state: z.literal("configured"),
+    })
+    .passthrough(),
+  z
+    .object({
+      state: z.literal("provider_unconfigured"),
+      missing: z.array(z.string().trim().min(1)).optional(),
+    })
+    .passthrough(),
+])
+
 const accountDeletionAcceptedSchema = z.object({
   code: z.enum(["ACCOUNT_DELETION_ACCEPTED", "ACCOUNT_DELETION_IN_PROGRESS"]),
   deletionJobId: idSchema,

@@ -4,7 +4,10 @@ import { useAction } from "convex/react"
 import { useCallback, useState } from "react"
 
 import { customerConvex, type PlanId } from "@/lib/customer-convex"
-import { billingRedirectResultSchema } from "@/lib/settings-convex"
+import {
+  billingRedirectResultSchema,
+  billingUpgradeResultSchema,
+} from "@/lib/settings-convex"
 
 type BillingAction = "portal" | `checkout:${PlanId}` | `upgrade:${PlanId}`
 
@@ -38,6 +41,21 @@ export function useBillingActions() {
     }
 
     window.location.assign(parsed.data.url)
+    return true
+  }, [])
+
+  const handleBillingUpgrade = useCallback((value: unknown) => {
+    const parsed = billingUpgradeResultSchema.safeParse(value)
+    if (!parsed.success) {
+      setError("The billing provider returned an unexpected response.")
+      return false
+    }
+
+    if (parsed.data.state === "provider_unconfigured") {
+      setError("Creem billing is not configured for this deployment.")
+      return false
+    }
+
     return true
   }, [])
 
@@ -81,7 +99,7 @@ export function useBillingActions() {
       setError(null)
       setPending(`upgrade:${planId}`)
       try {
-        followBillingRedirect(await upgradeSubscription({ planId }))
+        handleBillingUpgrade(await upgradeSubscription({ planId }))
       } catch {
         setError(
           "The subscription upgrade could not be started. Try again shortly.",
@@ -90,7 +108,7 @@ export function useBillingActions() {
         setPending(null)
       }
     },
-    [followBillingRedirect, upgradeSubscription],
+    [handleBillingUpgrade, upgradeSubscription],
   )
 
   return {

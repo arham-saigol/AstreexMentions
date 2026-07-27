@@ -210,6 +210,38 @@ afterEach(() => {
 })
 
 describe("account deletion request and billing boundary", () => {
+  it("ignores pending billing events owned by another workspace", async () => {
+    const t = createBackendTest()
+    const primary = await bootstrap(t)
+    const other = await bootstrap(t, otherIdentity)
+
+    await t.run(async (ctx) => {
+      await ctx.db.insert("billingEvents", {
+        attempts: 0,
+        createdAt: NOW,
+        eventType: "subscription.updated",
+        livemode: false,
+        payloadJson: "{}",
+        provider: "creem",
+        providerCreatedAt: NOW,
+        providerEventId: "event_other_workspace",
+        receivedAt: NOW,
+        status: "pending",
+        updatedAt: NOW,
+        workspaceId: other.account.workspaceId as GenericId<"workspaces">,
+      })
+    })
+
+    await expect(
+      primary.customer.mutation(deleteAccountReference, {
+        confirmation: "DELETE",
+      }),
+    ).resolves.toMatchObject({
+      code: "ACCOUNT_DELETION_ACCEPTED",
+      state: "accepted",
+    })
+  })
+
   it("accepts once, returns the same operation for duplicates, and fences stale credentials", async () => {
     const t = createBackendTest()
     const { accepted, customer } = await acceptedDeletion(t)

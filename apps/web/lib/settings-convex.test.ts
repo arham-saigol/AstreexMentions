@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest"
 import {
   accountDeletionReadinessSchema,
   accountDeletionResponseSchema,
+  billingRedirectResultSchema,
+  billingUpgradeResultSchema,
   settingsCategoriesResultSchema,
 } from "./settings-convex"
 
@@ -95,5 +97,18 @@ describe("settings account deletion states", () => {
         state: "accepted",
       }).success,
     ).toBe(false)
+  })
+})
+
+describe("settings billing action contracts", () => {
+  it("accepts an applied upgrade without requiring a redirect URL", () => {
+    const upgrade = {
+      kind: "applied",
+      planId: "growth",
+      state: "configured",
+    }
+
+    expect(billingUpgradeResultSchema.safeParse(upgrade).success).toBe(true)
+    expect(billingRedirectResultSchema.safeParse(upgrade).success).toBe(false)
   })
 })

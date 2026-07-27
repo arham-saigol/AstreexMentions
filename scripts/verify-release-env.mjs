@@ -20,6 +20,7 @@ const required = [
   "FETCHLAYER_API_KEY",
   "XQUIK_API_KEY",
   "DEEPSEEK_API_KEY",
+  "DELETION_IDENTITY_FENCE_MS",
 ]
 
 const missing = required.filter((name) => !process.env[name]?.trim())
@@ -32,6 +33,15 @@ if (missing.length > 0) {
 
 if (process.env.CREEM_MODE !== "production") {
   console.error("CREEM_MODE must be production for a release deployment.")
+  process.exit(1)
+}
+
+const deletionIdentityFenceMs = Number(process.env.DELETION_IDENTITY_FENCE_MS)
+if (
+  !Number.isSafeInteger(deletionIdentityFenceMs) ||
+  deletionIdentityFenceMs <= 0
+) {
+  console.error("DELETION_IDENTITY_FENCE_MS must be a positive integer.")
   process.exit(1)
 }
 

@@ -841,6 +841,20 @@ export const beginCreemProviderOperation = internalMutation({
       ) {
         throw new TypeError("Creem operation idempotency key is already in use")
       }
+      if (existing.status === "failed") {
+        const now = Date.now()
+        await ctx.db.patch("providerRuns", existing._id as ProviderRunId, {
+          attempt: (existing.attempt as number) + 1,
+          durationMs: undefined,
+          errorCode: undefined,
+          errorMessage: undefined,
+          finishedAt: undefined,
+          startedAt: now,
+          status: "running",
+          updatedAt: now,
+        })
+        return { state: "started" as const }
+      }
       return {
         state:
           existing.status === "running"
@@ -898,12 +912,16 @@ export const markCreemProviderOperationUnresolved = internalMutation({
     ) {
       return { state: "stale" as const }
     }
+    const now = Date.now()
     await ctx.db.patch("providerRuns", run._id as ProviderRunId, {
+      durationMs: Math.max(0, now - (run.startedAt as number)),
       errorCode: args.errorCode.slice(0, 80),
       errorMessage: args.errorMessage.slice(0, 200),
-      updatedAt: Date.now(),
+      finishedAt: now,
+      status: "failed",
+      updatedAt: now,
     })
-    return { state: "unresolved" as const }
+    return { state: "retryable" as const }
   },
 })
 

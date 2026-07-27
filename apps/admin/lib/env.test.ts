@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest"
 
 import {
   getAdminAuthConfigurationIssues,
+  getAdminDataConfigurationIssues,
   hasExactAdminClerkUserId,
   readAdminServerEnv,
 } from "./env"
@@ -55,5 +56,18 @@ describe("admin environment authorization", () => {
     process.env.ADMIN_CLERK_USER_ID = " user_123 "
 
     expect(readAdminServerEnv().adminClerkUserId).toBe(" user_123 ")
+  })
+
+  it("rejects cleartext non-local Convex URLs but permits local development", () => {
+    process.env.NEXT_PUBLIC_CONVEX_URL = "http://convex.example.com"
+
+    const insecure = readAdminServerEnv()
+    expect(insecure.convexUrl).toBeUndefined()
+    expect(getAdminDataConfigurationIssues(insecure)).toEqual([
+      expect.objectContaining({ name: "NEXT_PUBLIC_CONVEX_URL" }),
+    ])
+
+    process.env.NEXT_PUBLIC_CONVEX_URL = "http://127.0.0.1:3210"
+    expect(readAdminServerEnv().convexUrl).toBe("http://127.0.0.1:3210")
   })
 })

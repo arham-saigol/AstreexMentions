@@ -23,7 +23,7 @@ function nonBlank(value: string | undefined): string | undefined {
   return value.trim()
 }
 
-function validUrl(value: string | undefined): string | undefined {
+function validConvexUrl(value: string | undefined): string | undefined {
   const candidate = nonBlank(value)
 
   if (!candidate) {
@@ -32,7 +32,11 @@ function validUrl(value: string | undefined): string | undefined {
 
   try {
     const url = new URL(candidate)
-    return url.protocol === "https:" || url.protocol === "http:"
+    const isLocalDevelopment =
+      url.protocol === "http:" &&
+      ["localhost", "127.0.0.1", "[::1]", "::1"].includes(url.hostname)
+
+    return url.protocol === "https:" || isLocalDevelopment
       ? candidate
       : undefined
   } catch {
@@ -65,7 +69,7 @@ export function readAdminServerEnv(): AdminServerEnv {
       process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
     ),
     clerkSecretKey: nonBlank(process.env.CLERK_SECRET_KEY),
-    convexUrl: validUrl(process.env.NEXT_PUBLIC_CONVEX_URL),
+    convexUrl: validConvexUrl(process.env.NEXT_PUBLIC_CONVEX_URL),
   }
 }
 
@@ -117,7 +121,8 @@ export function getAdminDataConfigurationIssues(
   return [
     {
       name: "NEXT_PUBLIC_CONVEX_URL",
-      reason: "Set a valid HTTP(S) Convex deployment URL.",
+      reason:
+        "Set a valid HTTPS Convex deployment URL (HTTP is allowed only on localhost).",
     },
   ]
 }
