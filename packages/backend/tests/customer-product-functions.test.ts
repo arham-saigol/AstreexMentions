@@ -20,6 +20,12 @@ const customerTestSchema = defineSchema({
       "normalizedName",
       "deletedAt",
     ])
+    .index("by_workspace_deleted_enabled_and_sort_order", [
+      "workspaceId",
+      "deletedAt",
+      "enabled",
+      "sortOrder",
+    ])
     .index("by_workspace_and_sort_order", ["workspaceId", "sortOrder"]),
   deletionJobs: defineTable(v.any())
     .index("by_idempotency_key", ["idempotencyKey"])
@@ -62,6 +68,10 @@ const customerTestSchema = defineSchema({
       "position",
     ]),
   subscriptions: defineTable(v.any()).index("by_workspace", ["workspaceId"]),
+  systemMetricBuckets: defineTable(v.any()).index(
+    "by_metric_scope_workspace_granularity_and_bucket",
+    ["metric", "scope", "workspaceId", "granularity", "bucketStartAt"],
+  ),
   providerRuns: defineTable(v.any()).index(
     "by_workspace_status_and_started_at",
     ["workspaceId", "status", "startedAt"],

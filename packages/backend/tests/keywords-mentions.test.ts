@@ -45,6 +45,10 @@ const testSchema = defineSchema({
     .index("by_workspace_and_published_at", ["workspaceId", "publishedAt"])
     .index("by_workspace_and_engagement", ["workspaceId", "engagementScore"]),
   subscriptions: defineTable(v.any()).index("by_workspace", ["workspaceId"]),
+  systemMetricBuckets: defineTable(v.any()).index(
+    "by_metric_scope_workspace_granularity_and_bucket",
+    ["metric", "scope", "workspaceId", "granularity", "bucketStartAt"],
+  ),
   trackingSources: defineTable(v.any())
     .index("by_keyword_and_source_type", ["keywordId", "sourceType"])
     .index("by_workspace_status_and_created_at", [

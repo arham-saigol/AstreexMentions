@@ -1027,6 +1027,7 @@ export default defineSchema({
   })
     .index("by_idempotency_key", ["idempotencyKey"])
     .index("by_resource_key_and_created_at", ["resourceKey", "createdAt"])
+    .index("by_kind_and_created_at", ["kind", "createdAt"])
     .index("by_status_and_next_attempt_at", ["status", "nextAttemptAt"])
     .index("by_status_and_lease_expires_at", ["status", "leaseExpiresAt"])
     .index("by_billing_guard_status_and_created_at", [

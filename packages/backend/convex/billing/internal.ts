@@ -19,6 +19,10 @@ import {
 import { canReconcileBillingWorkspace } from "../lib/creemBilling"
 import { indexAtMost, withoutUndefinedValues } from "../lib/jobRuntime"
 import {
+  syncUsagePausedWorkspaceMetric,
+  transitionSubscriptionMetrics,
+} from "../lib/operationalMetrics"
+import {
   env,
   indexEquals,
   internalMutation,
@@ -377,6 +381,7 @@ async function synchronizeTrackingSourcesForBilling(
         },
       )
     }
+    await syncUsagePausedWorkspaceMetric(ctx, input.workspaceId, input.now)
     return
   }
 
@@ -405,6 +410,7 @@ async function synchronizeTrackingSourcesForBilling(
       },
     )
   }
+  await syncUsagePausedWorkspaceMetric(ctx, input.workspaceId, input.now)
 }
 
 async function persistSubscriptionTransition(
@@ -454,8 +460,19 @@ async function persistSubscriptionTransition(
         subscriptionId: String(subscriptionId),
       },
     }
+    await transitionSubscriptionMetrics(ctx, {
+      to: subscriptionDocument,
+      updatedAt: input.providerCreatedAt,
+      workspaceId: input.workspaceId,
+    })
   } else {
     await ctx.db.patch("subscriptions", subscriptionId, subscriptionDocument)
+    await transitionSubscriptionMetrics(ctx, {
+      from: input.existingRow ?? undefined,
+      to: subscriptionDocument,
+      updatedAt: input.providerCreatedAt,
+      workspaceId: input.workspaceId,
+    })
   }
 
   if (transition.closedUsageCycle && currentCycleRow) {

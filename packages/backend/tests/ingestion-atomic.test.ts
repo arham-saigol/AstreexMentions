@@ -423,9 +423,9 @@ describe("serializable atomic ingestion", () => {
     expect(firstState.jobs).toHaveLength(2)
     expect(firstState.matches).toHaveLength(2)
     expect(firstState.outbox).toHaveLength(2)
-    expect(firstState.metrics).toHaveLength(5)
+    expect(firstState.metrics).toHaveLength(7)
     expect(firstState.metrics.map(({ value }) => value)).toEqual([
-      2, 2, 2, 2, 2,
+      2, 2, 2, 2, 2, 1, 1,
     ])
     expect(firstState.sources).toEqual([
       expect.objectContaining({
@@ -459,7 +459,7 @@ describe("serializable atomic ingestion", () => {
     expect(replayedState.jobs).toHaveLength(2)
     expect(replayedState.outbox).toHaveLength(2)
     expect(replayedState.metrics.map(({ value }) => value)).toEqual([
-      2, 2, 2, 2, 2,
+      2, 2, 2, 2, 2, 1, 1,
     ])
   })
 
@@ -498,8 +498,10 @@ describe("serializable atomic ingestion", () => {
     expect(state.jobs).toHaveLength(1)
     expect(state.matches).toHaveLength(1)
     expect(state.outbox).toHaveLength(2)
-    expect(state.metrics).toHaveLength(5)
-    expect(state.metrics.map(({ value }) => value)).toEqual([1, 1, 1, 1, 1])
+    expect(state.metrics).toHaveLength(7)
+    expect(state.metrics.map(({ value }) => value)).toEqual([
+      1, 1, 1, 1, 1, 1, 1,
+    ])
     expect(
       state.sources.every((source) => source?.checkpointVersion === 7),
     ).toBe(true)

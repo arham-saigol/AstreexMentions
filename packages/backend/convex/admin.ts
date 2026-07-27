@@ -18,6 +18,11 @@ import {
 } from "./ingestion/model"
 import { adminMutation, adminQuery } from "./lib/authorization"
 import { withoutUndefinedValues } from "./lib/jobRuntime"
+import {
+  subscriptionCountMetric,
+  USAGE_PAUSED_WORKSPACE_METRIC,
+  WORKSPACE_COUNT_METRIC,
+} from "./lib/operationalMetrics"
 import { SYSTEM_METRIC_GAUGE_BUCKET_START_AT } from "./lib/systemMetricBuckets"
 import {
   indexEquals,
@@ -674,15 +679,20 @@ export const getMetricsOverview = adminQuery({
     const startAt = todayStartAt - (args.days - 1) * DAY_MS
     const last30DaysStartAt = todayStartAt - 29 * DAY_MS
     const metricReadStartAt = Math.min(startAt, last30DaysStartAt)
+    const operationalMetricNames = [
+      WORKSPACE_COUNT_METRIC,
+      USAGE_PAUSED_WORKSPACE_METRIC,
+      ...(["starter", "growth", "scale"] as const).flatMap((planId) => [
+        subscriptionCountMetric(planId, false),
+        subscriptionCountMetric(planId, true),
+      ]),
+    ]
 
     const [
       providerRows,
       systemRows,
-      subscriptions,
-      workspaces,
-      trackingSources,
-      categories,
       categorizationGaugeRows,
+      operationalGaugeRows,
     ] = (await Promise.all([
       ctx.db
         .query("providerMetricBuckets")
@@ -704,10 +714,6 @@ export const getMetricsOverview = adminQuery({
           ),
         )
         .collect(),
-      ctx.db.query("subscriptions").collect(),
-      ctx.db.query("workspaces").collect(),
-      ctx.db.query("trackingSources").collect(),
-      ctx.db.query("categories").collect(),
       Promise.all(
         CATEGORIZATION_JOB_STATUSES.map(
           async (status) =>
@@ -728,24 +734,62 @@ export const getMetricsOverview = adminQuery({
               .unique()) as GenericRow | null,
         ),
       ),
+      Promise.all(
+        operationalMetricNames.map(
+          async (metric) =>
+            (await ctx.db
+              .query("systemMetricBuckets")
+              .withIndex(
+                "by_metric_scope_workspace_granularity_and_bucket",
+                (q) =>
+                  indexEquals(
+                    q,
+                    ["metric", metric],
+                    ["scope", "global"],
+                    ["workspaceId", undefined],
+                    ["granularity", "hour"],
+                    ["bucketStartAt", SYSTEM_METRIC_GAUGE_BUCKET_START_AT],
+                  ),
+              )
+              .unique()) as GenericRow | null,
+        ),
+      ),
     ])) as [
       GenericRow[],
       GenericRow[],
-      GenericRow[],
-      GenericRow[],
-      GenericRow[],
-      GenericRow[],
+      Array<GenericRow | null>,
       Array<GenericRow | null>,
     ]
 
     const relevantSystemRows = systemRows.filter(
       (row) => (row.bucketStartAt as number) >= metricReadStartAt,
     )
+    const categoryIds = new Set<string>()
+    for (const row of relevantSystemRows) {
+      if (
+        row.scope === "global" &&
+        typeof row.metric === "string" &&
+        row.metric.startsWith(CATEGORIZED_MENTION_METRIC_PREFIX) &&
+        (row.bucketStartAt as number) >= startAt
+      ) {
+        categoryIds.add(
+          row.metric.slice(CATEGORIZED_MENTION_METRIC_PREFIX.length),
+        )
+      }
+    }
+    const categories = await Promise.all(
+      [...categoryIds].map(
+        async (categoryId) =>
+          (await ctx.db.get(
+            "categories",
+            categoryId as GenericId<"categories">,
+          )) as GenericRow | null,
+      ),
+    )
     const categoryNames = new Map(
-      categories.map((category) => [
-        String(category._id),
-        category.name as string,
-      ]),
+      categories
+        .filter((category): category is GenericRow => category !== null)
+        .map((category) => [String(category._id), category.name as string]),
     )
     const categoryCounts = new Map<string, number>()
     let categorizedMentions = 0
@@ -812,30 +856,24 @@ export const getMetricsOverview = adminQuery({
       ),
     }
 
+    const operationalCounts = new Map(
+      operationalMetricNames.map((metric, index) => [
+        metric,
+        operationalGaugeRows[index]
+          ? metricAmount(operationalGaugeRows[index]!)
+          : 0,
+      ]),
+    )
     const subscriptionsByPlan = (["starter", "growth", "scale"] as const).map(
       (planId) => ({
-        activeCount: subscriptions.filter(
-          (subscription) =>
-            subscription.planId === planId &&
-            subscription.entitlementStatus === "active",
-        ).length,
-        count: subscriptions.filter(
-          (subscription) => subscription.planId === planId,
-        ).length,
+        activeCount:
+          operationalCounts.get(subscriptionCountMetric(planId, true)) ?? 0,
+        count:
+          operationalCounts.get(subscriptionCountMetric(planId, false)) ?? 0,
         planId,
       }),
     )
 
-    const usagePausedWorkspaceIds = new Set(
-      trackingSources
-        .filter(
-          (source) =>
-            source.status === "paused" &&
-            source.pauseReason === "usage" &&
-            source.deletedAt === undefined,
-        )
-        .map((source) => String(source.workspaceId)),
-    )
     const activeWorkspaceIds = new Set(
       relevantSystemRows
         .filter(
@@ -869,12 +907,11 @@ export const getMetricsOverview = adminQuery({
         activeWorkspaces: activeWorkspaceIds.size,
         emailsDelivered: delivery.delivered,
         mentions: sumMetric(relevantSystemRows, MENTION_METRIC, startAt),
-        workspaces: workspaces.filter(
-          (workspace) => workspace.deletedAt === undefined,
-        ).length,
+        workspaces: operationalCounts.get(WORKSPACE_COUNT_METRIC) ?? 0,
       },
       subscriptionsByPlan,
-      usagePausedWorkspaces: usagePausedWorkspaceIds.size,
+      usagePausedWorkspaces:
+        operationalCounts.get(USAGE_PAUSED_WORKSPACE_METRIC) ?? 0,
     }
   },
 })
@@ -890,16 +927,22 @@ export const listDeletionJobs = adminQuery({
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 200) {
       adminError("INVALID_ADMIN_INPUT", "Deletion job limit must be 1 to 200")
     }
-    const rows = (await ctx.db.query("deletionJobs").collect()) as GenericRow[]
-    return rows
-      .filter((row) => args.status === undefined || row.status === args.status)
-      .sort(
-        (left, right) =>
-          (right.createdAt as number) - (left.createdAt as number) ||
-          String(right._id).localeCompare(String(left._id), "en"),
-      )
-      .slice(0, limit)
-      .map(formatDeletionJob)
+    const rows = args.status
+      ? await ctx.db
+          .query("deletionJobs")
+          .withIndex("by_kind_status_and_created_at", (q) =>
+            indexEquals(q, ["kind", "account"], ["status", args.status]),
+          )
+          .order("desc")
+          .take(limit)
+      : await ctx.db
+          .query("deletionJobs")
+          .withIndex("by_kind_and_created_at", (q) =>
+            indexEquals(q, ["kind", "account"]),
+          )
+          .order("desc")
+          .take(limit)
+    return (rows as GenericRow[]).map(formatDeletionJob)
   },
 })
 

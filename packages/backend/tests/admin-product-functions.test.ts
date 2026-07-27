@@ -29,6 +29,7 @@ const schema = defineSchema({
   ]),
   deletionJobs: defineTable(v.any())
     .index("by_resource_key_and_created_at", ["resourceKey", "createdAt"])
+    .index("by_kind_and_created_at", ["kind", "createdAt"])
     .index("by_workspace_and_created_at", ["workspaceId", "createdAt"]),
   featureRequests: defineTable(v.any())
     .index("by_creator_and_created_at", ["createdByUserId", "createdAt"])
@@ -429,6 +430,25 @@ describe("admin metrics", () => {
           granularity: "hour",
           maximum: value,
           metric: `categorization_jobs_status:${status}`,
+          minimum: value,
+          scope: "global",
+          sum: value,
+          updatedAt: now,
+          value,
+        })
+      }
+      for (const [metric, value] of [
+        ["operational_subscriptions:starter:total", 1],
+        ["operational_subscriptions:starter:active", 1],
+        ["operational_usage_paused_workspaces", 1],
+      ] as const) {
+        await ctx.db.insert("systemMetricBuckets", {
+          bucketEndAt: 3_600_000,
+          bucketStartAt: 0,
+          count: value,
+          granularity: "hour",
+          maximum: value,
+          metric,
           minimum: value,
           scope: "global",
           sum: value,

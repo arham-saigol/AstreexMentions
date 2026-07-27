@@ -91,6 +91,29 @@ describe("release environment validation", () => {
     expect(result.stderr).toContain(`${name} must start with ${prefix}.`)
   })
 
+  it.each([" user_release", "user_release ", "admin_release"])(
+    "rejects an invalid ADMIN_CLERK_USER_ID value %s",
+    (adminClerkUserId) => {
+      const result = spawnSync(process.execPath, [scriptPath], {
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          ...baseEnvironment,
+          ADMIN_CLERK_USER_ID: adminClerkUserId,
+          CREEM_PRODUCT_ALLOWLIST_JSON: JSON.stringify({
+            prod_growth: plans.growth,
+            prod_scale: plans.scale,
+            prod_starter: plans.starter,
+          }),
+        },
+      })
+      expect(result.status).toBe(1)
+      expect(result.stderr).toContain(
+        "ADMIN_CLERK_USER_ID must be an exact Clerk user ID",
+      )
+    },
+  )
+
   it("rejects an extra product mapped to a duplicate plan", () => {
     const result = runReleaseValidation({
       prod_growth: plans.growth,

@@ -9,6 +9,7 @@ import {
   buildMentionRediscoveryPatch,
   type MentionEngagementMetrics,
 } from "../lib/mentionIngestion"
+import { syncUsagePausedWorkspaceMetric } from "../lib/operationalMetrics"
 import { createPendingEmail, emailPayloadFingerprint } from "../lib/emailOutbox"
 import { indexEquals, type MutationCtx } from "../server"
 import { incrementHourlySystemMetric } from "../lib/systemMetricBuckets"
@@ -468,6 +469,7 @@ async function pauseWorkspaceSourcesForUsage(
       updatedAt: now,
     })
   }
+  await syncUsagePausedWorkspaceMetric(ctx, workspaceId, now)
   return activeSources.length
 }
 

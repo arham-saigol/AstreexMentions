@@ -7,6 +7,11 @@ import {
 } from "../lib/functionReferences"
 import { indexAtMost } from "../lib/jobRuntime"
 import {
+  adjustWorkspaceCountMetric,
+  syncUsagePausedWorkspaceMetric,
+  transitionSubscriptionMetrics,
+} from "../lib/operationalMetrics"
+import {
   type CategorizationJobStatus,
   transitionCategorizationStatusMetric,
 } from "../categorization/metrics"
@@ -561,8 +566,17 @@ async function purgeWorkspaceIndexedStage(
         updatedAt: now,
         workspaceId,
       })
+    } else if (stage === "subscriptions") {
+      await transitionSubscriptionMetrics(ctx, {
+        from: row,
+        updatedAt: now,
+        workspaceId,
+      })
     }
     await ctx.db.delete(table, row._id as never)
+  }
+  if (stage === "tracking_sources") {
+    await syncUsagePausedWorkspaceMetric(ctx, workspaceId, now)
   }
   return rows.length
 }
@@ -607,6 +621,11 @@ async function purgeSpecialStage(
     if (!workspace) {
       return 0
     }
+    await adjustWorkspaceCountMetric(ctx, {
+      delta: -1,
+      updatedAt: now,
+      workspaceId: job.workspaceId as WorkspaceId,
+    })
     await ctx.db.delete("workspaces", job.workspaceId as WorkspaceId)
     return 1
   }

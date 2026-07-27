@@ -18,6 +18,7 @@ import {
   DEFAULT_DIGEST_MENTION_LIMIT,
   nextDailyDigestRunAt,
 } from "./lib/dailyDigest"
+import { adjustWorkspaceCountMetric } from "./lib/operationalMetrics"
 import { indexEquals, type MutationCtx } from "./server"
 
 type UserId = GenericId<"users">
@@ -129,11 +130,18 @@ function bootstrapStore(ctx: MutationCtx): BootstrapStore {
       (await ctx.db.insert("workspaceMembers", input)) as MembershipId,
     insertUser: async (input) =>
       (await ctx.db.insert("users", input)) as UserId,
-    insertWorkspace: async (input) =>
-      (await ctx.db.insert("workspaces", {
+    insertWorkspace: async (input) => {
+      const workspaceId = (await ctx.db.insert("workspaces", {
         ...input,
         normalizedName: input.name.toLocaleLowerCase("en"),
-      })) as WorkspaceId,
+      })) as WorkspaceId
+      await adjustWorkspaceCountMetric(ctx, {
+        delta: 1,
+        updatedAt: input.updatedAt,
+        workspaceId,
+      })
+      return workspaceId
+    },
     patchMembership: async (membershipId, patch) => {
       await ctx.db.patch("workspaceMembers", membershipId, patch)
     },

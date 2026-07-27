@@ -4,6 +4,7 @@ import { ConvexError, v } from "convex/values"
 
 import { effectiveEntitlementStatus } from "./billing/lifecycle"
 import { authenticatedMutation, authenticatedQuery } from "./lib/authorization"
+import { syncUsagePausedWorkspaceMetric } from "./lib/operationalMetrics"
 import {
   createInitialTrackingSchedule,
   type PlanId,
@@ -617,6 +618,7 @@ async function syncTrackingSources(
       })
     }
   }
+  await syncUsagePausedWorkspaceMetric(ctx, input.workspaceId, input.now)
 }
 
 export async function replaceWorkspaceKeywordConfiguration(
@@ -754,6 +756,7 @@ export async function replaceWorkspaceKeywordConfiguration(
     desiredIds.push(keywordId)
   }
 
+  await syncUsagePausedWorkspaceMetric(ctx, input.workspaceId, now)
   return desiredIds
 }
 
@@ -876,6 +879,7 @@ export const createKeyword = authenticatedMutation({
         workspaceId: customer.workspaceId,
       })
     }
+    await syncUsagePausedWorkspaceMetric(ctx, customer.workspaceId, now)
 
     const keyword = await keywordForWorkspace(
       ctx,
@@ -969,6 +973,7 @@ export const pauseKeyword = authenticatedMutation({
         updatedAt: now,
       })
     }
+    await syncUsagePausedWorkspaceMetric(ctx, customer.workspaceId, now)
 
     const keyword = await keywordForWorkspace(
       ctx,
@@ -1012,6 +1017,7 @@ export const resumeKeyword = authenticatedMutation({
         updatedAt: now,
       })
     }
+    await syncUsagePausedWorkspaceMetric(ctx, customer.workspaceId, now)
 
     const keyword = await keywordForWorkspace(
       ctx,
@@ -1054,6 +1060,7 @@ export const deleteKeyword = authenticatedMutation({
         updatedAt: now,
       })
     }
+    await syncUsagePausedWorkspaceMetric(ctx, customer.workspaceId, now)
 
     return { id: keywordId, status: "deleted" as const }
   },

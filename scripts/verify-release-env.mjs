@@ -46,6 +46,17 @@ for (const [name, prefix] of [
   }
 }
 
+const adminClerkUserId = process.env.ADMIN_CLERK_USER_ID
+if (
+  adminClerkUserId !== adminClerkUserId.trim() ||
+  !/^user_[A-Za-z0-9]+$/.test(adminClerkUserId)
+) {
+  console.error(
+    "ADMIN_CLERK_USER_ID must be an exact Clerk user ID without surrounding whitespace.",
+  )
+  process.exit(1)
+}
+
 const deletionIdentityFenceMs = Number(process.env.DELETION_IDENTITY_FENCE_MS)
 if (
   !Number.isSafeInteger(deletionIdentityFenceMs) ||
