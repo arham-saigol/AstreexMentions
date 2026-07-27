@@ -129,6 +129,21 @@ describe("atomic onboarding configuration", () => {
         updatedAt: now,
         workspaceId,
       })
+      const savedViewId = await ctx.db.insert("savedViews", {
+        createdAt: now,
+        filters: {
+          categoryIds: [categoryId, otherCategoryId],
+          keywordIds: [oldKeywordId],
+        },
+        icon: "funnel",
+        name: "Onboarding filters",
+        normalizedName: "onboarding filters",
+        position: 0,
+        sort: "newest",
+        updatedAt: now,
+        userId,
+        workspaceId,
+      })
 
       const foreignUserId = await ctx.db.insert("users", {
         clerkUserId: "foreign-user",
@@ -162,6 +177,7 @@ describe("atomic onboarding configuration", () => {
         oldKeywordId,
         oldSourceId,
         otherCategoryId,
+        savedViewId,
         workspaceId,
       }
     })
@@ -185,6 +201,7 @@ describe("atomic onboarding configuration", () => {
     const rolledBack = await t.run(async (ctx) => ({
       keywords: await ctx.db.query("keywords").collect(),
       source: await ctx.db.get("trackingSources", seeded.oldSourceId),
+      savedView: await ctx.db.get("savedViews", seeded.savedViewId),
       workspace: await ctx.db.get("workspaces", seeded.workspaceId),
     }))
     expect(rolledBack.keywords).toEqual([
@@ -194,6 +211,10 @@ describe("atomic onboarding configuration", () => {
       }),
     ])
     expect(rolledBack.source).toMatchObject({ status: "paused" })
+    expect(rolledBack.savedView?.filters).toEqual({
+      categoryIds: [seeded.categoryId, seeded.otherCategoryId],
+      keywordIds: [seeded.oldKeywordId],
+    })
     expect(rolledBack.workspace).toMatchObject({ name: "Original workspace" })
 
     await expect(
@@ -203,7 +224,7 @@ describe("atomic onboarding configuration", () => {
             categoryId: seeded.categoryId,
             colorToken: "green",
             description: "Updated questions",
-            enabled: true,
+            enabled: false,
           },
           {
             categoryId: seeded.otherCategoryId,
@@ -224,11 +245,13 @@ describe("atomic onboarding configuration", () => {
       category: await ctx.db.get("categories", seeded.categoryId),
       keywords: await ctx.db.query("keywords").collect(),
       sources: await ctx.db.query("trackingSources").collect(),
+      savedView: await ctx.db.get("savedViews", seeded.savedViewId),
       workspace: await ctx.db.get("workspaces", seeded.workspaceId),
     }))
     expect(applied.category).toMatchObject({
       colorToken: "green",
       description: "Updated questions",
+      enabled: false,
     })
     expect(applied.keywords).toEqual(
       expect.arrayContaining([
@@ -250,6 +273,9 @@ describe("atomic onboarding configuration", () => {
         sourceType: "x",
       }),
     ])
+    expect(applied.savedView?.filters).toEqual({
+      categoryIds: [seeded.otherCategoryId],
+    })
     expect(applied.workspace).toMatchObject({ name: "Changed workspace" })
   })
 })

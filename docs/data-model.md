@@ -220,7 +220,7 @@ The canonical schema is `packages/backend/convex/schema.ts`. It defines 25 valid
 
 ### `savedViews`
 
-**Purpose.** User-owned persisted mention filter/sort presets within a workspace.
+**Purpose.** User-owned persisted mention filter/sort presets within a workspace. Keyword removal and category disable/delete—including atomic onboarding replacement—remove those IDs from active views in the same transaction.
 
 **Invariants.** Ownership is both `workspaceId` and `userId`. Active names are unique per workspace/user. Referenced category/keyword IDs must be active and belong to the same workspace at write time. Positions are contiguous after reorder/delete. `All Mentions` is synthetic and must never be stored, changed, reordered away from first, or deleted. Deletion is soft.
 

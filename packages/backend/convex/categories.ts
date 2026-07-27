@@ -287,6 +287,16 @@ export async function applyOnboardingCategoryConfiguration(
 
   const now = Date.now()
   for (const { category, description } of updates) {
+    const currentCategory = currentById.get(String(category.categoryId))!
+    if (currentCategory.enabled && !category.enabled) {
+      await removeCategoryFromActiveSavedViews(
+        ctx,
+        input.workspaceId,
+        category.categoryId,
+        now,
+        "CATEGORY_UPDATE_FAILED",
+      )
+    }
     await ctx.db.patch("categories", category.categoryId, {
       colorToken: category.colorToken,
       description,

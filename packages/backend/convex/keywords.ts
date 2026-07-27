@@ -167,6 +167,34 @@ function removeKeywordFromSavedViewFilters(
   }
 }
 
+async function removeKeywordFromActiveSavedViews(
+  ctx: MutationCtx,
+  workspaceId: WorkspaceId,
+  keywordId: KeywordId,
+  now: number,
+  failureCode: "KEYWORD_DELETE_FAILED" | "KEYWORD_UPDATE_FAILED",
+): Promise<void> {
+  const savedViews = await ctx.db
+    .query("savedViews")
+    .withIndex("by_workspace_deleted_and_updated_at", (q) =>
+      indexEquals(q, ["workspaceId", workspaceId], ["deletedAt", undefined]),
+    )
+    .take(MAX_ACTIVE_SAVED_VIEWS + 1)
+  if (savedViews.length > MAX_ACTIVE_SAVED_VIEWS) {
+    keywordError(failureCode, "Saved view count exceeds the supported maximum")
+  }
+  for (const savedView of savedViews) {
+    const filters = savedView.filters as SavedViewFilters
+    if (!filters.keywordIds?.includes(keywordId)) {
+      continue
+    }
+    await ctx.db.patch("savedViews", savedView._id as GenericId<"savedViews">, {
+      filters: removeKeywordFromSavedViewFilters(filters, keywordId),
+      updatedAt: now,
+    })
+  }
+}
+
 export function normalizeKeywordPhrase(value: string): string {
   return value.trim().replace(/\s+/g, " ").toLocaleLowerCase("en")
 }
@@ -757,6 +785,13 @@ export async function replaceWorkspaceKeywordConfiguration(
       continue
     }
     const keywordId = keyword._id as KeywordId
+    await removeKeywordFromActiveSavedViews(
+      ctx,
+      input.workspaceId,
+      keywordId,
+      now,
+      "KEYWORD_UPDATE_FAILED",
+    )
     await ctx.db.patch("keywords", keywordId, {
       deletedAt: now,
       status: "deleted",
@@ -1162,32 +1197,13 @@ export const deleteKeyword = authenticatedMutation({
     await keywordForWorkspace(ctx, customer.workspaceId, keywordId)
     const now = Date.now()
 
-    const savedViews = await ctx.db
-      .query("savedViews")
-      .withIndex("by_workspace_deleted_and_updated_at", (q) =>
-        indexEquals(
-          q,
-          ["workspaceId", customer.workspaceId],
-          ["deletedAt", undefined],
-        ),
-      )
-      .take(MAX_ACTIVE_SAVED_VIEWS + 1)
-    if (savedViews.length > MAX_ACTIVE_SAVED_VIEWS) {
-      keywordError(
-        "KEYWORD_DELETE_FAILED",
-        "Saved view count exceeds the supported maximum",
-      )
-    }
-    for (const savedView of savedViews) {
-      const filters = savedView.filters as SavedViewFilters
-      if (!filters.keywordIds?.includes(keywordId)) {
-        continue
-      }
-      await ctx.db.patch("savedViews", savedView._id, {
-        filters: removeKeywordFromSavedViewFilters(filters, keywordId),
-        updatedAt: now,
-      })
-    }
+    await removeKeywordFromActiveSavedViews(
+      ctx,
+      customer.workspaceId,
+      keywordId,
+      now,
+      "KEYWORD_DELETE_FAILED",
+    )
     await ctx.db.patch("keywords", keywordId, {
       deletedAt: now,
       status: "deleted",
