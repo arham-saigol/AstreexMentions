@@ -11,7 +11,10 @@ import {
 import { env, internalAction } from "../server"
 import { readProviderRuntimeConfiguration } from "./config"
 import { ProviderResultContractError } from "./contracts"
-import { createProviderApplyBatches } from "./ingestion"
+import {
+  boundCursorResultToWindow,
+  createProviderApplyBatches,
+} from "./ingestion"
 import { MAX_FETCHLAYER_CUMULATIVE_PAGES } from "./model"
 import {
   applyTrackingProviderPageReference,
@@ -66,11 +69,15 @@ async function searchProvider(
       if (adapter.state === "provider_unconfigured") {
         throw new TypeError("Xquik configuration changed before execution")
       }
-      return await adapter.search({
+      const result = await adapter.search({
         cursor: context.cursor,
         limit: MAX_INGESTION_CHUNK_SIZE,
         q: context.providerQuery,
         queryType: "Latest",
+      })
+      return boundCursorResultToWindow(result, {
+        endAt: context.windowEndAt,
+        startAt: context.windowStartAt,
       })
     }
     case "reddit_posts":

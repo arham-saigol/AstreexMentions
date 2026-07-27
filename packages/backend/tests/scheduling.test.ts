@@ -8,7 +8,10 @@ import {
   readSchedulingDispatchConfiguration,
 } from "../convex/scheduling/config"
 import { parseProviderSearchResultJson } from "../convex/scheduling/contracts"
-import { createProviderApplyBatches } from "../convex/scheduling/ingestion"
+import {
+  boundCursorResultToWindow,
+  createProviderApplyBatches,
+} from "../convex/scheduling/ingestion"
 import {
   HOUR_MS,
   MAX_FETCHLAYER_CUMULATIVE_PAGES,
@@ -450,6 +453,75 @@ describe("deterministic retry and checkpoint transitions", () => {
 })
 
 describe("configuration and normalized result contracts", () => {
+  it("clips X cursor pages to the persisted monitoring window", () => {
+    const startAt = fixture.now - 5 * MINUTE_MS
+    const result = parseProviderSearchResultJson(
+      JSON.stringify({
+        checkpoint: {
+          newestPublishedAt: fixture.now + 1,
+          oldestPublishedAt: startAt - 1,
+        },
+        items: [
+          {
+            body: "Too new",
+            canonicalUrl: "https://x.com/fixture/status/too-new",
+            contentType: "tweet",
+            engagementScore: 0,
+            platform: "x",
+            providerItemId: "too-new",
+            publishedAt: fixture.now + 1,
+            searchText: "Too new",
+          },
+          {
+            body: "In window",
+            canonicalUrl: "https://x.com/fixture/status/in-window",
+            contentType: "tweet",
+            engagementScore: 0,
+            platform: "x",
+            providerItemId: "in-window",
+            publishedAt: startAt,
+            searchText: "In window",
+          },
+          {
+            body: "Too old",
+            canonicalUrl: "https://x.com/fixture/status/too-old",
+            contentType: "tweet",
+            engagementScore: 0,
+            platform: "x",
+            providerItemId: "too-old",
+            publishedAt: startAt - 1,
+            searchText: "Too old",
+          },
+        ],
+        pagination: {
+          hasMore: true,
+          kind: "cursor",
+          nextCursor: "older-page",
+          requestCursor: "current-page",
+        },
+        state: "ok",
+      }),
+    )
+
+    const bounded = boundCursorResultToWindow(result, {
+      endAt: fixture.now,
+      startAt,
+    })
+
+    expect(bounded.items.map(({ providerItemId }) => providerItemId)).toEqual([
+      "in-window",
+    ])
+    expect(bounded.checkpoint).toMatchObject({
+      newestPublishedAt: startAt,
+      oldestPublishedAt: startAt,
+    })
+    expect(bounded.pagination).toEqual({
+      hasMore: false,
+      kind: "cursor",
+      requestCursor: "current-page",
+    })
+  })
+
   it("splits cumulative provider results into bounded durable apply batches", () => {
     const result = parseProviderSearchResultJson(
       JSON.stringify({

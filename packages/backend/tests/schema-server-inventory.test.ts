@@ -143,6 +143,11 @@ describe("complete Convex schema", () => {
       "workspaceId",
       "systemKey",
     ])
+    expectIndex("keywords", "by_workspace_phrase_and_deleted_at", [
+      "workspaceId",
+      "normalizedPhrase",
+      "deletedAt",
+    ])
     expectIndex("categories", "by_workspace_normalized_name_and_deleted_at", [
       "workspaceId",
       "normalizedName",

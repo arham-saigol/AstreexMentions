@@ -380,21 +380,19 @@ async function assertUniquePhrase(
 ): Promise<void> {
   const matches = (await ctx.db
     .query("keywords")
-    .withIndex("by_workspace_and_normalized_phrase", (q) =>
+    .withIndex("by_workspace_phrase_and_deleted_at", (q) =>
       indexEquals(
         q,
         ["workspaceId", workspaceId],
         ["normalizedPhrase", normalizedPhrase],
+        ["deletedAt", undefined],
       ),
     )
-    .collect()) as GenericRow[]
+    .take(2)) as GenericRow[]
 
   if (
     matches.some(
-      (row) =>
-        row._id !== exceptKeywordId &&
-        row.status !== "deleted" &&
-        row.deletedAt === undefined,
+      (row) => row._id !== exceptKeywordId && row.status !== "deleted",
     )
   ) {
     keywordError(

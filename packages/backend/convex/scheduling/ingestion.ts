@@ -4,7 +4,10 @@ import {
   type IngestionCandidate,
   type IngestionChunk,
 } from "../ingestion/contracts"
-import type { ProviderSearchResult } from "../integrations/providers"
+import {
+  observeProviderCheckpoint,
+  type ProviderSearchResult,
+} from "../integrations/providers"
 import type { ValidatedProviderSearchResult } from "./contracts"
 
 function candidateFromProviderItem(
@@ -37,6 +40,44 @@ function candidateFromProviderItem(
       ? {}
       : { repostCount: item.repostCount }),
     ...(item.title === undefined ? {} : { title: item.title }),
+  }
+}
+
+export function boundCursorResultToWindow(
+  result: ProviderSearchResult,
+  window: { endAt: number; startAt: number },
+): ProviderSearchResult {
+  if (
+    !Number.isSafeInteger(window.startAt) ||
+    !Number.isSafeInteger(window.endAt) ||
+    window.startAt < 0 ||
+    window.endAt < window.startAt
+  ) {
+    throw new RangeError("Provider result window is invalid")
+  }
+  if (result.pagination.kind !== "cursor") {
+    return result
+  }
+  const crossedWindowStart = result.items.some(
+    ({ publishedAt }) => publishedAt <= window.startAt,
+  )
+  const items = result.items.filter(
+    ({ publishedAt }) =>
+      publishedAt >= window.startAt && publishedAt <= window.endAt,
+  )
+  return {
+    checkpoint: observeProviderCheckpoint(items),
+    items,
+    pagination: crossedWindowStart
+      ? {
+          hasMore: false,
+          kind: "cursor",
+          ...(result.pagination.requestCursor === undefined
+            ? {}
+            : { requestCursor: result.pagination.requestCursor }),
+        }
+      : result.pagination,
+    state: "ok",
   }
 }
 

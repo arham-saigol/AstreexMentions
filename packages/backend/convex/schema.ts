@@ -477,9 +477,10 @@ export default defineSchema({
     updatedAt: v.number(),
     workspaceId: v.id("workspaces"),
   })
-    .index("by_workspace_and_normalized_phrase", [
+    .index("by_workspace_phrase_and_deleted_at", [
       "workspaceId",
       "normalizedPhrase",
+      "deletedAt",
     ])
     .index("by_workspace_status_and_created_at", [
       "workspaceId",

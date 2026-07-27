@@ -33,9 +33,10 @@ const modules = {
 const testSchema = defineSchema({
   categories: defineTable(v.any()),
   keywords: defineTable(v.any())
-    .index("by_workspace_and_normalized_phrase", [
+    .index("by_workspace_phrase_and_deleted_at", [
       "workspaceId",
       "normalizedPhrase",
+      "deletedAt",
     ])
     .index("by_workspace_status_and_created_at", [
       "workspaceId",
@@ -1011,6 +1012,14 @@ describe("frontend function inventory", () => {
     expect(configuredKeywordQuery).not.toContain(
       '"by_workspace_and_updated_at"',
     )
+    const uniquenessQuery = keywordSource.slice(
+      keywordSource.indexOf("async function assertUniquePhrase"),
+      keywordSource.indexOf("async function keywordForWorkspace"),
+    )
+    expect(uniquenessQuery).toContain('"by_workspace_phrase_and_deleted_at"')
+    expect(uniquenessQuery).toContain('["deletedAt", undefined]')
+    expect(uniquenessQuery).toContain(".take(2)")
+    expect(uniquenessQuery).not.toContain(".collect()")
 
     const mentionMonitoringQuery = mentionSource.slice(
       mentionSource.indexOf("async function readMentionMonitoringState"),
