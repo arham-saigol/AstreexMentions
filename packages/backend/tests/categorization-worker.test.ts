@@ -449,7 +449,11 @@ describe("durable DeepSeek categorization worker", () => {
     const categoryMetrics = await t.run(
       async (ctx) => await ctx.db.query("systemMetricBuckets").collect(),
     )
-    expect(categoryMetrics).toEqual([
+    expect(
+      categoryMetrics.filter((row) =>
+        String(row.metric).startsWith("mentions_categorized:"),
+      ),
+    ).toEqual([
       expect.objectContaining({
         metric: `mentions_categorized:${String(seeded.categories[0]!.id)}`,
         scope: "global",

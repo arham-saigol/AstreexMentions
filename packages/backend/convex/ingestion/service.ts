@@ -4,6 +4,7 @@ import {
   DEFAULT_CATEGORIZATION_MAX_ATTEMPTS,
   DEEPSEEK_CATEGORIZATION_MODEL,
 } from "../lib/deepseekCategorization"
+import { transitionCategorizationStatusMetric } from "../categorization/metrics"
 import {
   buildMentionRediscoveryPatch,
   type MentionEngagementMetrics,
@@ -328,6 +329,11 @@ async function ensureCategorizationJob(
     model: DEEPSEEK_CATEGORIZATION_MODEL,
     nextAttemptAt: now,
     status: "pending",
+    updatedAt: now,
+    workspaceId: input.workspaceId,
+  })
+  await transitionCategorizationStatusMetric(ctx, {
+    to: "pending",
     updatedAt: now,
     workspaceId: input.workspaceId,
   })

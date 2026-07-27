@@ -463,6 +463,33 @@ describe("keyword Convex functions", () => {
       data: { code: "INVALID_KEYWORD_PLATFORMS" },
     })
 
+    const leasedSourceId = created.sources[0]!.id
+    await t.run(async (ctx) => {
+      await ctx.db.patch("trackingSources", leasedSourceId, {
+        inProgressCursor: "old-query-cursor",
+        inProgressPage: 2,
+        leaseExpiresAt: Date.now() + 60_000,
+        leaseToken: "old-query-lease",
+        leaseVersion: 3,
+      })
+    })
+    await customer.client.mutation(updateKeywordReference, {
+      keywordId: created.id,
+      phrase: "Updated lifecycle",
+      platforms: ["reddit"],
+    })
+    const queryChangedSource = await t.run(
+      async (ctx) => await ctx.db.get("trackingSources", leasedSourceId),
+    )
+    expect(queryChangedSource).toMatchObject({
+      leaseVersion: 4,
+      providerQuery: "Updated lifecycle",
+    })
+    expect(queryChangedSource).not.toHaveProperty("inProgressCursor")
+    expect(queryChangedSource).not.toHaveProperty("inProgressPage")
+    expect(queryChangedSource).not.toHaveProperty("leaseExpiresAt")
+    expect(queryChangedSource).not.toHaveProperty("leaseToken")
+
     const updated = keywordResult(
       await customer.client.mutation(updateKeywordReference, {
         keywordId: created.id,

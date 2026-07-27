@@ -25,6 +25,7 @@ import {
   parseCategorySnapshotJson,
   parseCategorizationResultsJson,
 } from "./contracts"
+import { transitionCategorizationStatusMetric } from "./metrics"
 import {
   categorySnapshotJson,
   createCategorizationLease,
@@ -283,6 +284,12 @@ async function markJobDead(
   errorCode: string,
   now: number,
 ): Promise<void> {
+  await transitionCategorizationStatusMetric(ctx, {
+    from: row.status as "leased" | "pending",
+    to: "dead",
+    updatedAt: now,
+    workspaceId: row.workspaceId as WorkspaceId,
+  })
   await ctx.db.patch("categorizationJobs", row._id as CategorizationJobId, {
     completedAt: now,
     lastError: errorCode,
@@ -306,6 +313,12 @@ async function recoverExpiredJob(
     return null
   }
 
+  await transitionCategorizationStatusMetric(ctx, {
+    from: "leased",
+    to: "pending",
+    updatedAt: now,
+    workspaceId: row.workspaceId as WorkspaceId,
+  })
   await ctx.db.patch("categorizationJobs", row._id as CategorizationJobId, {
     lastError: "lease_expired",
     leaseExpiresAt: undefined,
@@ -521,6 +534,12 @@ async function completeAlreadyCategorizedJob(
     return false
   }
 
+  await transitionCategorizationStatusMetric(ctx, {
+    from: row.status as "leased" | "pending",
+    to: "completed",
+    updatedAt: now,
+    workspaceId: row.workspaceId as WorkspaceId,
+  })
   await ctx.db.patch("categorizationJobs", row._id as CategorizationJobId, {
     completedAt: now,
     lastError: undefined,
@@ -630,6 +649,12 @@ export const dispatchDueCategorizationJobs = internalMutation({
       })
       const jobIds = eligible.map((row) => row._id as CategorizationJobId)
       for (const row of eligible) {
+        await transitionCategorizationStatusMetric(ctx, {
+          from: "pending",
+          to: "leased",
+          updatedAt: now,
+          workspaceId,
+        })
         await ctx.db.patch(
           "categorizationJobs",
           row._id as CategorizationJobId,
@@ -737,6 +762,12 @@ export const releaseCategorizationBlockedConfiguration = internalMutation({
     }
 
     for (const job of batch.jobs) {
+      await transitionCategorizationStatusMetric(ctx, {
+        from: "leased",
+        to: "pending",
+        updatedAt: now,
+        workspaceId: batch.workspaceId,
+      })
       await ctx.db.patch("categorizationJobs", job._id as CategorizationJobId, {
         attempts: Math.max(0, (job.attempts as number) - 1),
         lastError: "blocked_config",
@@ -893,6 +924,12 @@ export const applyCategorizationBatch = internalMutation({
         categoryId,
         updatedAt: now,
       })
+      await transitionCategorizationStatusMetric(ctx, {
+        from: "leased",
+        to: "completed",
+        updatedAt: now,
+        workspaceId: batch.workspaceId,
+      })
       await ctx.db.patch("categorizationJobs", job._id as CategorizationJobId, {
         completedAt: now,
         lastError: undefined,
@@ -957,6 +994,12 @@ export const failCategorizationBatch = internalMutation({
       })
       if (plan.status === "dead") {
         dead += 1
+        await transitionCategorizationStatusMetric(ctx, {
+          from: "leased",
+          to: "dead",
+          updatedAt: now,
+          workspaceId: batch.workspaceId,
+        })
         await ctx.db.patch(
           "categorizationJobs",
           job._id as CategorizationJobId,
@@ -973,6 +1016,12 @@ export const failCategorizationBatch = internalMutation({
         await patchMentionAnalysisState(ctx, job, "failed", now)
       } else {
         pending += 1
+        await transitionCategorizationStatusMetric(ctx, {
+          from: "leased",
+          to: "pending",
+          updatedAt: now,
+          workspaceId: batch.workspaceId,
+        })
         await ctx.db.patch(
           "categorizationJobs",
           job._id as CategorizationJobId,

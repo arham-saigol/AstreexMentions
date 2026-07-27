@@ -39,10 +39,15 @@ const schema = defineSchema({
     ["granularity", "bucketStartAt"],
   ),
   subscriptions: defineTable(v.any()),
-  systemMetricBuckets: defineTable(v.any()).index("by_granularity_and_bucket", [
-    "granularity",
-    "bucketStartAt",
-  ]),
+  systemMetricBuckets: defineTable(v.any())
+    .index("by_granularity_and_bucket", ["granularity", "bucketStartAt"])
+    .index("by_metric_scope_workspace_granularity_and_bucket", [
+      "metric",
+      "scope",
+      "workspaceId",
+      "granularity",
+      "bucketStartAt",
+    ]),
   trackingSources: defineTable(v.any()),
   users: defineTable(v.any())
     .index("by_clerk_user_id", ["clerkUserId"])
@@ -411,6 +416,26 @@ describe("admin metrics", () => {
       await ctx.db.insert("categorizationJobs", { status: "completed" })
       await ctx.db.insert("categorizationJobs", { status: "pending" })
       await ctx.db.insert("categorizationJobs", { status: "dead" })
+      for (const [status, value] of [
+        ["completed", 1],
+        ["pending", 1],
+        ["leased", 0],
+        ["dead", 1],
+      ] as const) {
+        await ctx.db.insert("systemMetricBuckets", {
+          bucketEndAt: 3_600_000,
+          bucketStartAt: 0,
+          count: value,
+          granularity: "hour",
+          maximum: value,
+          metric: `categorization_jobs_status:${status}`,
+          minimum: value,
+          scope: "global",
+          sum: value,
+          updatedAt: now,
+          value,
+        })
+      }
     })
 
     const result = (await admin.query(getMetricsOverview, {

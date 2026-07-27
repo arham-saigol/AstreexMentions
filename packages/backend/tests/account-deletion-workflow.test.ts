@@ -13,6 +13,7 @@ import {
   ACCOUNT_DELETION_PURGE_STAGES,
   ACCOUNT_DELETION_WORKFLOW_VERSION,
   canClaimDeletionJob,
+  createDeletionContinuationLease,
   createDeletionLease,
   planDeletionFailure,
 } from "../convex/deletion/model"
@@ -556,6 +557,14 @@ describe("account deletion model and Clerk outcomes", () => {
     })
     expect(lease).toMatchObject({ attempts: 3, version: 5 })
     expect(
+      createDeletionContinuationLease({
+        attempts: lease.attempts,
+        jobId: "job",
+        leaseVersion: lease.version,
+        now: NOW,
+      }),
+    ).toMatchObject({ attempts: 3, version: 6 })
+    expect(
       planDeletionFailure({
         attempts: 3,
         maxAttempts: 10,
@@ -638,12 +647,9 @@ describe("account deletion model and Clerk outcomes", () => {
 
     await t.mutation(dispatchReference, { now: NOW })
     await t.finishAllScheduledFunctions(vi.runAllTimers)
-    expect((await persistedJob(t, accepted.deletionJobId))?.phase).toBe("purge")
-
-    await t.mutation(dispatchReference, { now: NOW })
-    await t.finishAllScheduledFunctions(vi.runAllTimers)
     const fenced = await persistedJob(t, accepted.deletionJobId)
     expect(fenced).toMatchObject({
+      attempts: 1,
       dataDeletionVerifiedAt: NOW,
       identityDeletionVerifiedAt: NOW,
       nextAttemptAt: NOW + FENCE_MS,

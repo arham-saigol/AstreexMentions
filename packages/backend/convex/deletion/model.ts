@@ -145,6 +145,33 @@ export function createDeletionLease(input: {
   }
 }
 
+export function createDeletionContinuationLease(input: {
+  attempts: number
+  jobId: string
+  leaseVersion: number
+  now: number
+}): DeletionLease {
+  const version = input.leaseVersion + 1
+  if (!Number.isSafeInteger(input.attempts) || input.attempts < 1) {
+    throw new RangeError("Account deletion attempts are invalid")
+  }
+  if (!Number.isSafeInteger(version) || version < 1) {
+    throw new RangeError("Account deletion lease version is invalid")
+  }
+
+  return {
+    attempts: input.attempts,
+    expiresAt: input.now + ACCOUNT_DELETION_LEASE_MS,
+    token: createJobLeaseToken({
+      attempt: input.attempts,
+      jobId: input.jobId,
+      namespace: `account-deletion-continuation:${version}`,
+      now: input.now,
+    }),
+    version,
+  }
+}
+
 export function deletionRetryDelayMs(attempts: number): number {
   if (!Number.isSafeInteger(attempts) || attempts < 1) {
     throw new RangeError("Account deletion attempts must be positive")

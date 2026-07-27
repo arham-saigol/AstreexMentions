@@ -3,6 +3,10 @@ import type { GenericId } from "convex/values"
 import { ConvexError, v } from "convex/values"
 
 import {
+  CATEGORIZATION_JOB_STATUSES,
+  categorizationStatusMetric,
+} from "./categorization/metrics"
+import {
   ACCOUNT_DELETION_MAX_ATTEMPTS,
   ACCOUNT_DELETION_PURGE_STAGES,
   ACCOUNT_DELETION_WORKFLOW_VERSION,
@@ -14,6 +18,7 @@ import {
 } from "./ingestion/model"
 import { adminMutation, adminQuery } from "./lib/authorization"
 import { withoutUndefinedValues } from "./lib/jobRuntime"
+import { SYSTEM_METRIC_GAUGE_BUCKET_START_AT } from "./lib/systemMetricBuckets"
 import {
   indexEquals,
   indexGreaterThanOrEqual,
@@ -677,7 +682,7 @@ export const getMetricsOverview = adminQuery({
       workspaces,
       trackingSources,
       categories,
-      categorizationJobs,
+      categorizationGaugeRows,
     ] = (await Promise.all([
       ctx.db
         .query("providerMetricBuckets")
@@ -703,7 +708,26 @@ export const getMetricsOverview = adminQuery({
       ctx.db.query("workspaces").collect(),
       ctx.db.query("trackingSources").collect(),
       ctx.db.query("categories").collect(),
-      ctx.db.query("categorizationJobs").collect(),
+      Promise.all(
+        CATEGORIZATION_JOB_STATUSES.map(
+          async (status) =>
+            (await ctx.db
+              .query("systemMetricBuckets")
+              .withIndex(
+                "by_metric_scope_workspace_granularity_and_bucket",
+                (q) =>
+                  indexEquals(
+                    q,
+                    ["metric", categorizationStatusMetric(status)],
+                    ["scope", "global"],
+                    ["workspaceId", undefined],
+                    ["granularity", "hour"],
+                    ["bucketStartAt", SYSTEM_METRIC_GAUGE_BUCKET_START_AT],
+                  ),
+              )
+              .unique()) as GenericRow | null,
+        ),
+      ),
     ])) as [
       GenericRow[],
       GenericRow[],
@@ -711,7 +735,7 @@ export const getMetricsOverview = adminQuery({
       GenericRow[],
       GenericRow[],
       GenericRow[],
-      GenericRow[],
+      Array<GenericRow | null>,
     ]
 
     const relevantSystemRows = systemRows.filter(
@@ -769,15 +793,23 @@ export const getMetricsOverview = adminQuery({
       }),
     )
 
+    const categorizationCounts = Object.fromEntries(
+      CATEGORIZATION_JOB_STATUSES.map((status, index) => [
+        status,
+        categorizationGaugeRows[index]
+          ? metricAmount(categorizationGaugeRows[index]!)
+          : 0,
+      ]),
+    ) as Record<(typeof CATEGORIZATION_JOB_STATUSES)[number], number>
     const categorization = {
-      completed: categorizationJobs.filter((job) => job.status === "completed")
-        .length,
-      failed: categorizationJobs.filter((job) => job.status === "dead").length,
-      leased: categorizationJobs.filter((job) => job.status === "leased")
-        .length,
-      pending: categorizationJobs.filter((job) => job.status === "pending")
-        .length,
-      total: categorizationJobs.length,
+      completed: categorizationCounts.completed,
+      failed: categorizationCounts.dead,
+      leased: categorizationCounts.leased,
+      pending: categorizationCounts.pending,
+      total: CATEGORIZATION_JOB_STATUSES.reduce(
+        (total, status) => total + categorizationCounts[status],
+        0,
+      ),
     }
 
     const subscriptionsByPlan = (["starter", "growth", "scale"] as const).map(

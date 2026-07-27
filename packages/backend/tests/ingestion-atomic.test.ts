@@ -335,8 +335,8 @@ describe("serializable atomic ingestion", () => {
     expect(state.jobs).toHaveLength(1)
     expect(state.matches).toHaveLength(2)
     expect(state.outbox).toHaveLength(0)
-    expect(state.metrics).toHaveLength(3)
-    expect(state.metrics.map(({ value }) => value)).toEqual([1, 1, 1])
+    expect(state.metrics).toHaveLength(5)
+    expect(state.metrics.map(({ value }) => value)).toEqual([1, 1, 1, 1, 1])
   })
 
   it("deduplicates normalized fallback keys without provider identifiers", async () => {
@@ -384,7 +384,7 @@ describe("serializable atomic ingestion", () => {
     expect(state.usage?.mentionsUsed).toBe(1)
     expect(state.jobs).toHaveLength(1)
     expect(state.matches).toHaveLength(1)
-    expect(state.metrics.map(({ value }) => value)).toEqual([1, 1, 1])
+    expect(state.metrics.map(({ value }) => value)).toEqual([1, 1, 1, 1, 1])
   })
 
   it("holds the checkpoint at the first over-cap position and keeps all side effects exactly once", async () => {
@@ -423,8 +423,10 @@ describe("serializable atomic ingestion", () => {
     expect(firstState.jobs).toHaveLength(2)
     expect(firstState.matches).toHaveLength(2)
     expect(firstState.outbox).toHaveLength(2)
-    expect(firstState.metrics).toHaveLength(3)
-    expect(firstState.metrics.map(({ value }) => value)).toEqual([2, 2, 2])
+    expect(firstState.metrics).toHaveLength(5)
+    expect(firstState.metrics.map(({ value }) => value)).toEqual([
+      2, 2, 2, 2, 2,
+    ])
     expect(firstState.sources).toEqual([
       expect.objectContaining({
         checkpointVersion: 7,
@@ -456,7 +458,9 @@ describe("serializable atomic ingestion", () => {
     expect(replayedState.usage?.mentionsUsed).toBe(2)
     expect(replayedState.jobs).toHaveLength(2)
     expect(replayedState.outbox).toHaveLength(2)
-    expect(replayedState.metrics.map(({ value }) => value)).toEqual([2, 2, 2])
+    expect(replayedState.metrics.map(({ value }) => value)).toEqual([
+      2, 2, 2, 2, 2,
+    ])
   })
 
   it("serializes concurrent unique candidates so only one can consume the last slot", async () => {
@@ -494,8 +498,8 @@ describe("serializable atomic ingestion", () => {
     expect(state.jobs).toHaveLength(1)
     expect(state.matches).toHaveLength(1)
     expect(state.outbox).toHaveLength(2)
-    expect(state.metrics).toHaveLength(3)
-    expect(state.metrics.map(({ value }) => value)).toEqual([1, 1, 1])
+    expect(state.metrics).toHaveLength(5)
+    expect(state.metrics.map(({ value }) => value)).toEqual([1, 1, 1, 1, 1])
     expect(
       state.sources.every((source) => source?.checkpointVersion === 7),
     ).toBe(true)

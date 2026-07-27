@@ -562,6 +562,7 @@ async function syncTrackingSources(
     retainedTypes.add(sourceType)
     const reactivating =
       source.status === "deleted" || source.deletedAt !== undefined
+    const providerQueryChanged = source.providerQuery !== input.phrase
     const schedule = reactivating
       ? createInitialTrackingSchedule({
           now: input.now,
@@ -583,12 +584,22 @@ async function syncTrackingSources(
       pauseReason: preserveError
         ? (source.pauseReason as TrackingPauseReason | undefined)
         : desiredState.pauseReason,
-      ...(desiredState.status === "active" && !reactivating
-        ? {}
-        : {
+      ...(providerQueryChanged
+        ? {
+            inProgressCursor: undefined,
+            inProgressPage: undefined,
+            inProgressWindowEndAt: undefined,
+            inProgressWindowStartAt: undefined,
             leaseExpiresAt: undefined,
             leaseToken: undefined,
-          }),
+            leaseVersion: (source.leaseVersion as number) + 1,
+          }
+        : desiredState.status === "active" && !reactivating
+          ? {}
+          : {
+              leaseExpiresAt: undefined,
+              leaseToken: undefined,
+            }),
       updatedAt: input.now,
     })
   }

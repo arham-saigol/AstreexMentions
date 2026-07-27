@@ -7,6 +7,10 @@ import {
 } from "../lib/functionReferences"
 import { indexAtMost } from "../lib/jobRuntime"
 import {
+  type CategorizationJobStatus,
+  transitionCategorizationStatusMetric,
+} from "../categorization/metrics"
+import {
   indexEquals,
   internalMutation,
   internalQuery,
@@ -23,6 +27,7 @@ import {
   type AccountDeletionPhase,
   type AccountDeletionPurgeStage,
   canClaimDeletionJob,
+  createDeletionContinuationLease,
   createDeletionLease,
   nextPurgeStage,
   planDeletionFailure,
@@ -540,6 +545,7 @@ async function purgeWorkspaceIndexedStage(
   ctx: MutationCtx,
   stage: WorkspaceIndexedPurgeStage,
   workspaceId: WorkspaceId,
+  now: number,
 ): Promise<number> {
   const [table] = workspaceIndexedStages[stage]
   const rows = await workspaceRows(
@@ -549,6 +555,13 @@ async function purgeWorkspaceIndexedStage(
     ACCOUNT_DELETION_BATCH_SIZE,
   )
   for (const row of rows) {
+    if (stage === "categorization_jobs") {
+      await transitionCategorizationStatusMetric(ctx, {
+        from: row.status as CategorizationJobStatus,
+        updatedAt: now,
+        workspaceId,
+      })
+    }
     await ctx.db.delete(table, row._id as never)
   }
   return rows.length
@@ -651,6 +664,7 @@ export const purgeAccountDeletionBatch = internalMutation({
         ctx,
         stage,
         job.workspaceId as WorkspaceId,
+        now,
       )
     }
 
@@ -887,14 +901,27 @@ export const continueAccountDeletion = internalMutation({
     if (!job) {
       return { state: "stale_lease" as const }
     }
+    const lease = createDeletionContinuationLease({
+      attempts: job.attempts as number,
+      jobId: String(job._id),
+      leaseVersion: job.leaseVersion as number,
+      now,
+    })
     await ctx.db.patch("deletionJobs", args.deletionJobId, {
-      leaseExpiresAt: undefined,
-      leaseToken: undefined,
-      nextAttemptAt: now,
-      status: "pending",
+      attempts: lease.attempts,
+      leaseExpiresAt: lease.expiresAt,
+      leaseToken: lease.token,
+      leaseVersion: lease.version,
+      nextAttemptAt: undefined,
+      status: "leased",
       updatedAt: now,
     })
-    return { state: "pending" as const }
+    await ctx.scheduler.runAfter(0, runAccountDeletionReference, {
+      deletionJobId: args.deletionJobId,
+      leaseToken: lease.token,
+      leaseVersion: lease.version,
+    })
+    return { state: "continued" as const }
   },
 })
 
