@@ -50,8 +50,10 @@ import {
 import { useProductContext } from "@/components/product/product-context"
 import { billingOverviewResultSchema } from "@/lib/customer-convex"
 import {
+  canReuseOnboardingCheckout,
   createOnboardingDraft,
   draftStorageKey,
+  isCompletedOnboardingCheckout,
   MAX_DRAFT_KEYWORDS,
   normalizeKeywordPhrase,
   ONBOARDING_STEP_COUNT,
@@ -189,7 +191,18 @@ function readDraftFromStorage(key: string): OnboardingDraft | null {
     }
 
     const parsed = onboardingDraftSchema.safeParse(JSON.parse(raw))
-    return parsed.success ? parsed.data : null
+    if (!parsed.success) {
+      return null
+    }
+    const checkout = parsed.data.checkout
+    if (
+      checkout &&
+      !isCompletedOnboardingCheckout(checkout) &&
+      !canReuseOnboardingCheckout(checkout, Date.now())
+    ) {
+      return { ...parsed.data, checkout: undefined }
+    }
+    return parsed.data
   } catch {
     return null
   }
@@ -1474,12 +1487,21 @@ export function OnboardingFlow() {
       return
     }
 
+    const savedCheckout =
+      draft.checkout?.planId === draft.selectedPlan ? draft.checkout : undefined
+    if (savedCheckout && isCompletedOnboardingCheckout(savedCheckout)) {
+      setCheckoutError(
+        "This checkout is already complete. Astreex is waiting for authoritative subscription activation and will not open another payment session.",
+      )
+      return
+    }
+
     setCheckoutPending(true)
     setCheckoutError(null)
 
     const pending =
-      draft.checkout?.planId === draft.selectedPlan
-        ? draft.checkout
+      savedCheckout && canReuseOnboardingCheckout(savedCheckout, Date.now())
+        ? savedCheckout
         : {
             idempotencyKey: createCheckoutKey(
               workspace.workspace.id,

@@ -16,6 +16,7 @@ const categoryColorTokenSchema = z.enum([
 
 export const ONBOARDING_STEP_COUNT = 7
 export const MAX_DRAFT_KEYWORDS = 10
+export const CHECKOUT_INTENT_TTL_MS = 24 * 60 * 60 * 1_000
 
 export const onboardingStepSchema = z.number().int().min(1).max(7)
 
@@ -99,6 +100,33 @@ export type OnboardingCategoryDraft = z.infer<
   typeof onboardingCategoryDraftSchema
 >
 export type OnboardingStep = z.infer<typeof onboardingStepSchema>
+
+const completedCheckoutStatuses = new Set(["complete", "completed"])
+const unusableCheckoutStatuses = new Set([
+  ...completedCheckoutStatuses,
+  "canceled",
+  "cancelled",
+  "expired",
+])
+
+export function isCompletedOnboardingCheckout(
+  checkout: NonNullable<OnboardingDraft["checkout"]>,
+): boolean {
+  return completedCheckoutStatuses.has(checkout.status.toLocaleLowerCase("en"))
+}
+
+export function canReuseOnboardingCheckout(
+  checkout: NonNullable<OnboardingDraft["checkout"]>,
+  now: number,
+): boolean {
+  const ageMs = now - checkout.startedAt
+  return (
+    Number.isSafeInteger(now) &&
+    ageMs >= 0 &&
+    ageMs < CHECKOUT_INTENT_TTL_MS &&
+    !unusableCheckoutStatuses.has(checkout.status.toLocaleLowerCase("en"))
+  )
+}
 
 export function createOnboardingDraft(workspaceName: string): OnboardingDraft {
   return {

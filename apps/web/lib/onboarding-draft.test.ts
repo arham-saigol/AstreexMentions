@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  canReuseOnboardingCheckout,
+  CHECKOUT_INTENT_TTL_MS,
   createOnboardingDraft,
+  isCompletedOnboardingCheckout,
   MAX_DRAFT_KEYWORDS,
   normalizeKeywordPhrase,
   onboardingDraftSchema,
@@ -70,5 +73,47 @@ describe("onboarding draft", () => {
         categories: [{ ...category, enabled: true }],
       }).success,
     ).toBe(true)
+  })
+
+  it("reuses only current nonterminal checkout intents", () => {
+    const now = 2_000_000_000_000
+    const checkout = {
+      idempotencyKey: "checkout-current",
+      planId: "growth" as const,
+      startedAt: now - 60_000,
+      status: "open",
+      url: "https://checkout.example/session",
+    }
+
+    expect(canReuseOnboardingCheckout(checkout, now)).toBe(true)
+    expect(
+      canReuseOnboardingCheckout(
+        {
+          ...checkout,
+          startedAt: now - CHECKOUT_INTENT_TTL_MS,
+        },
+        now,
+      ),
+    ).toBe(false)
+    expect(
+      canReuseOnboardingCheckout({ ...checkout, status: "expired" }, now),
+    ).toBe(false)
+    expect(
+      canReuseOnboardingCheckout({ ...checkout, startedAt: now + 1 }, now),
+    ).toBe(false)
+  })
+
+  it("recognizes completed checkout statuses without opening another session", () => {
+    const checkout = {
+      idempotencyKey: "checkout-complete",
+      planId: "scale" as const,
+      startedAt: 1,
+      status: "completed",
+    }
+
+    expect(isCompletedOnboardingCheckout(checkout)).toBe(true)
+    expect(isCompletedOnboardingCheckout({ ...checkout, status: "open" })).toBe(
+      false,
+    )
   })
 })
