@@ -11,16 +11,9 @@ import {
 import {
   internalActionReference,
   internalMutationReference,
-  internalQueryReference,
 } from "../lib/functionReferences"
 import { createJobLeaseToken, indexAtMost } from "../lib/jobRuntime"
-import {
-  env,
-  indexEquals,
-  internalMutation,
-  internalQuery,
-  type MutationCtx,
-} from "../server"
+import { env, indexEquals, internalMutation, type MutationCtx } from "../server"
 import { readResendDeliveryConfiguration } from "./config"
 
 const MAX_EMAIL_CLAIMS = 32
@@ -126,6 +119,40 @@ async function patchOutboxState(
     sentAt: state.status === "sent" ? state.sentAt : undefined,
     status: state.status,
     updatedAt: state.updatedAt,
+  })
+}
+
+async function emailOwnerIsUnavailable(
+  ctx: MutationCtx,
+  row: GenericRow,
+): Promise<boolean> {
+  const [workspace, user] = (await Promise.all([
+    ctx.db.get("workspaces", row.workspaceId as GenericId<"workspaces">),
+    ctx.db.get("users", row.userId as GenericId<"users">),
+  ])) as [GenericRow | null, GenericRow | null]
+  return (
+    !workspace ||
+    workspace.deletedAt !== undefined ||
+    workspace.deletionPendingAt !== undefined ||
+    !user ||
+    user.deletedAt !== undefined ||
+    user.disabledAt !== undefined
+  )
+}
+
+async function deadLetterUnavailableEmail(
+  ctx: MutationCtx,
+  row: GenericRow,
+  now: number,
+): Promise<void> {
+  await ctx.db.patch("emailOutbox", row._id as EmailOutboxId, {
+    deadAt: now,
+    lastError: "workspace_or_user_unavailable",
+    leaseExpiresAt: undefined,
+    leaseToken: undefined,
+    nextAttemptAt: undefined,
+    status: "dead",
+    updatedAt: now,
   })
 }
 
@@ -275,7 +302,14 @@ export const dispatchPendingEmails = internalMutation({
       )
       .slice(0, MAX_EMAIL_CLAIMS)
 
+    let claimed = 0
+    let suppressed = 0
     for (const row of claimable) {
+      if (await emailOwnerIsUnavailable(ctx, row)) {
+        await deadLetterUnavailableEmail(ctx, row, now)
+        suppressed += 1
+        continue
+      }
       const outboxId = row._id as EmailOutboxId
       const leaseToken = createJobLeaseToken({
         attempt: (row.attempts as number) + 1,
@@ -293,13 +327,14 @@ export const dispatchPendingEmails = internalMutation({
         leaseToken,
         outboxId,
       })
+      claimed += 1
     }
 
-    return { claimed: claimable.length, state: "dispatched" as const }
+    return { claimed, state: "dispatched" as const, suppressed }
   },
 })
 
-export const loadLeasedEmail = internalQuery({
+export const loadLeasedEmail = internalMutation({
   args: {
     leaseToken: v.string(),
     outboxId: v.id("emailOutbox"),
@@ -329,6 +364,7 @@ export const loadLeasedEmail = internalQuery({
       user.deletedAt !== undefined ||
       user.disabledAt !== undefined
     ) {
+      await deadLetterUnavailableEmail(ctx, row, Date.now())
       return { state: "stale_lease" as const }
     }
 
@@ -506,7 +542,9 @@ export const deliverEmailReference =
   internalActionReference<EmailLeaseArguments>("email/actions:deliverEmail")
 
 export const loadLeasedEmailReference =
-  internalQueryReference<EmailLeaseArguments>("email/internal:loadLeasedEmail")
+  internalMutationReference<EmailLeaseArguments>(
+    "email/internal:loadLeasedEmail",
+  )
 
 export const releaseEmailBlockedConfigReference =
   internalMutationReference<EmailLeaseArguments>(

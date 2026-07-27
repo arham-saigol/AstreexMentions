@@ -56,7 +56,7 @@ export const deliverEmail = internalAction({
     outboxId: v.id("emailOutbox"),
   },
   handler: async (ctx, args) => {
-    const leased = (await ctx.runQuery(
+    const leased = (await ctx.runMutation(
       loadLeasedEmailReference,
       args,
     )) as LeasedEmailContext
