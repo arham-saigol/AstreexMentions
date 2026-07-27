@@ -36,6 +36,16 @@ if (process.env.CREEM_MODE !== "production") {
   process.exit(1)
 }
 
+for (const [name, prefix] of [
+  ["NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY", "pk_"],
+  ["CLERK_SECRET_KEY", "sk_"],
+]) {
+  if (!process.env[name].startsWith(prefix)) {
+    console.error(`${name} must start with ${prefix}.`)
+    process.exit(1)
+  }
+}
+
 const deletionIdentityFenceMs = Number(process.env.DELETION_IDENTITY_FENCE_MS)
 if (
   !Number.isSafeInteger(deletionIdentityFenceMs) ||

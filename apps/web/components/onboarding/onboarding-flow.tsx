@@ -65,6 +65,7 @@ import {
   categoryListResultSchema,
   checkoutResultSchema,
   keywordListResultSchema,
+  onboardingConfigurationResultSchema,
   onboardingConvex,
   type CategoryColorToken,
   type CategoryResult,
@@ -1069,11 +1070,7 @@ export function OnboardingFlow() {
 
   const keywordValue = useQuery(onboardingConvex.keywords.list, {})
   const categoryValue = useQuery(onboardingConvex.categories.list, {})
-  const createKeyword = useMutation(onboardingConvex.keywords.create)
-  const updateKeyword = useMutation(onboardingConvex.keywords.update)
-  const removeKeyword = useMutation(onboardingConvex.keywords.remove)
-  const updateCategory = useMutation(onboardingConvex.categories.update)
-  const updateWorkspace = useMutation(onboardingConvex.workspaces.update)
+  const saveConfiguration = useMutation(onboardingConvex.configuration.save)
   const createCheckout = useAction(onboardingConvex.billing.createCheckout)
 
   const parsedKeywords = useMemo(
@@ -1370,68 +1367,26 @@ export function OnboardingFlow() {
     setSaveError(null)
 
     try {
-      const desiredByPhrase = new Map(
-        draft.keywords.map((keyword) => [
-          normalizeKeywordPhrase(keyword.phrase),
-          keyword,
-        ]),
-      )
-      const existing = parsedKeywords.data.filter(
-        (keyword) => keyword.status !== "deleted",
-      )
-
-      for (const keyword of existing) {
-        if (!desiredByPhrase.has(normalizeKeywordPhrase(keyword.phrase))) {
-          await removeKeyword({ keywordId: keyword.id })
-        }
-      }
-
-      for (const desired of draft.keywords) {
-        const current = existing.find(
-          (keyword) =>
-            normalizeKeywordPhrase(keyword.phrase) ===
-            normalizeKeywordPhrase(desired.phrase),
-        )
-        if (current) {
-          await updateKeyword({
-            keywordId: current.id,
-            phrase: desired.phrase.trim(),
-            platforms: desired.platforms,
-          })
-        } else {
-          await createKeyword({
-            phrase: desired.phrase.trim(),
-            platforms: desired.platforms,
-          })
-        }
-      }
-
-      for (const category of draft.categories) {
-        if (category.systemKey === "other") {
-          continue
-        }
-        const current = parsedCategories.data.find(
-          (item) => item.id === category.serverId,
-        )
-        if (!current) {
-          throw new Error("Category disappeared while saving")
-        }
-        if (
-          current.colorToken !== category.colorToken ||
-          current.description !== category.description.trim() ||
-          current.enabled !== category.enabled
-        ) {
-          await updateCategory({
+      const result = onboardingConfigurationResultSchema.safeParse(
+        await saveConfiguration({
+          categories: draft.categories.map((category) => ({
             categoryId: category.serverId,
             colorToken: category.colorToken,
             description: category.description.trim(),
             enabled: category.enabled,
-          })
-        }
-      }
-
-      if (draft.workspaceName.trim() !== workspace.workspace.name) {
-        await updateWorkspace({ name: draft.workspaceName.trim() })
+          })),
+          keywords: draft.keywords.map((keyword) => ({
+            phrase: keyword.phrase.trim(),
+            platforms: keyword.platforms,
+          })),
+          workspaceName: draft.workspaceName.trim(),
+        }),
+      )
+      if (
+        !result.success ||
+        result.data.keywordCount !== draft.keywords.length
+      ) {
+        throw new Error("Onboarding configuration result is invalid")
       }
 
       const savedAt = Date.now()
@@ -1455,17 +1410,7 @@ export function OnboardingFlow() {
     } finally {
       setSavingConfiguration(false)
     }
-  }, [
-    createKeyword,
-    draft,
-    parsedCategories,
-    parsedKeywords,
-    removeKeyword,
-    updateCategory,
-    updateKeyword,
-    updateWorkspace,
-    workspace.workspace.name,
-  ])
+  }, [draft, parsedCategories, parsedKeywords, saveConfiguration])
 
   const goForward = useCallback(async () => {
     const validation = validateStep(draft, draft.step)

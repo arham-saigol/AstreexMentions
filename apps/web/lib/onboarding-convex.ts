@@ -196,6 +196,12 @@ export const checkoutResultSchema = z.discriminatedUnion("state", [
     .passthrough(),
 ])
 
+export const onboardingConfigurationResultSchema = z.object({
+  keywordCount: z.number().int().nonnegative(),
+  keywordIds: z.array(idSchema),
+  workspaceName: z.string().trim().min(1),
+})
+
 export type OnboardingPlatform = z.infer<typeof onboardingPlatformSchema>
 export type CategoryColorToken = z.infer<typeof categoryColorTokenSchema>
 export type KeywordResult = z.infer<typeof keywordResultSchema>
@@ -228,6 +234,24 @@ export const onboardingConvex = {
       },
       unknown
     >("categories:updateCategory"),
+  },
+  configuration: {
+    save: convexMutationReference<
+      {
+        categories: Array<{
+          categoryId: string
+          colorToken: CategoryColorToken
+          description: string
+          enabled: boolean
+        }>
+        keywords: Array<{
+          phrase: string
+          platforms: OnboardingPlatform[]
+        }>
+        workspaceName: string
+      },
+      unknown
+    >("onboarding:saveOnboardingConfiguration"),
   },
   keywords: {
     create: convexMutationReference<

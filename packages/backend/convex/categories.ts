@@ -13,7 +13,7 @@ import {
   type CategorySystemKey,
 } from "./lib/categories"
 import { categoryColorTokenValidator } from "./schema"
-import { indexEquals, internalMutation } from "./server"
+import { indexEquals, internalMutation, type MutationCtx } from "./server"
 import { resolveCurrentCustomer } from "./users"
 
 type CategoryId = GenericId<"categories">
@@ -159,6 +159,69 @@ async function findDuplicateName(
       ),
     )
     .unique()
+}
+
+export async function applyOnboardingCategoryConfiguration(
+  ctx: MutationCtx,
+  input: {
+    categories: Array<{
+      categoryId: CategoryId
+      colorToken: CategoryColorToken
+      description: string
+      enabled: boolean
+    }>
+    workspaceId: WorkspaceId
+  },
+): Promise<void> {
+  const categoryIds = new Set(
+    input.categories.map((category) => String(category.categoryId)),
+  )
+  if (categoryIds.size !== input.categories.length) {
+    categoryError("INVALID_CATEGORY", "Category ids must be unique")
+  }
+
+  const current = await currentCategories(ctx, input.workspaceId)
+  if (
+    current.length !== input.categories.length ||
+    current.some((category) => !categoryIds.has(String(category.id)))
+  ) {
+    categoryError(
+      "INVALID_CATEGORY",
+      "Onboarding must include the complete current category catalog",
+    )
+  }
+  const currentById = new Map(
+    current.map((category) => [String(category.id), category]),
+  )
+  const updates = input.categories.map((category) => {
+    const currentCategory = currentById.get(String(category.categoryId))
+    if (!currentCategory) {
+      categoryError("CATEGORY_NOT_FOUND", "Category not found")
+    }
+    const description = requiredCategoryText(
+      category.description,
+      "Category description",
+      300,
+    )
+    try {
+      assertCategoryUpdateAllowed(currentCategory, {
+        enabled: category.enabled,
+      })
+    } catch (error) {
+      translateCategoryInvariant(error)
+    }
+    return { category, description }
+  })
+
+  const now = Date.now()
+  for (const { category, description } of updates) {
+    await ctx.db.patch("categories", category.categoryId, {
+      colorToken: category.colorToken,
+      description,
+      enabled: category.enabled,
+      updatedAt: now,
+    })
+  }
 }
 
 export const listCategories = authenticatedQuery({

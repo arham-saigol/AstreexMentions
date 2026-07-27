@@ -76,6 +76,11 @@ const FRONTEND_ARGUMENT_KEYS = {
   "mentions:getMention": ["mentionId"],
   "mentions:listMentions": ["cursor", "filters", "limit", "query", "sort"],
   "mentions:updateMentionStatus": ["mentionId", "status"],
+  "onboarding:saveOnboardingConfiguration": [
+    "categories",
+    "keywords",
+    "workspaceName",
+  ],
   "savedViews:createSavedView": ["filters", "icon", "name", "sort"],
   "savedViews:deleteSavedView": ["savedViewId"],
   "savedViews:listSavedViews": [],

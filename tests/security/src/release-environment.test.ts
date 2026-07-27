@@ -70,6 +70,27 @@ describe("release environment validation", () => {
     expect(result.status).toBe(0)
   })
 
+  it.each([
+    ["NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY", "publishable_release", "pk_"],
+    ["CLERK_SECRET_KEY", "secret_release", "sk_"],
+  ])("rejects an invalid %s format", (name, value, prefix) => {
+    const result = spawnSync(process.execPath, [scriptPath], {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        ...baseEnvironment,
+        [name]: value,
+        CREEM_PRODUCT_ALLOWLIST_JSON: JSON.stringify({
+          prod_growth: plans.growth,
+          prod_scale: plans.scale,
+          prod_starter: plans.starter,
+        }),
+      },
+    })
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain(`${name} must start with ${prefix}.`)
+  })
+
   it("rejects an extra product mapped to a duplicate plan", () => {
     const result = runReleaseValidation({
       prod_growth: plans.growth,

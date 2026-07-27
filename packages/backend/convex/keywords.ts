@@ -608,6 +608,144 @@ async function syncTrackingSources(
   }
 }
 
+export async function replaceWorkspaceKeywordConfiguration(
+  ctx: MutationCtx,
+  input: {
+    keywords: Array<{ phrase: string; platforms: Platform[] }>
+    userId: UserId
+    workspaceId: WorkspaceId
+  },
+): Promise<KeywordId[]> {
+  const desired = input.keywords.map((keyword) => ({
+    ...validatedPhrase(keyword.phrase),
+    platforms: validatedPlatforms(keyword.platforms),
+  }))
+  const normalizedPhrases = new Set(
+    desired.map((keyword) => keyword.normalizedPhrase),
+  )
+  if (desired.length === 0) {
+    keywordError("INVALID_KEYWORD", "Onboarding requires at least one keyword")
+  }
+  if (normalizedPhrases.size !== desired.length) {
+    keywordError(
+      "KEYWORD_ALREADY_EXISTS",
+      "Keyword phrases must be unique within the configuration",
+    )
+  }
+
+  const now = Date.now()
+  const [existing, billing] = await Promise.all([
+    configuredKeywords(ctx, input.workspaceId),
+    readBillingKeywordState(ctx, input.workspaceId, now),
+  ])
+  if (billing.hasActiveSubscription && !billing.hasCurrentUsage) {
+    keywordError(
+      "USAGE_CYCLE_REQUIRED",
+      "The active subscription does not have a current usage cycle",
+    )
+  }
+  const capacity = keywordCapacity({
+    configuredCount: desired.length,
+    ...(billing.hasActiveSubscription
+      ? { paidKeywordLimit: billing.keywordLimit }
+      : {}),
+  })
+  if (desired.length > capacity.limit) {
+    keywordError(
+      "KEYWORD_LIMIT_REACHED",
+      billing.hasActiveSubscription
+        ? "The active plan keyword limit has been reached"
+        : `Keyword drafts are limited to ${MAX_DRAFT_KEYWORDS}`,
+    )
+  }
+
+  const existingByPhrase = new Map(
+    existing.map((keyword) => [keyword.normalizedPhrase as string, keyword]),
+  )
+  const desiredIds: KeywordId[] = []
+
+  for (const keyword of existing) {
+    if (normalizedPhrases.has(keyword.normalizedPhrase as string)) {
+      continue
+    }
+    const keywordId = keyword._id as KeywordId
+    await ctx.db.patch("keywords", keywordId, {
+      deletedAt: now,
+      status: "deleted",
+      updatedAt: now,
+    })
+    for (const source of await sourcesForKeyword(ctx, keywordId)) {
+      if (source.status === "deleted" && source.deletedAt !== undefined) {
+        continue
+      }
+      await ctx.db.patch("trackingSources", source._id as TrackingSourceId, {
+        deletedAt: now,
+        inProgressCursor: undefined,
+        inProgressPage: undefined,
+        inProgressWindowEndAt: undefined,
+        inProgressWindowStartAt: undefined,
+        leaseExpiresAt: undefined,
+        leaseToken: undefined,
+        pauseReason: undefined,
+        status: "deleted",
+        updatedAt: now,
+      })
+    }
+  }
+
+  for (const keyword of desired) {
+    const current = existingByPhrase.get(keyword.normalizedPhrase)
+    if (current) {
+      const keywordId = current._id as KeywordId
+      const status = current.status as Exclude<KeywordStatus, "deleted">
+      await ctx.db.patch("keywords", keywordId, {
+        normalizedPhrase: keyword.normalizedPhrase,
+        phrase: keyword.phrase,
+        platforms: keyword.platforms,
+        updatedAt: now,
+      })
+      await syncTrackingSources(ctx, {
+        billing,
+        keywordId,
+        keywordStatus: status,
+        now,
+        phrase: keyword.phrase,
+        platforms: keyword.platforms,
+        workspaceId: input.workspaceId,
+      })
+      desiredIds.push(keywordId)
+      continue
+    }
+
+    const keywordId = (await ctx.db.insert("keywords", {
+      createdAt: now,
+      createdByUserId: input.userId,
+      normalizedPhrase: keyword.normalizedPhrase,
+      phrase: keyword.phrase,
+      platforms: keyword.platforms,
+      status: "active",
+      updatedAt: now,
+      workspaceId: input.workspaceId,
+    })) as KeywordId
+    for (const sourceType of trackingSourceTypesForPlatforms(
+      keyword.platforms,
+    )) {
+      await insertTrackingSource(ctx, {
+        billing,
+        keywordId,
+        keywordStatus: "active",
+        now,
+        phrase: keyword.phrase,
+        sourceType,
+        workspaceId: input.workspaceId,
+      })
+    }
+    desiredIds.push(keywordId)
+  }
+
+  return desiredIds
+}
+
 export const listKeywords = authenticatedQuery({
   args: {},
   returns: v.array(keywordResultValidator),

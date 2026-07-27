@@ -207,6 +207,11 @@ export const PUBLIC_FUNCTION_AUTHORIZATION_INVENTORY = {
     kind: "mutation",
     wrapper: "authenticatedMutation",
   },
+  "onboarding:saveOnboardingConfiguration": {
+    authorization: "authenticated_identity_current_workspace",
+    kind: "mutation",
+    wrapper: "authenticatedMutation",
+  },
   "savedViews:createSavedView": {
     authorization: "authenticated_identity_current_workspace",
     kind: "mutation",
