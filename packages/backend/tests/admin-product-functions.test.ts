@@ -1,0 +1,646 @@
+import { convexTest } from "convex-test"
+import {
+  defineSchema,
+  defineTable,
+  makeFunctionReference,
+  type UserIdentity,
+} from "convex/server"
+import { v } from "convex/values"
+import { afterEach, beforeEach, describe, expect, it } from "vitest"
+
+const schema = defineSchema({
+  auditEvents: defineTable(v.any()).index("by_target_and_created_at", [
+    "targetType",
+    "targetId",
+    "createdAt",
+  ]),
+  categories: defineTable(v.any()).index("by_workspace_and_system_key", [
+    "workspaceId",
+    "systemKey",
+  ]),
+  categorizationJobs: defineTable(v.any()),
+  changelogEntries: defineTable(v.any())
+    .index("by_slug", ["slug"])
+    .index("by_status_and_published_at", ["status", "publishedAt"])
+    .index("by_status_and_updated_at", ["status", "updatedAt"]),
+  digestPreferences: defineTable(v.any()).index("by_workspace_and_user", [
+    "workspaceId",
+    "userId",
+  ]),
+  deletionJobs: defineTable(v.any())
+    .index("by_resource_key_and_created_at", ["resourceKey", "createdAt"])
+    .index("by_workspace_and_created_at", ["workspaceId", "createdAt"]),
+  featureRequests: defineTable(v.any())
+    .index("by_creator_and_created_at", ["createdByUserId", "createdAt"])
+    .index("by_status_and_created_at", ["status", "createdAt"]),
+  mentions: defineTable(v.any()),
+  providerMetricBuckets: defineTable(v.any()).index(
+    "by_granularity_and_bucket",
+    ["granularity", "bucketStartAt"],
+  ),
+  subscriptions: defineTable(v.any()),
+  systemMetricBuckets: defineTable(v.any()).index("by_granularity_and_bucket", [
+    "granularity",
+    "bucketStartAt",
+  ]),
+  trackingSources: defineTable(v.any()),
+  users: defineTable(v.any())
+    .index("by_clerk_user_id", ["clerkUserId"])
+    .index("by_token_identifier", ["tokenIdentifier"]),
+  workspaceMembers: defineTable(v.any()).index("by_workspace_and_user", [
+    "workspaceId",
+    "userId",
+  ]),
+  workspaces: defineTable(v.any()).index("by_owner_and_kind", [
+    "ownerUserId",
+    "kind",
+  ]),
+})
+
+const modules = {
+  "convex/_generated/server.ts": async () => ({}),
+  "convex/admin.ts": () => import("../convex/admin"),
+  "convex/changelog.ts": () => import("../convex/changelog"),
+  "convex/featureRequests.ts": () => import("../convex/featureRequests"),
+  "convex/users.ts": () => import("../convex/users"),
+}
+
+const customerIdentity = {
+  email: "customer@example.com",
+  issuer: "https://clerk.example.test",
+  name: "Customer",
+  subject: "user_customer",
+  tokenIdentifier: "https://clerk.example.test|user_customer",
+} satisfies Partial<UserIdentity>
+
+const adminIdentity = {
+  email: "admin@example.com",
+  issuer: "https://clerk.example.test",
+  name: "Admin",
+  subject: "user_admin",
+  tokenIdentifier: "https://clerk.example.test|user_admin",
+} satisfies Partial<UserIdentity>
+
+const bootstrapCurrentUser = makeFunctionReference<"mutation">(
+  "users:bootstrapCurrentUser",
+)
+const createFeatureRequest = makeFunctionReference<"mutation">(
+  "featureRequests:createFeatureRequest",
+)
+const listMyFeatureRequests = makeFunctionReference<"query">(
+  "featureRequests:listMyFeatureRequests",
+)
+const listPublishedEntries = makeFunctionReference<"query">(
+  "changelog:listPublishedEntries",
+)
+const getMetricsOverview = makeFunctionReference<"query">(
+  "admin:getMetricsOverview",
+)
+const listFeatureRequests = makeFunctionReference<"query">(
+  "admin:listFeatureRequests",
+)
+const updateFeatureRequest = makeFunctionReference<"mutation">(
+  "admin:updateFeatureRequest",
+)
+const listChangelogEntries = makeFunctionReference<"query">(
+  "admin:listChangelogEntries",
+)
+const createChangelogEntry = makeFunctionReference<"mutation">(
+  "admin:createChangelogEntry",
+)
+const updateChangelogEntry = makeFunctionReference<"mutation">(
+  "admin:updateChangelogEntry",
+)
+const publishChangelogEntry = makeFunctionReference<"mutation">(
+  "admin:publishChangelogEntry",
+)
+const unpublishChangelogEntry = makeFunctionReference<"mutation">(
+  "admin:unpublishChangelogEntry",
+)
+const deleteChangelogEntry = makeFunctionReference<"mutation">(
+  "admin:deleteChangelogEntry",
+)
+const listDeletionJobs = makeFunctionReference<"query">(
+  "admin:listDeletionJobs",
+)
+const getDeletionJob = makeFunctionReference<"query">("admin:getDeletionJob")
+const retryDeletionJob = makeFunctionReference<"mutation">(
+  "admin:retryDeletionJob",
+)
+const cancelDeletionJob = makeFunctionReference<"mutation">(
+  "admin:cancelDeletionJob",
+)
+
+const previousAdminClerkUserId = process.env.ADMIN_CLERK_USER_ID
+
+beforeEach(() => {
+  process.env.ADMIN_CLERK_USER_ID = adminIdentity.subject
+})
+
+afterEach(() => {
+  if (previousAdminClerkUserId === undefined) {
+    delete process.env.ADMIN_CLERK_USER_ID
+  } else {
+    process.env.ADMIN_CLERK_USER_ID = previousAdminClerkUserId
+  }
+})
+
+async function setup() {
+  const t = convexTest({ modules, schema })
+  const customer = t.withIdentity(customerIdentity)
+  const admin = t.withIdentity(adminIdentity)
+  const bootstrap = (await customer.mutation(bootstrapCurrentUser, {})) as {
+    userId: string
+    workspaceId: string
+  }
+  return { admin, bootstrap, customer, t }
+}
+
+describe("customer feature request functions", () => {
+  it("derives the current customer and never returns admin-only fields", async () => {
+    const { admin, bootstrap, customer, t } = await setup()
+    const created = (await customer.mutation(createFeatureRequest, {
+      description: "  A detailed description for the requested workflow.  ",
+      title: "  Better   alerts  ",
+    })) as { id: string }
+
+    await expect(customer.query(listMyFeatureRequests, {})).resolves.toEqual([
+      {
+        body: "A detailed description for the requested workflow.",
+        createdAt: expect.any(Number),
+        id: created.id,
+        status: "new",
+        title: "Better alerts",
+        updatedAt: expect.any(Number),
+      },
+    ])
+
+    await admin.mutation(updateFeatureRequest, {
+      adminNote: "Planned after the next ingestion release.",
+      requestId: created.id,
+      status: "planned",
+    })
+    const customerRows = (await customer.query(
+      listMyFeatureRequests,
+      {},
+    )) as Array<Record<string, unknown>>
+    expect(customerRows[0]).not.toHaveProperty("adminNote")
+
+    const persisted = await t.run(
+      async (ctx) => await ctx.db.get(created.id as never),
+    )
+    expect(persisted).toMatchObject({
+      createdByUserId: bootstrap.userId,
+      workspaceId: bootstrap.workspaceId,
+    })
+  })
+
+  it("rejects invalid customer input at runtime", async () => {
+    const { customer } = await setup()
+    await expect(
+      customer.mutation(createFeatureRequest, {
+        description: "too short",
+        title: "x",
+      }),
+    ).rejects.toMatchObject({ data: { code: "INVALID_FEATURE_REQUEST" } })
+  })
+})
+
+describe("admin feature request and changelog functions", () => {
+  it("requires the exact configured admin Clerk subject and fails closed", async () => {
+    const { t } = await setup()
+    await expect(
+      t
+        .withIdentity({
+          ...adminIdentity,
+          subject: "user_other",
+          tokenIdentifier: "https://clerk.example.test|user_other",
+        })
+        .query(listFeatureRequests, {}),
+    ).rejects.toMatchObject({ data: { code: "FORBIDDEN" } })
+
+    delete process.env.ADMIN_CLERK_USER_ID
+    await expect(
+      t.withIdentity(adminIdentity).query(listFeatureRequests, {}),
+    ).rejects.toMatchObject({ data: { code: "ADMIN_NOT_CONFIGURED" } })
+  })
+
+  it("returns persisted metadata and audits every privileged mutation", async () => {
+    const { admin, customer, t } = await setup()
+    const request = (await customer.mutation(createFeatureRequest, {
+      description: "Please add a weekly summary for saved mentions.",
+      title: "Weekly saved mention summary",
+    })) as { id: string }
+
+    const updatedRequest = (await admin.mutation(updateFeatureRequest, {
+      adminNote: "Included in the next planning review.",
+      requestId: request.id,
+      status: "planned",
+    })) as Record<string, unknown>
+    expect(updatedRequest).toMatchObject({
+      adminNote: "Included in the next planning review.",
+      status: "planned",
+      user: { email: customerIdentity.email, name: customerIdentity.name },
+      workspace: { name: "Personal workspace" },
+    })
+
+    const publicationDate = Date.UTC(2026, 6, 26)
+    const created = (await admin.mutation(createChangelogEntry, {
+      body: "Initial release details.",
+      label: "  Product  ",
+      publishedAt: publicationDate,
+      slug: "initial-release",
+      summary: "Initial release summary.",
+      title: "Initial release",
+    })) as { id: string; status: string }
+    expect(created.status).toBe("draft")
+    await expect(t.query(listPublishedEntries, {})).resolves.toEqual([])
+
+    await admin.mutation(updateChangelogEntry, {
+      body: "Updated release details.",
+      entryId: created.id,
+      label: "Product",
+      publishedAt: publicationDate,
+      slug: "initial-release",
+      summary: "Updated release summary.",
+      title: "Initial release updated",
+    })
+    await admin.mutation(publishChangelogEntry, { entryId: created.id })
+
+    const publicEntries = (await t.query(listPublishedEntries, {})) as Array<
+      Record<string, unknown>
+    >
+    expect(publicEntries).toEqual([
+      {
+        body: "Updated release details.",
+        publishedAt: publicationDate,
+        slug: "initial-release",
+        summary: "Updated release summary.",
+        title: "Initial release updated",
+        updatedAt: expect.any(Number),
+      },
+    ])
+    expect(publicEntries[0]).not.toHaveProperty("createdByClerkUserId")
+    expect(publicEntries[0]).not.toHaveProperty("label")
+    expect(publicEntries[0]).not.toHaveProperty("status")
+
+    await admin.mutation(unpublishChangelogEntry, { entryId: created.id })
+    await expect(t.query(listPublishedEntries, {})).resolves.toEqual([])
+    await admin.mutation(deleteChangelogEntry, { entryId: created.id })
+
+    await expect(admin.query(listChangelogEntries, {})).resolves.toEqual([])
+    const auditEvents = await t.run(
+      async (ctx) => await ctx.db.query("auditEvents").collect(),
+    )
+    expect(auditEvents).toHaveLength(6)
+    expect(auditEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          action: "admin.feature_request.updated",
+          actorClerkUserId: adminIdentity.subject,
+          actorType: "admin",
+          outcome: "success",
+        }),
+        expect.objectContaining({ action: "admin.changelog.created" }),
+        expect.objectContaining({ action: "admin.changelog.updated" }),
+        expect.objectContaining({ action: "admin.changelog.published" }),
+        expect.objectContaining({ action: "admin.changelog.unpublished" }),
+        expect.objectContaining({ action: "admin.changelog.deleted" }),
+      ]),
+    )
+  })
+})
+
+describe("admin metrics", () => {
+  it("aggregates provider, product, billing, usage, and delivery metrics", async () => {
+    const { admin, bootstrap, t } = await setup()
+    const now = Date.now()
+    const hour = Math.floor(now / 3_600_000) * 3_600_000
+    const categories = await t.run(
+      async (ctx) => await ctx.db.query("categories").collect(),
+    )
+    const categoryId = categories[0]?._id
+
+    await t.run(async (ctx) => {
+      await ctx.db.insert("providerMetricBuckets", {
+        bucketEndAt: hour + 3_600_000,
+        bucketStartAt: hour,
+        failureCount: 1,
+        granularity: "hour",
+        inputItemCount: 4,
+        latencyMaxMs: 250,
+        latencyTotalMs: 400,
+        operation: "search",
+        outputItemCount: 3,
+        provider: "x",
+        rateLimitedCount: 1,
+        requestCount: 2,
+        retryCount: 1,
+        successCount: 1,
+        updatedAt: now,
+      })
+      for (const metric of [
+        {
+          metric: "mentions_ingested",
+          scope: "global",
+          value: 5,
+        },
+        {
+          metric: "mentions_ingested",
+          scope: "workspace",
+          value: 5,
+          workspaceId: bootstrap.workspaceId,
+        },
+        {
+          metric: "email_delivery_delivered",
+          scope: "global",
+          value: 2,
+        },
+      ]) {
+        await ctx.db.insert("systemMetricBuckets", {
+          bucketEndAt: hour + 3_600_000,
+          bucketStartAt: hour,
+          count: metric.value,
+          granularity: "hour",
+          maximum: metric.value,
+          metric: metric.metric,
+          minimum: metric.value,
+          scope: metric.scope,
+          sum: metric.value,
+          updatedAt: now,
+          value: metric.value,
+          ...(metric.workspaceId === undefined
+            ? {}
+            : { workspaceId: metric.workspaceId }),
+        })
+      }
+      await ctx.db.insert("subscriptions", {
+        entitlementStatus: "active",
+        planId: "starter",
+        workspaceId: bootstrap.workspaceId,
+      })
+      await ctx.db.insert("trackingSources", {
+        pauseReason: "usage",
+        status: "paused",
+        workspaceId: bootstrap.workspaceId,
+      })
+      await ctx.db.insert("mentions", {
+        categoryId,
+        firstSeenAt: now,
+        platform: "x",
+      })
+      await ctx.db.insert("mentions", {
+        firstSeenAt: now,
+        platform: "reddit",
+      })
+      await ctx.db.insert("categorizationJobs", { status: "completed" })
+      await ctx.db.insert("categorizationJobs", { status: "pending" })
+      await ctx.db.insert("categorizationJobs", { status: "dead" })
+    })
+
+    const result = (await admin.query(getMetricsOverview, {
+      days: 30,
+    })) as Record<string, any>
+    expect(result.stats).toEqual({
+      activeWorkspaces: 1,
+      emailsDelivered: 2,
+      mentions: 5,
+      workspaces: 1,
+    })
+    expect(result.providerHealth).toEqual([
+      {
+        averageLatencyMs: 200,
+        failureCount: 1,
+        inputItemCount: 4,
+        maxLatencyMs: 250,
+        outputItemCount: 3,
+        provider: "x",
+        rateLimitedCount: 1,
+        requestCount: 2,
+        retryCount: 1,
+        successCount: 1,
+      },
+    ])
+    expect(result.mentions).toMatchObject({
+      last30Days: 5,
+      today: 5,
+    })
+    expect(result.mentions.byPlatform).toEqual([
+      { count: 1, platform: "x" },
+      { count: 1, platform: "reddit" },
+      { count: 0, platform: "hacker_news" },
+    ])
+    expect(result.categoryBreakdown).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ count: 1 }),
+        { category: "Uncategorized", count: 1 },
+      ]),
+    )
+    expect(result.categorization).toEqual({
+      completed: 1,
+      failed: 1,
+      leased: 0,
+      pending: 1,
+      total: 3,
+    })
+    expect(result.subscriptionsByPlan[0]).toEqual({
+      activeCount: 1,
+      count: 1,
+      planId: "starter",
+    })
+    expect(result.usagePausedWorkspaces).toBe(1)
+    expect(result.digestDelivery).toMatchObject({ delivered: 2, total: 2 })
+  })
+})
+
+describe("admin account deletion controls", () => {
+  it("requires exact admin authorization and explicit retry confirmation, then audits a bounded new generation", async () => {
+    const { admin, bootstrap, t } = await setup()
+    const now = Date.now()
+    const originalId = await t.run(
+      async (ctx) =>
+        await ctx.db.insert("deletionJobs", {
+          accountUserId: bootstrap.userId,
+          accessFencedAt: now - 1_000,
+          attempts: 10,
+          billingGuardStatus: "confirmed_inactive",
+          createdAt: now - 2_000,
+          generation: 1,
+          idempotencyKey: `account:${bootstrap.userId}:1`,
+          identityClerkUserId: customerIdentity.subject,
+          kind: "account",
+          lastError: "CLERK_IDENTITY_STILL_PRESENT",
+          lastErrorCode: "CLERK_IDENTITY_STILL_PRESENT",
+          leaseVersion: 3,
+          maxAttempts: 10,
+          operationId: `account:${bootstrap.userId}:1`,
+          phase: "identity_delete",
+          requestedByUserId: bootstrap.userId,
+          resourceKey: `account:${bootstrap.userId}`,
+          scheduledAt: now - 2_000,
+          status: "dead",
+          updatedAt: now - 1_000,
+          workflowVersion: 2,
+          workspaceId: bootstrap.workspaceId,
+        }),
+    )
+
+    await expect(
+      t.withIdentity(customerIdentity).query(listDeletionJobs, {}),
+    ).rejects.toMatchObject({ data: { code: "FORBIDDEN" } })
+    await expect(
+      admin.mutation(retryDeletionJob, {
+        confirmation: "retry",
+        deletionJobId: originalId,
+      }),
+    ).rejects.toMatchObject({ data: { code: "CONFIRMATION_MISMATCH" } })
+
+    const retry = (await admin.mutation(retryDeletionJob, {
+      confirmation: "RETRY",
+      deletionJobId: originalId,
+    })) as Record<string, unknown>
+    expect(retry).toMatchObject({
+      attempts: 0,
+      generation: 2,
+      phase: "billing_check",
+      status: "pending",
+      supersedesJobId: originalId,
+      workflowVersion: 2,
+    })
+    const listed = (await admin.query(listDeletionJobs, {
+      limit: 10,
+    })) as Array<Record<string, unknown>>
+    expect(listed).toHaveLength(2)
+    const detail = (await admin.query(getDeletionJob, {
+      deletionJobId: retry.id,
+    })) as { events: Array<Record<string, unknown>> }
+    expect(detail.events).toEqual([
+      expect.objectContaining({
+        action: "admin.account_deletion.retry_created",
+        outcome: "success",
+      }),
+    ])
+  })
+
+  it("allows exact-confirmed cancellation only before quiescence and restores only its own access fence", async () => {
+    const { admin, bootstrap, t } = await setup()
+    const now = Date.now()
+    await t.run(async (ctx) => {
+      await ctx.db.patch(bootstrap.userId as never, {
+        disabledAt: now,
+        updatedAt: now,
+      })
+      await ctx.db.patch(bootstrap.workspaceId as never, {
+        deletionPendingAt: now,
+        updatedAt: now,
+      })
+    })
+    const pendingId = await t.run(
+      async (ctx) =>
+        await ctx.db.insert("deletionJobs", {
+          accountUserId: bootstrap.userId,
+          accessFencedAt: now,
+          attempts: 0,
+          billingGuardStatus: "confirmed_inactive",
+          createdAt: now,
+          generation: 1,
+          idempotencyKey: `account:${bootstrap.userId}:1`,
+          identityClerkUserId: customerIdentity.subject,
+          kind: "account",
+          leaseVersion: 0,
+          maxAttempts: 10,
+          nextAttemptAt: now,
+          operationId: `account:${bootstrap.userId}:1`,
+          phase: "billing_check",
+          requestedByUserId: bootstrap.userId,
+          resourceKey: `account:${bootstrap.userId}`,
+          scheduledAt: now,
+          status: "pending",
+          updatedAt: now,
+          workflowVersion: 2,
+          workspaceId: bootstrap.workspaceId,
+        }),
+    )
+
+    await expect(
+      admin.mutation(cancelDeletionJob, {
+        confirmation: "CANCEL",
+        deletionJobId: pendingId,
+      }),
+    ).resolves.toMatchObject({ status: "canceled" })
+    const restored = await t.run(async (ctx) => ({
+      user: await ctx.db.get(bootstrap.userId as never),
+      workspace: await ctx.db.get(bootstrap.workspaceId as never),
+    }))
+    expect(restored.user?.disabledAt).toBeUndefined()
+    expect(restored.workspace?.deletionPendingAt).toBeUndefined()
+
+    const quiescedId = await t.run(
+      async (ctx) =>
+        await ctx.db.insert("deletionJobs", {
+          accountUserId: bootstrap.userId,
+          accessFencedAt: now,
+          attempts: 1,
+          billingGuardStatus: "confirmed_inactive",
+          createdAt: now + 1,
+          generation: 2,
+          idempotencyKey: `account:${bootstrap.userId}:2`,
+          identityClerkUserId: customerIdentity.subject,
+          kind: "account",
+          leaseVersion: 1,
+          maxAttempts: 10,
+          operationId: `account:${bootstrap.userId}:2`,
+          phase: "purge",
+          purgeStage: "mentions",
+          quiescedAt: now + 1,
+          requestedByUserId: bootstrap.userId,
+          resourceKey: `account:${bootstrap.userId}`,
+          scheduledAt: now + 1,
+          status: "failed",
+          updatedAt: now + 1,
+          workflowVersion: 2,
+          workspaceId: bootstrap.workspaceId,
+        }),
+    )
+    await expect(
+      admin.mutation(cancelDeletionJob, {
+        confirmation: "CANCEL",
+        deletionJobId: quiescedId,
+      }),
+    ).rejects.toMatchObject({ data: { code: "DELETION_CANCEL_REJECTED" } })
+  })
+
+  it("keeps legacy deletion jobs review-only", async () => {
+    const { admin, bootstrap, t } = await setup()
+    const now = Date.now()
+    const legacyId = await t.run(
+      async (ctx) =>
+        await ctx.db.insert("deletionJobs", {
+          accountUserId: bootstrap.userId,
+          attempts: 10,
+          billingGuardStatus: "failed",
+          createdAt: now,
+          idempotencyKey: "legacy",
+          kind: "workspace",
+          maxAttempts: 10,
+          requestedByUserId: bootstrap.userId,
+          scheduledAt: now,
+          status: "dead",
+          updatedAt: now,
+          workspaceId: bootstrap.workspaceId,
+        }),
+    )
+    await expect(
+      admin.mutation(retryDeletionJob, {
+        confirmation: "RETRY",
+        deletionJobId: legacyId,
+      }),
+    ).rejects.toMatchObject({ data: { code: "DELETION_RETRY_REJECTED" } })
+    await expect(
+      admin.mutation(cancelDeletionJob, {
+        confirmation: "CANCEL",
+        deletionJobId: legacyId,
+      }),
+    ).rejects.toMatchObject({ data: { code: "DELETION_CANCEL_REJECTED" } })
+  })
+})

@@ -1,0 +1,62 @@
+{
+  "now": 1785067200000,
+  "intervals": [
+    { "sourceType": "x", "planId": "starter", "expectedMs": 300000 },
+    { "sourceType": "x", "planId": "scale", "expectedMs": 300000 },
+    { "sourceType": "hacker_news", "planId": "growth", "expectedMs": 600000 },
+    {
+      "sourceType": "reddit_posts",
+      "planId": "starter",
+      "expectedMs": 21600000
+    },
+    {
+      "sourceType": "reddit_comments",
+      "planId": "growth",
+      "expectedMs": 7200000
+    },
+    { "sourceType": "reddit_posts", "planId": "scale", "expectedMs": 3600000 }
+  ],
+  "stagger": [
+    {
+      "sourceKey": "source-a",
+      "leaseVersion": 1,
+      "expectedInitialRunAt": 1785067235608,
+      "expectedDispatchDelayMs": 8509
+    },
+    {
+      "sourceKey": "source-b",
+      "leaseVersion": 7,
+      "expectedInitialRunAt": 1785067228465,
+      "expectedDispatchDelayMs": 26706
+    },
+    {
+      "sourceKey": "tracking-42",
+      "leaseVersion": 3,
+      "expectedInitialRunAt": 1785067232855,
+      "expectedDispatchDelayMs": 20003
+    }
+  ],
+  "backoff": [
+    {
+      "sourceKey": "source-a",
+      "consecutiveFailures": 1,
+      "expectedDelayMs": 28320
+    },
+    {
+      "sourceKey": "source-a",
+      "consecutiveFailures": 2,
+      "expectedDelayMs": 56288
+    },
+    {
+      "sourceKey": "source-b",
+      "consecutiveFailures": 4,
+      "retryAfterMs": 180000,
+      "expectedDelayMs": 267744
+    },
+    {
+      "sourceKey": "source-c",
+      "consecutiveFailures": 20,
+      "expectedDelayMs": 20131457
+    }
+  ]
+}

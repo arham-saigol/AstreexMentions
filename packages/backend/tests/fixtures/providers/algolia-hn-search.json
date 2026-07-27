@@ -1,0 +1,42 @@
+{
+  "exhaustive": {
+    "nbHits": true,
+    "typo": true
+  },
+  "hits": [
+    {
+      "_tags": ["story", "author_alice", "story_49000002"],
+      "author": "alice",
+      "created_at": "2026-07-26T10:30:00Z",
+      "created_at_i": 1785061800,
+      "num_comments": 8,
+      "objectID": "49000002",
+      "points": 31,
+      "story_id": 49000002,
+      "story_text": "Astreex finds questions.<p>It also tracks praise &amp; complaints.</p>",
+      "title": "Show HN: Astreex mention monitoring",
+      "updated_at": "2026-07-26T10:45:00Z"
+    },
+    {
+      "_tags": ["comment", "author_bob", "story_48999999"],
+      "author": "bob",
+      "comment_text": "I would use this for support.<p>Does it handle Reddit?</p>",
+      "created_at": "2026-07-26T09:00:00Z",
+      "created_at_i": 1785056400,
+      "objectID": "49000001",
+      "parent_id": 48999999,
+      "story_id": 48999999,
+      "story_title": "Tools for customer research",
+      "story_url": "https://example.com/customer-research",
+      "updated_at": "2026-07-26T09:05:00Z"
+    }
+  ],
+  "hitsPerPage": 2,
+  "nbHits": 4,
+  "nbPages": 2,
+  "page": 0,
+  "params": "query=astreex&tags=(story,comment)&page=0&hitsPerPage=2",
+  "processingTimeMS": 1,
+  "query": "astreex",
+  "serverTimeMS": 1
+}

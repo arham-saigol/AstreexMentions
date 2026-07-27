@@ -1,0 +1,31 @@
+{
+  "listingType": "search-comments",
+  "items": [
+    {
+      "id": "mno123",
+      "fullname": "t1_mno123",
+      "subreddit": "SaaS",
+      "subredditPrefixed": "r/SaaS",
+      "author": "customer_voice",
+      "parentPostTitle": "How do you monitor brand mentions?",
+      "parentPostAuthor": "founder_one",
+      "parentPostUrl": "https://www.reddit.com/r/SaaS/comments/1abcde/how_do_you_monitor_brand_mentions/",
+      "permalink": "/r/SaaS/comments/1abcde/how_do_you_monitor_brand_mentions/mno123/",
+      "contextUrl": "https://www.reddit.com/r/SaaS/comments/1abcde/how_do_you_monitor_brand_mentions/mno123/?context=3",
+      "fullCommentsUrl": "https://www.reddit.com/r/SaaS/comments/1abcde/how_do_you_monitor_brand_mentions/",
+      "createdAt": "2026-07-25T16:00:00Z",
+      "score": 15,
+      "replyCount": 3,
+      "bodyText": "Astreex looks useful, but does it support Reddit comments?",
+      "bodyHtml": "<div class=\"md\"><p>Astreex looks useful, but does it support Reddit comments?</p></div>",
+      "distinguished": null,
+      "stickied": false
+    }
+  ],
+  "itemCount": 1,
+  "nextPageUrl": null,
+  "pagesRequested": 1,
+  "pagesScraped": 1,
+  "responseStatus": 200,
+  "scrapedAt": "2026-07-25T16:01:00Z"
+}

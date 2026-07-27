@@ -1,0 +1,7 @@
+{
+  "extends": "@astreex/config/tsconfig.library.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "node_modules/.cache/tsconfig.tsbuildinfo"
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx", "vitest.config.ts"]
+}

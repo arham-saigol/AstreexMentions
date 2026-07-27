@@ -1,0 +1,41 @@
+{
+  "localDate": "2026-07-25",
+  "mentions": [
+    {
+      "body": "Astreex made monitoring much easier for our team.",
+      "canonicalUrl": "https://www.reddit.com/r/startups/comments/fixture/astreex/",
+      "categorySystemKey": "praise",
+      "commentCount": 4,
+      "engagementScore": 22,
+      "id": "reddit:fixture-1",
+      "platform": "reddit",
+      "publishedAt": 1784980800000,
+      "title": "Astreex monitoring feedback"
+    },
+    {
+      "body": "How do I configure daily reports?",
+      "canonicalUrl": "https://news.ycombinator.com/item?id=42000001",
+      "categorySystemKey": "question",
+      "commentCount": 2,
+      "engagementScore": 11,
+      "id": "hacker_news:42000001",
+      "platform": "hacker_news",
+      "pointCount": 5,
+      "publishedAt": 1784977200000,
+      "title": "Daily report configuration"
+    },
+    {
+      "body": "The latest export still fails for me.",
+      "canonicalUrl": "https://x.com/fixture/status/1000000000000000001",
+      "categorySystemKey": "bug",
+      "engagementScore": 8,
+      "id": "x:1000000000000000001",
+      "likeCount": 2,
+      "platform": "x",
+      "publishedAt": 1784973600000,
+      "quoteCount": 0,
+      "replyCount": 2,
+      "repostCount": 0
+    }
+  ]
+}

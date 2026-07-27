@@ -1,0 +1,28 @@
+{
+  "name": "@astreex/email",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.tsx"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "lint": "eslint src --max-warnings=0",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@astreex/domain": "workspace:*",
+    "react-email": "^6.9.0",
+    "react": "^19.2.0"
+  },
+  "devDependencies": {
+    "@astreex/config": "workspace:*",
+    "@types/react": "^19.0.0",
+    "eslint": "^9.0.0",
+    "typescript": "^6.0.0",
+    "vitest": "^4.0.0"
+  }
+}

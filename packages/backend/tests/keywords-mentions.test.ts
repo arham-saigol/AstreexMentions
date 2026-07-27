@@ -1,0 +1,811 @@
+import { readFileSync } from "node:fs"
+
+import { convexTest } from "convex-test"
+import {
+  defineSchema,
+  defineTable,
+  makeFunctionReference,
+  type UserIdentity,
+} from "convex/server"
+import { type GenericId, v } from "convex/values"
+import { describe, expect, it } from "vitest"
+
+import {
+  desiredTrackingState,
+  keywordCapacity,
+  MAX_DRAFT_KEYWORDS,
+  normalizeKeywordPhrase,
+  normalizeKeywordPlatforms,
+  trackingSourceTypesForPlatforms,
+} from "../convex/keywords"
+import {
+  compareMentionRecords,
+  normalizeMentionSearchQuery,
+  safeCanonicalUrl,
+} from "../convex/mentions"
+
+const modules = {
+  "./_generated/server.ts": async () => ({}),
+  "./keywords.ts": async () => await import("../convex/keywords"),
+  "./mentions.ts": async () => await import("../convex/mentions"),
+}
+
+const testSchema = defineSchema({
+  categories: defineTable(v.any()),
+  keywords: defineTable(v.any())
+    .index("by_workspace_and_normalized_phrase", [
+      "workspaceId",
+      "normalizedPhrase",
+    ])
+    .index("by_workspace_and_updated_at", ["workspaceId", "updatedAt"]),
+  mentionKeywordMatches: defineTable(v.any())
+    .index("by_keyword_and_mention", ["keywordId", "mentionId"])
+    .index("by_workspace_and_mention", ["workspaceId", "mentionId"]),
+  mentions: defineTable(v.any()).index("by_workspace_and_published_at", [
+    "workspaceId",
+    "publishedAt",
+  ]),
+  subscriptions: defineTable(v.any()).index("by_workspace", ["workspaceId"]),
+  trackingSources: defineTable(v.any())
+    .index("by_keyword_and_source_type", ["keywordId", "sourceType"])
+    .index("by_workspace_status_and_created_at", [
+      "workspaceId",
+      "status",
+      "createdAt",
+    ]),
+  usageCycles: defineTable(v.any()).index(
+    "by_workspace_status_and_period_end",
+    ["workspaceId", "status", "periodEndAt"],
+  ),
+  users: defineTable(v.any()).index("by_token_identifier", ["tokenIdentifier"]),
+  workspaceMembers: defineTable(v.any()).index("by_workspace_and_user", [
+    "workspaceId",
+    "userId",
+  ]),
+  workspaces: defineTable(v.any()),
+})
+
+function createBackendTest() {
+  return convexTest({ modules, schema: testSchema })
+}
+
+type BackendTest = ReturnType<typeof createBackendTest>
+type UserId = GenericId<"users">
+type WorkspaceId = GenericId<"workspaces">
+type KeywordId = GenericId<"keywords">
+type MentionId = GenericId<"mentions">
+
+const createKeywordReference = makeFunctionReference<
+  "mutation",
+  { phrase: string; platforms: Array<"x" | "reddit" | "hacker_news"> },
+  unknown
+>("keywords:createKeyword")
+const listKeywordsReference = makeFunctionReference<"query", object, unknown>(
+  "keywords:listKeywords",
+)
+const getKeywordSummaryReference = makeFunctionReference<
+  "query",
+  object,
+  unknown
+>("keywords:getKeywordSummary")
+const updateKeywordReference = makeFunctionReference<
+  "mutation",
+  {
+    keywordId: KeywordId
+    phrase: string
+    platforms: Array<"x" | "reddit" | "hacker_news">
+  },
+  unknown
+>("keywords:updateKeyword")
+const pauseKeywordReference = makeFunctionReference<
+  "mutation",
+  { keywordId: KeywordId },
+  unknown
+>("keywords:pauseKeyword")
+const resumeKeywordReference = makeFunctionReference<
+  "mutation",
+  { keywordId: KeywordId },
+  unknown
+>("keywords:resumeKeyword")
+const deleteKeywordReference = makeFunctionReference<
+  "mutation",
+  { keywordId: KeywordId },
+  unknown
+>("keywords:deleteKeyword")
+const listMentionsReference = makeFunctionReference<
+  "query",
+  {
+    cursor?: string
+    filters?: {
+      categoryIds?: GenericId<"categories">[]
+      keywordIds?: KeywordId[]
+      mentionStatuses?: Array<"new" | "saved" | "dismissed">
+      platforms?: Array<"x" | "reddit" | "hacker_news">
+      publishedAfter?: number
+      publishedBefore?: number
+    }
+    limit?: number
+    query?: string
+    sort?: "newest" | "oldest" | "most_engaged"
+  },
+  unknown
+>("mentions:listMentions")
+const getMentionReference = makeFunctionReference<
+  "query",
+  { mentionId: MentionId },
+  unknown
+>("mentions:getMention")
+const updateMentionStatusReference = makeFunctionReference<
+  "mutation",
+  { mentionId: MentionId; status: "new" | "saved" | "dismissed" },
+  unknown
+>("mentions:updateMentionStatus")
+
+type SeededCustomer = {
+  client: ReturnType<BackendTest["withIdentity"]>
+  identity: UserIdentity
+  subscriptionId?: GenericId<"subscriptions">
+  userId: UserId
+  workspaceId: WorkspaceId
+}
+
+async function seedCustomer(
+  t: BackendTest,
+  input: {
+    keywordLimit?: number
+    mentionLimit?: number
+    mentionsUsed?: number
+    paid?: boolean
+    suffix: string
+  },
+): Promise<SeededCustomer> {
+  const now = Date.now()
+  const identity = {
+    issuer: "https://clerk.example.test",
+    subject: `clerk_${input.suffix}`,
+    tokenIdentifier: `https://clerk.example.test|clerk_${input.suffix}`,
+  } as UserIdentity
+
+  const seeded = await t.run(async (ctx) => {
+    const userId = (await ctx.db.insert("users", {
+      clerkUserId: identity.subject,
+      createdAt: now - 10_000,
+      tokenIdentifier: identity.tokenIdentifier,
+      updatedAt: now - 10_000,
+    })) as UserId
+    const workspaceId = (await ctx.db.insert("workspaces", {
+      createdAt: now - 9_000,
+      kind: "personal",
+      name: `Workspace ${input.suffix}`,
+      normalizedName: `workspace ${input.suffix}`,
+      ownerUserId: userId,
+      updatedAt: now - 9_000,
+    })) as WorkspaceId
+    await ctx.db.patch("users", userId, { personalWorkspaceId: workspaceId })
+    await ctx.db.insert("workspaceMembers", {
+      createdAt: now - 8_000,
+      role: "owner",
+      updatedAt: now - 8_000,
+      userId,
+      workspaceId,
+    })
+
+    let subscriptionId: GenericId<"subscriptions"> | undefined
+    if (input.paid) {
+      subscriptionId = (await ctx.db.insert("subscriptions", {
+        cancelAtPeriodEnd: false,
+        createdAt: now - 7_000,
+        currentPeriodEnd: now + 30 * 24 * 60 * 60 * 1_000,
+        currentPeriodStart: now - 60_000,
+        entitlementStatus: "active",
+        lastSyncedAt: now - 1_000,
+        planId: "growth",
+        provider: "creem",
+        providerCustomerId: `customer_${input.suffix}`,
+        providerSubscriptionId: `subscription_${input.suffix}`,
+        status: "active",
+        updatedAt: now - 1_000,
+        workspaceId,
+      })) as GenericId<"subscriptions">
+      const keywordLimit = input.keywordLimit ?? 6
+      const mentionLimit = input.mentionLimit ?? 100
+      await ctx.db.insert("usageCycles", {
+        createdAt: now - 6_000,
+        idempotencyKey: `usage_${input.suffix}`,
+        keywordLimit,
+        mentionLimit,
+        mentionsUsed: input.mentionsUsed ?? 0,
+        periodEndAt: now + 30 * 24 * 60 * 60 * 1_000,
+        periodStartAt: now - 60_000,
+        planSnapshot: {
+          keywordLimit,
+          mentionLimit,
+          planId: "growth",
+        },
+        status: "open",
+        subscriptionId,
+        updatedAt: now - 6_000,
+        workspaceId,
+      })
+    }
+
+    return { subscriptionId, userId, workspaceId }
+  })
+
+  return {
+    client: t.withIdentity(identity),
+    identity,
+    ...seeded,
+  }
+}
+
+function keywordResult(value: unknown) {
+  return value as {
+    id: KeywordId
+    phrase: string
+    platforms: string[]
+    sources: Array<{
+      intervalMs: number
+      pauseReason: string | null
+      sourceType: string
+      status: string
+    }>
+    status: string
+  }
+}
+
+function mentionPage(value: unknown) {
+  return value as {
+    isDone: boolean
+    items: Array<Record<string, unknown> & { id: MentionId; status: string }>
+    monitoringState: string
+    nextCursor: string | null
+    totalCount: number
+  }
+}
+
+describe("keyword model", () => {
+  it("normalizes phrases, deduplicates platforms, and expands Reddit separately", () => {
+    expect(normalizeKeywordPhrase("  Astreex   Monitor ")).toBe(
+      "astreex monitor",
+    )
+    expect(normalizeKeywordPlatforms(["reddit", "x", "reddit"])).toEqual([
+      "x",
+      "reddit",
+    ])
+    expect(trackingSourceTypesForPlatforms(["x", "reddit"])).toEqual([
+      "x",
+      "reddit_posts",
+      "reddit_comments",
+    ])
+  })
+
+  it("uses ten draft slots and the paid usage-cycle keyword limit", () => {
+    expect(MAX_DRAFT_KEYWORDS).toBe(10)
+    expect(keywordCapacity({ configuredCount: 9 })).toEqual({
+      canCreate: true,
+      limit: 10,
+      limitReached: false,
+      remaining: 1,
+    })
+    expect(
+      keywordCapacity({ configuredCount: 3, paidKeywordLimit: 3 }),
+    ).toEqual({
+      canCreate: false,
+      limit: 3,
+      limitReached: true,
+      remaining: 0,
+    })
+  })
+
+  it("pauses sources for user, unpaid, and exhausted-usage states", () => {
+    expect(
+      desiredTrackingState({
+        hasActiveSubscription: true,
+        hasCurrentUsage: true,
+        keywordStatus: "paused",
+        usageExhausted: false,
+      }),
+    ).toEqual({ pauseReason: "user", status: "paused" })
+    expect(
+      desiredTrackingState({
+        hasActiveSubscription: false,
+        hasCurrentUsage: false,
+        keywordStatus: "active",
+        usageExhausted: false,
+      }),
+    ).toEqual({ pauseReason: "paid", status: "paused" })
+    expect(
+      desiredTrackingState({
+        hasActiveSubscription: true,
+        hasCurrentUsage: true,
+        keywordStatus: "active",
+        usageExhausted: true,
+      }),
+    ).toEqual({ pauseReason: "usage", status: "paused" })
+  })
+})
+
+describe("keyword Convex functions", () => {
+  it("creates one unpaid keyword with independent scheduled Reddit sources", async () => {
+    const t = createBackendTest()
+    const customer = await seedCustomer(t, { paid: false, suffix: "draft" })
+
+    const created = keywordResult(
+      await customer.client.mutation(createKeywordReference, {
+        phrase: "  Astreex   Monitor ",
+        platforms: ["reddit", "x", "reddit"],
+      }),
+    )
+    expect(created).toMatchObject({
+      phrase: "Astreex Monitor",
+      platforms: ["x", "reddit"],
+      status: "active",
+    })
+    expect(created.sources.map((source) => source.sourceType)).toEqual([
+      "x",
+      "reddit_posts",
+      "reddit_comments",
+    ])
+    expect(created.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ pauseReason: "paid", status: "paused" }),
+      ]),
+    )
+    expect(created.sources.every((source) => source.intervalMs > 0)).toBe(true)
+
+    const rows = await t.run(async (ctx) => ({
+      keywords: await ctx.db.query("keywords").collect(),
+      sources: await ctx.db.query("trackingSources").collect(),
+    }))
+    expect(rows.keywords).toHaveLength(1)
+    expect(rows.sources).toHaveLength(3)
+    expect(rows.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          backoffMs: 0,
+          checkpointVersion: 0,
+          leaseVersion: 0,
+          sourceType: "reddit_posts",
+          totalFailures: 0,
+        }),
+        expect.objectContaining({ sourceType: "reddit_comments" }),
+      ]),
+    )
+
+    await expect(
+      customer.client.mutation(createKeywordReference, {
+        phrase: "astreex monitor",
+        platforms: ["hacker_news"],
+      }),
+    ).rejects.toMatchObject({ data: { code: "KEYWORD_ALREADY_EXISTS" } })
+
+    const summary = (await customer.client.query(
+      getKeywordSummaryReference,
+      {},
+    )) as Record<string, unknown>
+    expect(summary).toMatchObject({
+      canCreate: true,
+      count: 1,
+      limit: 10,
+      monitoringState: "unpaid",
+      remaining: 9,
+    })
+  })
+
+  it("enforces the ten-keyword draft ceiling without an active subscription", async () => {
+    const t = createBackendTest()
+    const customer = await seedCustomer(t, {
+      paid: false,
+      suffix: "draft-limit",
+    })
+
+    for (let index = 0; index < MAX_DRAFT_KEYWORDS; index += 1) {
+      await customer.client.mutation(createKeywordReference, {
+        phrase: `Draft keyword ${index}`,
+        platforms: ["x"],
+      })
+    }
+    await expect(
+      customer.client.mutation(createKeywordReference, {
+        phrase: "Draft keyword over limit",
+        platforms: ["x"],
+      }),
+    ).rejects.toMatchObject({ data: { code: "KEYWORD_LIMIT_REACHED" } })
+  })
+
+  it("counts one keyword across platforms against the active usage-cycle limit", async () => {
+    const t = createBackendTest()
+    const customer = await seedCustomer(t, {
+      keywordLimit: 1,
+      paid: true,
+      suffix: "paid-limit",
+    })
+
+    const created = keywordResult(
+      await customer.client.mutation(createKeywordReference, {
+        phrase: "One configured keyword",
+        platforms: ["x", "reddit", "hacker_news"],
+      }),
+    )
+    expect(created.sources).toHaveLength(4)
+    expect(created.sources.every((source) => source.status === "active")).toBe(
+      true,
+    )
+
+    await expect(
+      customer.client.mutation(createKeywordReference, {
+        phrase: "Second keyword",
+        platforms: ["x"],
+      }),
+    ).rejects.toMatchObject({ data: { code: "KEYWORD_LIMIT_REACHED" } })
+    expect(
+      (await customer.client.query(listKeywordsReference, {})) as unknown[],
+    ).toHaveLength(1)
+  })
+
+  it("keeps keyword status and source status reversible before soft deletion", async () => {
+    const t = createBackendTest()
+    const customer = await seedCustomer(t, { paid: true, suffix: "lifecycle" })
+    const created = keywordResult(
+      await customer.client.mutation(createKeywordReference, {
+        phrase: "Lifecycle",
+        platforms: ["reddit"],
+      }),
+    )
+
+    await expect(
+      customer.client.mutation(updateKeywordReference, {
+        keywordId: created.id,
+        phrase: "Lifecycle",
+        platforms: [],
+      }),
+    ).rejects.toMatchObject({
+      data: { code: "INVALID_KEYWORD_PLATFORMS" },
+    })
+
+    const updated = keywordResult(
+      await customer.client.mutation(updateKeywordReference, {
+        keywordId: created.id,
+        phrase: "Updated lifecycle",
+        platforms: ["x", "hacker_news"],
+      }),
+    )
+    expect(updated.sources.map((source) => source.sourceType)).toEqual([
+      "x",
+      "hacker_news",
+    ])
+
+    const paused = keywordResult(
+      await customer.client.mutation(pauseKeywordReference, {
+        keywordId: created.id,
+      }),
+    )
+    expect(paused.status).toBe("paused")
+    expect(
+      paused.sources.every((source) => source.pauseReason === "user"),
+    ).toBe(true)
+
+    const resumed = keywordResult(
+      await customer.client.mutation(resumeKeywordReference, {
+        keywordId: created.id,
+      }),
+    )
+    expect(resumed.status).toBe("active")
+    expect(resumed.sources.every((source) => source.status === "active")).toBe(
+      true,
+    )
+
+    await customer.client.mutation(deleteKeywordReference, {
+      keywordId: created.id,
+    })
+    expect(
+      (await customer.client.query(listKeywordsReference, {})) as unknown[],
+    ).toEqual([])
+    const persisted = await t.run(async (ctx) => ({
+      keyword: await ctx.db.get("keywords", created.id),
+      sources: await ctx.db.query("trackingSources").collect(),
+    }))
+    expect(persisted.keyword).toMatchObject({ status: "deleted" })
+    expect(
+      persisted.sources.every((source) => source.status === "deleted"),
+    ).toBe(true)
+  })
+})
+
+describe("mention model", () => {
+  it("accepts only safe canonical HTTP(S) URLs", () => {
+    expect(safeCanonicalUrl("https://example.com/post/1")).toBe(
+      "https://example.com/post/1",
+    )
+    expect(() => safeCanonicalUrl("javascript:alert(1)")).toThrow(/HTTP\(S\)/)
+    expect(() =>
+      safeCanonicalUrl("https://user:secret@example.com/post"),
+    ).toThrow(/credentials/)
+  })
+
+  it("normalizes search and deterministically sorts every supported order", () => {
+    expect(normalizeMentionSearchQuery("  Great   PRODUCT ")).toBe(
+      "great product",
+    )
+    const records = [
+      { _id: "a", engagementScore: 2, publishedAt: 20 },
+      { _id: "b", engagementScore: 9, publishedAt: 10 },
+      { _id: "c", engagementScore: 9, publishedAt: 30 },
+    ]
+    expect(
+      [...records]
+        .sort((left, right) => compareMentionRecords(left, right, "newest"))
+        .map((record) => record._id),
+    ).toEqual(["c", "a", "b"])
+    expect(
+      [...records]
+        .sort((left, right) => compareMentionRecords(left, right, "oldest"))
+        .map((record) => record._id),
+    ).toEqual(["b", "a", "c"])
+    expect(
+      [...records]
+        .sort((left, right) =>
+          compareMentionRecords(left, right, "most_engaged"),
+        )
+        .map((record) => record._id),
+    ).toEqual(["c", "b", "a"])
+  })
+})
+
+async function seedMentions(t: BackendTest, customer: SeededCustomer) {
+  const now = Date.now()
+  return await t.run(async (ctx) => {
+    const keywordId = (await ctx.db.insert("keywords", {
+      createdAt: now - 10_000,
+      createdByUserId: customer.userId,
+      normalizedPhrase: "astreex",
+      phrase: "Astreex",
+      platforms: ["x"],
+      status: "active",
+      updatedAt: now - 10_000,
+      workspaceId: customer.workspaceId,
+    })) as KeywordId
+    await ctx.db.insert("trackingSources", {
+      createdAt: now - 9_000,
+      keywordId,
+      sourceType: "x",
+      status: "active",
+      updatedAt: now - 9_000,
+      workspaceId: customer.workspaceId,
+    })
+    const categoryId = (await ctx.db.insert("categories", {
+      colorToken: "green",
+      createdAt: now - 8_000,
+      description: "Positive feedback",
+      enabled: true,
+      isSystem: true,
+      name: "Praise",
+      normalizedName: "praise",
+      sortOrder: 2,
+      systemKey: "praise",
+      updatedAt: now - 8_000,
+      workspaceId: customer.workspaceId,
+    })) as GenericId<"categories">
+
+    const definitions = [
+      {
+        body: "Astreex is a great product for tracking conversations.",
+        engagementScore: 4,
+        platform: "x",
+        publishedAt: now - 1_000,
+        status: "new",
+        title: "Fresh mention",
+      },
+      {
+        body: "A detailed Astreex review with strong engagement.",
+        engagementScore: 20,
+        platform: "reddit",
+        publishedAt: now - 2_000,
+        status: "saved",
+        title: "Popular review",
+      },
+      {
+        body: "Astreex appeared in this Hacker News discussion.",
+        engagementScore: 8,
+        platform: "hacker_news",
+        publishedAt: now - 3_000,
+        status: "dismissed",
+        title: "HN discussion",
+      },
+    ] as const
+    const mentionIds: MentionId[] = []
+    for (const [index, definition] of definitions.entries()) {
+      const mentionId = (await ctx.db.insert("mentions", {
+        analysisState: "completed",
+        authorDisplayName: `Author ${index}`,
+        body: definition.body,
+        canonicalUrl: `https://example.com/mention/${index}`,
+        categoryId: index === 2 ? undefined : categoryId,
+        commentCount: index,
+        contentType: index === 0 ? "tweet" : "post",
+        engagementScore: definition.engagementScore,
+        firstSeenAt: now - 4_000,
+        lastMatchedAt: now - 4_000,
+        platform: definition.platform,
+        publishedAt: definition.publishedAt,
+        searchText: `${definition.title} ${definition.body}`.toLocaleLowerCase(
+          "en",
+        ),
+        status: definition.status,
+        title: definition.title,
+        updatedAt: now - 4_000,
+        workspaceId: customer.workspaceId,
+      })) as MentionId
+      mentionIds.push(mentionId)
+      if (index < 2) {
+        await ctx.db.insert("mentionKeywordMatches", {
+          createdAt: now - 3_000,
+          keywordId,
+          matchKind: "phrase",
+          mentionId,
+          workspaceId: customer.workspaceId,
+        })
+      }
+    }
+
+    return { categoryId, keywordId, mentionIds }
+  })
+}
+
+describe("mention Convex functions", () => {
+  it("returns joined canonical data with search, filters, sorts, and cursor pages", async () => {
+    const t = createBackendTest()
+    const customer = await seedCustomer(t, { paid: true, suffix: "mentions" })
+    const seeded = await seedMentions(t, customer)
+
+    const firstPage = mentionPage(
+      await customer.client.query(listMentionsReference, {
+        filters: { keywordIds: [seeded.keywordId] },
+        limit: 1,
+        query: "astreex",
+        sort: "most_engaged",
+      }),
+    )
+    expect(firstPage).toMatchObject({
+      isDone: false,
+      monitoringState: "active",
+      totalCount: 2,
+    })
+    expect(firstPage.items).toHaveLength(1)
+    expect(firstPage.items[0]).toMatchObject({
+      body: expect.any(String),
+      canonicalUrl: "https://example.com/mention/1",
+      category: expect.objectContaining({ name: "Praise" }),
+      matchedKeywords: [{ id: seeded.keywordId, phrase: "Astreex" }],
+      status: "saved",
+    })
+    expect(firstPage.items[0]).not.toHaveProperty("searchText")
+    expect(firstPage.items[0]).not.toHaveProperty("providerItemId")
+    expect(firstPage.items[0]).not.toHaveProperty("trackingSourceId")
+
+    const secondPage = mentionPage(
+      await customer.client.query(listMentionsReference, {
+        cursor: firstPage.nextCursor ?? undefined,
+        filters: { keywordIds: [seeded.keywordId] },
+        limit: 1,
+        query: "astreex",
+        sort: "most_engaged",
+      }),
+    )
+    expect(secondPage).toMatchObject({ isDone: true, totalCount: 2 })
+    expect(secondPage.items[0]?.id).toBe(seeded.mentionIds[0])
+
+    const filtered = mentionPage(
+      await customer.client.query(listMentionsReference, {
+        filters: {
+          categoryIds: [seeded.categoryId],
+          mentionStatuses: ["new"],
+          platforms: ["x"],
+        },
+        sort: "oldest",
+      }),
+    )
+    expect(filtered.items.map((item) => item.id)).toEqual([
+      seeded.mentionIds[0],
+    ])
+  })
+
+  it("binds cursors and mention ids to the authenticated workspace", async () => {
+    const t = createBackendTest()
+    const firstCustomer = await seedCustomer(t, {
+      paid: true,
+      suffix: "tenant-one",
+    })
+    const secondCustomer = await seedCustomer(t, {
+      paid: true,
+      suffix: "tenant-two",
+    })
+    const seeded = await seedMentions(t, firstCustomer)
+    const page = mentionPage(
+      await firstCustomer.client.query(listMentionsReference, {
+        limit: 1,
+        sort: "newest",
+      }),
+    )
+    expect(page.nextCursor).not.toBeNull()
+
+    await expect(
+      secondCustomer.client.query(listMentionsReference, {
+        cursor: page.nextCursor ?? undefined,
+        limit: 1,
+        sort: "newest",
+      }),
+    ).rejects.toMatchObject({ data: { code: "INVALID_CURSOR" } })
+    await expect(
+      secondCustomer.client.query(getMentionReference, {
+        mentionId: seeded.mentionIds[0]!,
+      }),
+    ).rejects.toMatchObject({ data: { code: "MENTION_NOT_FOUND" } })
+  })
+
+  it("allows every mention status to be reversed without side effects", async () => {
+    const t = createBackendTest()
+    const customer = await seedCustomer(t, {
+      paid: true,
+      suffix: "status-reversible",
+    })
+    const seeded = await seedMentions(t, customer)
+    const mentionId = seeded.mentionIds[0]!
+
+    for (const status of ["saved", "new", "dismissed", "new"] as const) {
+      const updated = (await customer.client.mutation(
+        updateMentionStatusReference,
+        { mentionId, status },
+      )) as { status: string }
+      expect(updated.status).toBe(status)
+    }
+    const counts = await t.run(async (ctx) => ({
+      matches: (await ctx.db.query("mentionKeywordMatches").collect()).length,
+      mentions: (await ctx.db.query("mentions").collect()).length,
+      sources: (await ctx.db.query("trackingSources").collect()).length,
+    }))
+    expect(counts).toEqual({ matches: 2, mentions: 3, sources: 1 })
+  })
+})
+
+describe("frontend function inventory", () => {
+  const keywordSource = readFileSync(
+    new URL("../convex/keywords.ts", import.meta.url),
+    "utf8",
+  )
+  const mentionSource = readFileSync(
+    new URL("../convex/mentions.ts", import.meta.url),
+    "utf8",
+  )
+
+  it("exports every exact customer function through authenticated wrappers", () => {
+    for (const name of [
+      "listKeywords",
+      "getKeywordSummary",
+      "createKeyword",
+      "updateKeyword",
+      "pauseKeyword",
+      "resumeKeyword",
+      "deleteKeyword",
+    ]) {
+      expect(keywordSource).toContain(`export const ${name}`)
+    }
+    for (const name of ["listMentions", "getMention", "updateMentionStatus"]) {
+      expect(mentionSource).toContain(`export const ${name}`)
+    }
+    expect(keywordSource).toContain("authenticatedQuery")
+    expect(keywordSource).toContain("authenticatedMutation")
+    expect(mentionSource).toContain("authenticatedQuery")
+    expect(mentionSource).toContain("authenticatedMutation")
+  })
+
+  it("does not mutate saved views or provider telemetry", () => {
+    for (const source of [keywordSource, mentionSource]) {
+      expect(source).not.toContain('db.insert("savedViews"')
+      expect(source).not.toContain('db.patch("savedViews"')
+      expect(source).not.toContain('db.insert("providerRuns"')
+      expect(source).not.toContain('db.insert("providerMetricBuckets"')
+    }
+  })
+})

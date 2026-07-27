@@ -1,0 +1,40 @@
+{
+  "tweets": [
+    {
+      "id": "1900000000000000002",
+      "text": "Astreex catches customer questions quickly.",
+      "createdAt": "2026-07-26T12:30:00Z",
+      "likeCount": 12,
+      "retweetCount": 4,
+      "replyCount": 3,
+      "quoteCount": 2,
+      "viewCount": 900,
+      "bookmarkCount": 5,
+      "author": {
+        "id": "440000000000000001",
+        "username": "astreex_user",
+        "name": "Astreex User",
+        "verified": false
+      }
+    },
+    {
+      "id": "1900000000000000001",
+      "text": "An older Astreex mention.",
+      "createdAt": "2026-07-26T11:00:00Z",
+      "likeCount": 1,
+      "retweetCount": 0,
+      "replyCount": 0,
+      "quoteCount": 0,
+      "viewCount": 20,
+      "bookmarkCount": 0,
+      "author": {
+        "id": "440000000000000002",
+        "username": "older_user",
+        "name": "Older User",
+        "verified": false
+      }
+    }
+  ],
+  "has_next_page": true,
+  "next_cursor": "cursor-page-2"
+}

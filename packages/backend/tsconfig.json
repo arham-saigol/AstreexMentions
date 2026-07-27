@@ -1,0 +1,8 @@
+{
+  "extends": "@astreex/config/tsconfig.convex.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "tsBuildInfoFile": "node_modules/.cache/tsconfig.tsbuildinfo"
+  },
+  "include": ["convex/**/*.ts", "vitest.config.ts"]
+}

@@ -1,0 +1,14 @@
+{
+  "extends": "@astreex/config/tsconfig.next.json",
+  "compilerOptions": {
+    "ignoreDeprecations": "6.0",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./*"],
+      "recharts": ["./node_modules/@astreex/ui/node_modules/recharts"]
+    },
+    "tsBuildInfoFile": "node_modules/.cache/tsconfig.tsbuildinfo"
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"]
+}

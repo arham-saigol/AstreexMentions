@@ -1,0 +1,868 @@
+import type { UserIdentity } from "convex/server"
+import type { GenericId } from "convex/values"
+import { ConvexError, v } from "convex/values"
+
+import { effectiveEntitlementStatus } from "./billing/lifecycle"
+import { authenticatedMutation, authenticatedQuery } from "./lib/authorization"
+import { indexEquals, type MutationCtx, type QueryCtx } from "./server"
+import { resolveCurrentCustomer } from "./users"
+
+const DEFAULT_PAGE_SIZE = 12
+const MAX_PAGE_SIZE = 50
+const MAX_FILTER_VALUES = 50
+const MAX_SEARCH_LENGTH = 200
+const MAX_CURSOR_LENGTH = 20_000
+const CURSOR_VERSION = 1
+
+const platformValidator = v.union(
+  v.literal("x"),
+  v.literal("reddit"),
+  v.literal("hacker_news"),
+)
+const mentionStatusValidator = v.union(
+  v.literal("new"),
+  v.literal("saved"),
+  v.literal("dismissed"),
+)
+const mentionSortValidator = v.union(
+  v.literal("newest"),
+  v.literal("oldest"),
+  v.literal("most_engaged"),
+)
+
+const mentionFiltersValidator = v.object({
+  categoryIds: v.optional(v.array(v.id("categories"))),
+  keywordIds: v.optional(v.array(v.id("keywords"))),
+  mentionStatuses: v.optional(v.array(mentionStatusValidator)),
+  platforms: v.optional(v.array(platformValidator)),
+  publishedAfter: v.optional(v.number()),
+  publishedBefore: v.optional(v.number()),
+})
+
+const categoryResultValidator = v.object({
+  colorToken: v.optional(v.string()),
+  id: v.id("categories"),
+  name: v.string(),
+  systemKey: v.optional(v.string()),
+})
+
+const matchedKeywordResultValidator = v.object({
+  id: v.id("keywords"),
+  phrase: v.string(),
+})
+
+const mentionResultValidator = v.object({
+  authorDisplayName: v.optional(v.string()),
+  authorHandle: v.optional(v.string()),
+  body: v.string(),
+  canonicalUrl: v.string(),
+  category: v.union(categoryResultValidator, v.null()),
+  commentCount: v.optional(v.number()),
+  engagementScore: v.number(),
+  id: v.id("mentions"),
+  likeCount: v.optional(v.number()),
+  matchedKeywords: v.array(matchedKeywordResultValidator),
+  platform: platformValidator,
+  pointCount: v.optional(v.number()),
+  publishedAt: v.number(),
+  replyCount: v.optional(v.number()),
+  repostCount: v.optional(v.number()),
+  status: mentionStatusValidator,
+  title: v.optional(v.string()),
+})
+
+const mentionMonitoringStateValidator = v.union(
+  v.literal("active"),
+  v.literal("paused"),
+  v.literal("setup_required"),
+  v.literal("usage_limited"),
+)
+
+const mentionPageResultValidator = v.object({
+  isDone: v.boolean(),
+  items: v.array(mentionResultValidator),
+  monitoringState: mentionMonitoringStateValidator,
+  nextCursor: v.union(v.string(), v.null()),
+  totalCount: v.number(),
+})
+
+type UserId = GenericId<"users">
+type WorkspaceId = GenericId<"workspaces">
+type MentionId = GenericId<"mentions">
+type KeywordId = GenericId<"keywords">
+type CategoryId = GenericId<"categories">
+type Platform = "x" | "reddit" | "hacker_news"
+type MentionStatus = "new" | "saved" | "dismissed"
+type MentionSort = "newest" | "oldest" | "most_engaged"
+type MentionMonitoringState =
+  "active" | "paused" | "setup_required" | "usage_limited"
+type GenericRow = Record<string, unknown> & { _id: GenericId<string> }
+
+type CustomerDatabaseCtx = {
+  db: QueryCtx["db"] | MutationCtx["db"]
+  identity: UserIdentity
+}
+
+type CurrentCustomer = {
+  userId: UserId
+  workspaceId: WorkspaceId
+}
+
+type NormalizedMentionFilters = {
+  categoryIds: CategoryId[]
+  keywordIds: KeywordId[]
+  mentionStatuses: MentionStatus[]
+  platforms: Platform[]
+  publishedAfter?: number | undefined
+  publishedBefore?: number | undefined
+}
+
+type MentionCursor = {
+  engagementScore: number
+  fingerprint: string
+  mentionId: string
+  publishedAt: number
+  sort: MentionSort
+  version: typeof CURSOR_VERSION
+  workspaceId: string
+}
+
+export type SortableMention = {
+  _id: string
+  engagementScore: number
+  publishedAt: number
+}
+
+function compareText(left: string, right: string): number {
+  return left === right ? 0 : left < right ? -1 : 1
+}
+
+function mentionError(code: string, message: string): never {
+  throw new ConvexError({ code, message })
+}
+
+async function requireCurrentCustomer(
+  ctx: CustomerDatabaseCtx,
+): Promise<CurrentCustomer> {
+  const { viewer, workspace } = await resolveCurrentCustomer(ctx, ctx.identity)
+  return { userId: viewer.id, workspaceId: workspace.id }
+}
+
+function normalizedIdArray<Id extends GenericId<string>>(
+  values: readonly Id[] | undefined,
+  label: string,
+): Id[] {
+  if (!values) {
+    return []
+  }
+  if (values.length > MAX_FILTER_VALUES) {
+    mentionError(
+      "INVALID_MENTION_FILTERS",
+      `${label} supports at most ${MAX_FILTER_VALUES} values`,
+    )
+  }
+  return [...new Set(values)]
+}
+
+function normalizedEnumArray<Value extends string>(
+  values: readonly Value[] | undefined,
+  label: string,
+): Value[] {
+  if (!values) {
+    return []
+  }
+  if (values.length > MAX_FILTER_VALUES) {
+    mentionError(
+      "INVALID_MENTION_FILTERS",
+      `${label} supports at most ${MAX_FILTER_VALUES} values`,
+    )
+  }
+  return [...new Set(values)]
+}
+
+function validatedTimestamp(
+  value: number | undefined,
+  label: string,
+): number | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+  if (!Number.isSafeInteger(value) || value < 0) {
+    mentionError(
+      "INVALID_MENTION_FILTERS",
+      `${label} must be a non-negative timestamp`,
+    )
+  }
+  return value
+}
+
+function normalizeMentionFilters(
+  filters:
+    | {
+        categoryIds?: CategoryId[] | undefined
+        keywordIds?: KeywordId[] | undefined
+        mentionStatuses?: MentionStatus[] | undefined
+        platforms?: Platform[] | undefined
+        publishedAfter?: number | undefined
+        publishedBefore?: number | undefined
+      }
+    | undefined,
+): NormalizedMentionFilters {
+  const publishedAfter = validatedTimestamp(
+    filters?.publishedAfter,
+    "publishedAfter",
+  )
+  const publishedBefore = validatedTimestamp(
+    filters?.publishedBefore,
+    "publishedBefore",
+  )
+  if (
+    publishedAfter !== undefined &&
+    publishedBefore !== undefined &&
+    publishedAfter > publishedBefore
+  ) {
+    mentionError(
+      "INVALID_MENTION_FILTERS",
+      "publishedAfter cannot be later than publishedBefore",
+    )
+  }
+
+  return {
+    categoryIds: normalizedIdArray(filters?.categoryIds, "categoryIds"),
+    keywordIds: normalizedIdArray(filters?.keywordIds, "keywordIds"),
+    mentionStatuses: normalizedEnumArray(
+      filters?.mentionStatuses,
+      "mentionStatuses",
+    ),
+    platforms: normalizedEnumArray(filters?.platforms, "platforms"),
+    ...(publishedAfter === undefined ? {} : { publishedAfter }),
+    ...(publishedBefore === undefined ? {} : { publishedBefore }),
+  }
+}
+
+export function normalizeMentionSearchQuery(value: string | undefined): string {
+  const normalized = value?.trim().replace(/\s+/g, " ") ?? ""
+  if (normalized.length > MAX_SEARCH_LENGTH) {
+    mentionError(
+      "INVALID_MENTION_QUERY",
+      `Mention search is limited to ${MAX_SEARCH_LENGTH} characters`,
+    )
+  }
+  return normalized.toLocaleLowerCase("en")
+}
+
+function validatedLimit(value: number | undefined): number {
+  const limit = value ?? DEFAULT_PAGE_SIZE
+  if (!Number.isInteger(limit) || limit < 1 || limit > MAX_PAGE_SIZE) {
+    mentionError(
+      "INVALID_PAGE_SIZE",
+      `Mention page size must be between 1 and ${MAX_PAGE_SIZE}`,
+    )
+  }
+  return limit
+}
+
+export function compareMentionRecords(
+  left: SortableMention,
+  right: SortableMention,
+  sort: MentionSort,
+): number {
+  if (sort === "oldest") {
+    return (
+      left.publishedAt - right.publishedAt || compareText(left._id, right._id)
+    )
+  }
+  if (sort === "most_engaged") {
+    return (
+      right.engagementScore - left.engagementScore ||
+      right.publishedAt - left.publishedAt ||
+      compareText(right._id, left._id)
+    )
+  }
+  return (
+    right.publishedAt - left.publishedAt || compareText(right._id, left._id)
+  )
+}
+
+export function safeCanonicalUrl(value: string): string {
+  const canonicalUrl = value.trim()
+  let parsed: URL
+  try {
+    parsed = new URL(canonicalUrl)
+  } catch {
+    throw new TypeError("Mention canonicalUrl must be an absolute URL")
+  }
+  if (
+    (parsed.protocol !== "https:" && parsed.protocol !== "http:") ||
+    parsed.username.length > 0 ||
+    parsed.password.length > 0
+  ) {
+    throw new TypeError(
+      "Mention canonicalUrl must be an HTTP(S) URL without credentials",
+    )
+  }
+  return parsed.toString()
+}
+
+function requestFingerprint(input: {
+  filters: NormalizedMentionFilters
+  query: string
+  sort: MentionSort
+}): string {
+  return JSON.stringify({
+    filters: {
+      categoryIds: input.filters.categoryIds.map(String).sort(),
+      keywordIds: input.filters.keywordIds.map(String).sort(),
+      mentionStatuses: [...input.filters.mentionStatuses].sort(),
+      platforms: [...input.filters.platforms].sort(),
+      ...(input.filters.publishedAfter === undefined
+        ? {}
+        : { publishedAfter: input.filters.publishedAfter }),
+      ...(input.filters.publishedBefore === undefined
+        ? {}
+        : { publishedBefore: input.filters.publishedBefore }),
+    },
+    query: input.query,
+    sort: input.sort,
+  })
+}
+
+function encodeMentionCursor(cursor: MentionCursor): string {
+  return `m${CURSOR_VERSION}:${encodeURIComponent(JSON.stringify(cursor))}`
+}
+
+function decodeMentionCursor(
+  value: string,
+  expected: {
+    fingerprint: string
+    sort: MentionSort
+    workspaceId: WorkspaceId
+  },
+): MentionCursor {
+  if (value.length === 0 || value.length > MAX_CURSOR_LENGTH) {
+    mentionError("INVALID_CURSOR", "Mention cursor is invalid")
+  }
+
+  let parsed: unknown
+  try {
+    const prefix = `m${CURSOR_VERSION}:`
+    if (!value.startsWith(prefix)) {
+      mentionError("INVALID_CURSOR", "Mention cursor is invalid")
+    }
+    parsed = JSON.parse(
+      decodeURIComponent(value.slice(prefix.length)),
+    ) as unknown
+  } catch (error) {
+    if (error instanceof ConvexError) {
+      throw error
+    }
+    mentionError("INVALID_CURSOR", "Mention cursor is invalid")
+  }
+
+  if (
+    typeof parsed !== "object" ||
+    parsed === null ||
+    !("version" in parsed) ||
+    parsed.version !== CURSOR_VERSION ||
+    !("workspaceId" in parsed) ||
+    parsed.workspaceId !== String(expected.workspaceId) ||
+    !("fingerprint" in parsed) ||
+    parsed.fingerprint !== expected.fingerprint ||
+    !("sort" in parsed) ||
+    parsed.sort !== expected.sort ||
+    !("mentionId" in parsed) ||
+    typeof parsed.mentionId !== "string" ||
+    parsed.mentionId.length === 0 ||
+    !("publishedAt" in parsed) ||
+    typeof parsed.publishedAt !== "number" ||
+    !Number.isSafeInteger(parsed.publishedAt) ||
+    parsed.publishedAt < 0 ||
+    !("engagementScore" in parsed) ||
+    typeof parsed.engagementScore !== "number" ||
+    !Number.isFinite(parsed.engagementScore)
+  ) {
+    mentionError(
+      "INVALID_CURSOR",
+      "Mention cursor does not belong to this workspace and filter set",
+    )
+  }
+
+  return parsed as MentionCursor
+}
+
+function isAfterCursor(row: GenericRow, cursor: MentionCursor): boolean {
+  const rowId = String(row._id)
+  const publishedAt = row.publishedAt as number
+  const engagementScore = row.engagementScore as number
+
+  if (cursor.sort === "oldest") {
+    return (
+      publishedAt > cursor.publishedAt ||
+      (publishedAt === cursor.publishedAt && rowId > cursor.mentionId)
+    )
+  }
+  if (cursor.sort === "most_engaged") {
+    return (
+      engagementScore < cursor.engagementScore ||
+      (engagementScore === cursor.engagementScore &&
+        (publishedAt < cursor.publishedAt ||
+          (publishedAt === cursor.publishedAt && rowId < cursor.mentionId)))
+    )
+  }
+  return (
+    publishedAt < cursor.publishedAt ||
+    (publishedAt === cursor.publishedAt && rowId < cursor.mentionId)
+  )
+}
+
+async function assertAuthorizedFilterIds(
+  ctx: Pick<CustomerDatabaseCtx, "db">,
+  workspaceId: WorkspaceId,
+  filters: NormalizedMentionFilters,
+): Promise<void> {
+  for (const categoryId of filters.categoryIds) {
+    const category = await ctx.db.get("categories", categoryId)
+    if (!category || category.workspaceId !== workspaceId) {
+      mentionError("FILTER_NOT_FOUND", "Mention filter not found")
+    }
+  }
+  for (const keywordId of filters.keywordIds) {
+    const keyword = await ctx.db.get("keywords", keywordId)
+    if (!keyword || keyword.workspaceId !== workspaceId) {
+      mentionError("FILTER_NOT_FOUND", "Mention filter not found")
+    }
+  }
+}
+
+async function matchedMentionIds(
+  ctx: Pick<CustomerDatabaseCtx, "db">,
+  workspaceId: WorkspaceId,
+  keywordIds: readonly KeywordId[],
+): Promise<Set<string> | null> {
+  if (keywordIds.length === 0) {
+    return null
+  }
+
+  const mentionIds = new Set<string>()
+  for (const keywordId of keywordIds) {
+    const matches = (await ctx.db
+      .query("mentionKeywordMatches")
+      .withIndex("by_keyword_and_mention", (q) => q.eq("keywordId", keywordId))
+      .collect()) as GenericRow[]
+    for (const match of matches) {
+      if (match.workspaceId === workspaceId) {
+        mentionIds.add(String(match.mentionId))
+      }
+    }
+  }
+  return mentionIds
+}
+
+function mentionMatchesFilters(
+  row: GenericRow,
+  input: {
+    filters: NormalizedMentionFilters
+    keywordMatchedMentionIds: Set<string> | null
+    query: string
+  },
+): boolean {
+  const { filters } = input
+  if (
+    filters.categoryIds.length > 0 &&
+    !filters.categoryIds.includes(row.categoryId as CategoryId)
+  ) {
+    return false
+  }
+  if (
+    filters.keywordIds.length > 0 &&
+    !input.keywordMatchedMentionIds?.has(String(row._id))
+  ) {
+    return false
+  }
+  if (
+    filters.mentionStatuses.length > 0 &&
+    !filters.mentionStatuses.includes(row.status as MentionStatus)
+  ) {
+    return false
+  }
+  if (
+    filters.platforms.length > 0 &&
+    !filters.platforms.includes(row.platform as Platform)
+  ) {
+    return false
+  }
+  if (
+    filters.publishedAfter !== undefined &&
+    (row.publishedAt as number) < filters.publishedAfter
+  ) {
+    return false
+  }
+  if (
+    filters.publishedBefore !== undefined &&
+    (row.publishedAt as number) > filters.publishedBefore
+  ) {
+    return false
+  }
+  if (
+    input.query.length > 0 &&
+    !(row.searchText as string).toLocaleLowerCase("en").includes(input.query)
+  ) {
+    return false
+  }
+  return true
+}
+
+async function mentionForWorkspace(
+  ctx: Pick<CustomerDatabaseCtx, "db">,
+  workspaceId: WorkspaceId,
+  mentionId: MentionId,
+): Promise<GenericRow> {
+  const mention = (await ctx.db.get("mentions", mentionId)) as GenericRow | null
+  if (!mention || mention.workspaceId !== workspaceId) {
+    mentionError("MENTION_NOT_FOUND", "Mention not found")
+  }
+  return mention
+}
+
+async function formatCategory(
+  ctx: Pick<CustomerDatabaseCtx, "db">,
+  mention: GenericRow,
+): Promise<{
+  colorToken?: string
+  id: CategoryId
+  name: string
+  systemKey?: string
+} | null> {
+  if (mention.categoryId === undefined) {
+    return null
+  }
+  const category = await ctx.db.get(
+    "categories",
+    mention.categoryId as CategoryId,
+  )
+  if (!category || category.workspaceId !== mention.workspaceId) {
+    return null
+  }
+
+  return {
+    id: category._id as CategoryId,
+    name: category.name as string,
+    ...(category.colorToken === undefined
+      ? {}
+      : { colorToken: category.colorToken as string }),
+    ...(category.systemKey === undefined
+      ? {}
+      : { systemKey: category.systemKey as string }),
+  }
+}
+
+async function formatMatchedKeywords(
+  ctx: Pick<CustomerDatabaseCtx, "db">,
+  mention: GenericRow,
+): Promise<Array<{ id: KeywordId; phrase: string }>> {
+  const matches = (await ctx.db
+    .query("mentionKeywordMatches")
+    .withIndex("by_workspace_and_mention", (q) =>
+      indexEquals(
+        q,
+        ["workspaceId", mention.workspaceId],
+        ["mentionId", mention._id],
+      ),
+    )
+    .collect()) as GenericRow[]
+  const keywords = new Map<string, { id: KeywordId; phrase: string }>()
+
+  for (const match of matches) {
+    const keyword = await ctx.db.get("keywords", match.keywordId as KeywordId)
+    if (keyword && keyword.workspaceId === mention.workspaceId) {
+      keywords.set(String(keyword._id), {
+        id: keyword._id as KeywordId,
+        phrase: keyword.phrase as string,
+      })
+    }
+  }
+
+  return [...keywords.values()].sort((left, right) =>
+    left.phrase.localeCompare(right.phrase),
+  )
+}
+
+async function formatMention(
+  ctx: Pick<CustomerDatabaseCtx, "db">,
+  mention: GenericRow,
+) {
+  let canonicalUrl: string
+  try {
+    canonicalUrl = safeCanonicalUrl(mention.canonicalUrl as string)
+  } catch {
+    mentionError(
+      "INVALID_MENTION_DATA",
+      "Mention canonical data is not safe to return",
+    )
+  }
+
+  const [category, matchedKeywords] = await Promise.all([
+    formatCategory(ctx, mention),
+    formatMatchedKeywords(ctx, mention),
+  ])
+
+  return {
+    body: mention.body as string,
+    canonicalUrl,
+    category,
+    engagementScore: mention.engagementScore as number,
+    id: mention._id as MentionId,
+    matchedKeywords,
+    platform: mention.platform as Platform,
+    publishedAt: mention.publishedAt as number,
+    status: mention.status as MentionStatus,
+    ...(mention.authorDisplayName === undefined
+      ? {}
+      : { authorDisplayName: mention.authorDisplayName as string }),
+    ...(mention.authorHandle === undefined
+      ? {}
+      : { authorHandle: mention.authorHandle as string }),
+    ...(mention.commentCount === undefined
+      ? {}
+      : { commentCount: mention.commentCount as number }),
+    ...(mention.likeCount === undefined
+      ? {}
+      : { likeCount: mention.likeCount as number }),
+    ...(mention.pointCount === undefined
+      ? {}
+      : { pointCount: mention.pointCount as number }),
+    ...(mention.replyCount === undefined
+      ? {}
+      : { replyCount: mention.replyCount as number }),
+    ...(mention.repostCount === undefined
+      ? {}
+      : { repostCount: mention.repostCount as number }),
+    ...(mention.title === undefined ? {} : { title: mention.title as string }),
+  }
+}
+
+async function readMentionMonitoringState(
+  ctx: Pick<CustomerDatabaseCtx, "db">,
+  workspaceId: WorkspaceId,
+  now: number,
+): Promise<MentionMonitoringState> {
+  const keywords = (await ctx.db
+    .query("keywords")
+    .withIndex("by_workspace_and_updated_at", (q) =>
+      q.eq("workspaceId", workspaceId),
+    )
+    .collect()) as GenericRow[]
+  const configuredKeywords = keywords.filter(
+    (keyword) =>
+      keyword.status !== "deleted" && keyword.deletedAt === undefined,
+  )
+  if (configuredKeywords.length === 0) {
+    return "setup_required"
+  }
+
+  const subscriptions = (await ctx.db
+    .query("subscriptions")
+    .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+    .collect()) as GenericRow[]
+  const activeSubscription = subscriptions
+    .sort(
+      (left, right) =>
+        (right.lastSyncedAt as number) - (left.lastSyncedAt as number),
+    )
+    .find(
+      (subscription) =>
+        effectiveEntitlementStatus(
+          {
+            currentPeriodEnd: subscription.currentPeriodEnd as number,
+            entitlementStatus: subscription.entitlementStatus as
+              "active" | "inactive",
+            status: subscription.status as string,
+          },
+          now,
+        ) === "active",
+    )
+  if (!activeSubscription) {
+    return "paused"
+  }
+
+  const cycles = (await ctx.db
+    .query("usageCycles")
+    .withIndex("by_workspace_status_and_period_end", (q) =>
+      indexEquals(q, ["workspaceId", workspaceId], ["status", "open"]),
+    )
+    .collect()) as GenericRow[]
+  const usageCycle = cycles
+    .filter(
+      (cycle) =>
+        (cycle.periodStartAt as number) <= now &&
+        (cycle.periodEndAt as number) > now &&
+        (cycle.subscriptionId === activeSubscription._id ||
+          (cycle.subscriptionId === undefined &&
+            (cycle.planSnapshot as { planId?: unknown } | undefined)?.planId ===
+              activeSubscription.planId)),
+    )
+    .sort(
+      (left, right) =>
+        (right.periodStartAt as number) - (left.periodStartAt as number),
+    )[0]
+  if (
+    !usageCycle ||
+    (usageCycle.mentionsUsed as number) >= (usageCycle.mentionLimit as number)
+  ) {
+    return "usage_limited"
+  }
+
+  const activeKeywordIds = new Set(
+    configuredKeywords
+      .filter((keyword) => keyword.status === "active")
+      .map((keyword) => String(keyword._id)),
+  )
+  if (activeKeywordIds.size === 0) {
+    return "paused"
+  }
+  const activeSources = (await ctx.db
+    .query("trackingSources")
+    .withIndex("by_workspace_status_and_created_at", (q) =>
+      indexEquals(q, ["workspaceId", workspaceId], ["status", "active"]),
+    )
+    .collect()) as GenericRow[]
+  return activeSources.some(
+    (source) =>
+      source.deletedAt === undefined &&
+      activeKeywordIds.has(String(source.keywordId)),
+  )
+    ? "active"
+    : "paused"
+}
+
+export const listMentions = authenticatedQuery({
+  args: {
+    cursor: v.optional(v.string()),
+    filters: v.optional(mentionFiltersValidator),
+    limit: v.optional(v.number()),
+    query: v.optional(v.string()),
+    sort: v.optional(mentionSortValidator),
+  },
+  returns: mentionPageResultValidator,
+  handler: async (ctx, args) => {
+    const customer = await requireCurrentCustomer(ctx)
+    const filters = normalizeMentionFilters(args.filters)
+    const query = normalizeMentionSearchQuery(args.query)
+    const sort = args.sort ?? "newest"
+    const limit = validatedLimit(args.limit)
+    const fingerprint = requestFingerprint({ filters, query, sort })
+    const cursor =
+      args.cursor === undefined
+        ? null
+        : decodeMentionCursor(args.cursor, {
+            fingerprint,
+            sort,
+            workspaceId: customer.workspaceId,
+          })
+
+    await assertAuthorizedFilterIds(ctx, customer.workspaceId, filters)
+    const keywordMatchedMentionIds = await matchedMentionIds(
+      ctx,
+      customer.workspaceId,
+      filters.keywordIds,
+    )
+    const rows = (await ctx.db
+      .query("mentions")
+      .withIndex("by_workspace_and_published_at", (q) =>
+        q.eq("workspaceId", customer.workspaceId),
+      )
+      .collect()) as GenericRow[]
+    const filtered = rows
+      .filter((row) =>
+        mentionMatchesFilters(row, {
+          filters,
+          keywordMatchedMentionIds,
+          query,
+        }),
+      )
+      .sort((left, right) =>
+        compareMentionRecords(
+          {
+            _id: String(left._id),
+            engagementScore: left.engagementScore as number,
+            publishedAt: left.publishedAt as number,
+          },
+          {
+            _id: String(right._id),
+            engagementScore: right.engagementScore as number,
+            publishedAt: right.publishedAt as number,
+          },
+          sort,
+        ),
+      )
+    const pageCandidates = cursor
+      ? filtered.filter((row) => isAfterCursor(row, cursor))
+      : filtered
+    const pageRows = pageCandidates.slice(0, limit)
+    const hasMore = pageCandidates.length > pageRows.length
+    const lastRow = pageRows.at(-1)
+    const nextCursor =
+      hasMore && lastRow
+        ? encodeMentionCursor({
+            engagementScore: lastRow.engagementScore as number,
+            fingerprint,
+            mentionId: String(lastRow._id),
+            publishedAt: lastRow.publishedAt as number,
+            sort,
+            version: CURSOR_VERSION,
+            workspaceId: String(customer.workspaceId),
+          })
+        : null
+    const [items, monitoringState] = await Promise.all([
+      Promise.all(
+        pageRows.map(async (mention) => await formatMention(ctx, mention)),
+      ),
+      readMentionMonitoringState(ctx, customer.workspaceId, Date.now()),
+    ])
+
+    return {
+      isDone: nextCursor === null,
+      items,
+      monitoringState,
+      nextCursor,
+      totalCount: filtered.length,
+    }
+  },
+})
+
+export const getMention = authenticatedQuery({
+  args: { mentionId: v.id("mentions") },
+  returns: mentionResultValidator,
+  handler: async (ctx, args) => {
+    const customer = await requireCurrentCustomer(ctx)
+    const mention = await mentionForWorkspace(
+      ctx,
+      customer.workspaceId,
+      args.mentionId as MentionId,
+    )
+    return await formatMention(ctx, mention)
+  },
+})
+
+export const updateMentionStatus = authenticatedMutation({
+  args: {
+    mentionId: v.id("mentions"),
+    status: mentionStatusValidator,
+  },
+  returns: mentionResultValidator,
+  handler: async (ctx, args) => {
+    const customer = await requireCurrentCustomer(ctx)
+    const mentionId = args.mentionId as MentionId
+    await mentionForWorkspace(ctx, customer.workspaceId, mentionId)
+    await ctx.db.patch("mentions", mentionId, {
+      status: args.status,
+      updatedAt: Date.now(),
+    })
+    const mention = await mentionForWorkspace(
+      ctx,
+      customer.workspaceId,
+      mentionId,
+    )
+    return await formatMention(ctx, mention)
+  },
+})

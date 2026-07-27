@@ -1,0 +1,29 @@
+{
+  "name": "@astreex/config",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "files": [
+    "*.json",
+    "eslint/*.mjs"
+  ],
+  "exports": {
+    "./tsconfig.base.json": "./tsconfig.base.json",
+    "./tsconfig.next.json": "./tsconfig.next.json",
+    "./tsconfig.library.json": "./tsconfig.library.json",
+    "./tsconfig.convex.json": "./tsconfig.convex.json",
+    "./eslint/base": "./eslint/base.mjs",
+    "./eslint/next": "./eslint/next.mjs"
+  },
+  "dependencies": {
+    "@eslint/js": "^9.0.0",
+    "eslint-config-next": "^16.2.0",
+    "eslint-config-prettier": "^10.0.0",
+    "globals": "^16.0.0",
+    "typescript-eslint": "^8.0.0"
+  },
+  "peerDependencies": {
+    "eslint": "^9.0.0",
+    "typescript": ">=5.7.0 <6.1.0"
+  }
+}

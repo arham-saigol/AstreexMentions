@@ -1,0 +1,35 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# builds
+.next/
+out/
+dist/
+.turbo/
+coverage/
+playwright-report/
+test-results/
+
+# Convex
+.convex/
+
+# environment
+.env
+.env.*
+!.env.example
+
+# tooling
+*.tsbuildinfo
+.eslintcache
+.vercel/
+
+# operating systems and editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# logs
+*.log
+pnpm-debug.log*

@@ -1,0 +1,178 @@
+import { v } from "convex/values"
+
+import { MAX_INGESTION_CHUNK_SIZE } from "../ingestion/contracts"
+import {
+  createAlgoliaHackerNewsAdapter,
+  createFetchLayerRedditAdapter,
+  createXquikAdapter,
+  ProviderAdapterError,
+  type ProviderSearchResult,
+} from "../integrations/providers"
+import { env, internalAction } from "../server"
+import { readProviderRuntimeConfiguration } from "./config"
+import { ProviderResultContractError } from "./contracts"
+import {
+  applyTrackingProviderPageReference,
+  failTrackingProviderRunReference,
+  loadTrackingExecutionContextReference,
+  releaseIneligibleTrackingLeaseReference,
+  startTrackingProviderRunReference,
+  type TrackingExecutionContext,
+} from "./internal"
+
+function safeFailure(error: unknown): {
+  code: string
+  message: string
+  retryAfterMs?: number | undefined
+  retryable: boolean
+} {
+  if (error instanceof ProviderAdapterError) {
+    return {
+      code: error.code,
+      message: error.message,
+      retryAfterMs: error.retryAfterMs,
+      retryable: error.retryable,
+    }
+  }
+  if (error instanceof ProviderResultContractError) {
+    return {
+      code: "invalid_normalized_result",
+      message: "Normalized provider result failed validation",
+      retryable: true,
+    }
+  }
+  return {
+    code: "provider_execution_failed",
+    message: "Provider execution failed",
+    retryable: true,
+  }
+}
+
+async function searchProvider(
+  context: Extract<TrackingExecutionContext, { state: "ready" }>,
+  configuration: Extract<
+    ReturnType<typeof readProviderRuntimeConfiguration>,
+    { state: "configured" }
+  >,
+): Promise<ProviderSearchResult> {
+  switch (context.sourceType) {
+    case "x": {
+      const adapter = createXquikAdapter({
+        apiKey: configuration.apiKey,
+        timeoutMs: configuration.timeoutMs,
+      })
+      if (adapter.state === "provider_unconfigured") {
+        throw new TypeError("Xquik configuration changed before execution")
+      }
+      return await adapter.search({
+        cursor: context.cursor,
+        limit: MAX_INGESTION_CHUNK_SIZE,
+        q: context.providerQuery,
+        queryType: "Latest",
+      })
+    }
+    case "reddit_posts":
+    case "reddit_comments": {
+      const adapter = createFetchLayerRedditAdapter({
+        apiKey: configuration.apiKey,
+        timeoutMs: configuration.timeoutMs,
+      })
+      if (adapter.state === "provider_unconfigured") {
+        throw new TypeError("FetchLayer configuration changed before execution")
+      }
+      const input = {
+        limit: MAX_INGESTION_CHUNK_SIZE,
+        pages: 1,
+        query: context.providerQuery,
+        sort: "new" as const,
+      }
+      return context.sourceType === "reddit_posts"
+        ? await adapter.searchPosts(input)
+        : await adapter.searchComments(input)
+    }
+    case "hacker_news": {
+      const adapter = createAlgoliaHackerNewsAdapter({
+        timeoutMs: configuration.timeoutMs,
+      })
+      const startSeconds = Math.ceil(context.windowStartAt / 1_000)
+      const endSeconds = Math.floor(context.windowEndAt / 1_000)
+      return await adapter.search({
+        hitsPerPage: MAX_INGESTION_CHUNK_SIZE,
+        numericFilters: `created_at_i>=${startSeconds},created_at_i<=${endSeconds}`,
+        page: context.page ?? 0,
+        query: context.providerQuery,
+        tags: "(story,comment)",
+      })
+    }
+  }
+}
+
+export const executeTrackingSource = internalAction({
+  args: {
+    leaseExpiresAt: v.number(),
+    leaseToken: v.string(),
+    leaseVersion: v.number(),
+    trackingSourceId: v.id("trackingSources"),
+  },
+  handler: async (ctx, args) => {
+    const context = await ctx.runQuery(
+      loadTrackingExecutionContextReference,
+      args,
+    )
+    if (context.state === "stale_lease") {
+      return { state: "stale_lease" as const }
+    }
+    if (context.state !== "ready") {
+      await ctx.runMutation(releaseIneligibleTrackingLeaseReference, {
+        ...args,
+        reason: context.state,
+      })
+      return { state: context.state }
+    }
+
+    const configuration = readProviderRuntimeConfiguration(
+      env,
+      context.sourceType,
+    )
+    if (configuration.state === "provider_unconfigured") {
+      await ctx.runMutation(releaseIneligibleTrackingLeaseReference, {
+        ...args,
+        reason: "provider_unconfigured",
+      })
+      return configuration
+    }
+
+    const start = (await ctx.runMutation(
+      startTrackingProviderRunReference,
+      args,
+    )) as { state: "duplicate" | "stale_lease" | "started" }
+    if (start.state !== "started") {
+      return start
+    }
+
+    const startedAt = Date.now()
+    let providerDurationMs = 0
+    try {
+      const result = await searchProvider(context, configuration)
+      providerDurationMs = Math.max(0, Date.now() - startedAt)
+      return await ctx.runMutation(applyTrackingProviderPageReference, {
+        ...args,
+        durationMs: providerDurationMs,
+        resultJson: JSON.stringify(result),
+      })
+    } catch (error) {
+      providerDurationMs = Math.max(0, Date.now() - startedAt)
+      const failure = safeFailure(error)
+      return await ctx.runMutation(failTrackingProviderRunReference, {
+        ...args,
+        durationMs: providerDurationMs,
+        errorCode: failure.code,
+        errorMessage: failure.message,
+        retryable: failure.retryable,
+        ...(failure.retryAfterMs === undefined
+          ? {}
+          : { retryAfterMs: failure.retryAfterMs }),
+      })
+    }
+  },
+})
