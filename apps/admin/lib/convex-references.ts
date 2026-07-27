@@ -44,7 +44,7 @@ export const adminConvex = {
   >("admin:updateFeatureRequest"),
   listChangelogEntries: makeFunctionReference<
     "query",
-    { status?: ChangelogStatus },
+    { cursor?: string; status?: ChangelogStatus },
     unknown
   >("admin:listChangelogEntries"),
   createChangelogEntry: makeFunctionReference<

@@ -896,6 +896,7 @@ export default defineSchema({
     ])
     .index("by_published_at", ["publishedAt"])
     .index("by_status_and_updated_at", ["status", "updatedAt"])
+    .index("by_updated_at", ["updatedAt"])
     .index("by_created_at", ["createdAt"]),
 
   providerRuns: defineTable({

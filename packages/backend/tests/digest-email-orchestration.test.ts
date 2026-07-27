@@ -347,6 +347,19 @@ describe("Convex digest and email boundaries", () => {
     expect(emailSource).not.toContain("fetch(")
   })
 
+  it("selects only live categories for digest render context", () => {
+    const digestSource = source("digest/internal.ts")
+    const renderContextSource = digestSource.slice(
+      digestSource.indexOf("export const loadDailyDigestRenderContext"),
+      digestSource.indexOf("export const enqueueRenderedDailyDigest"),
+    )
+    expect(renderContextSource).toContain(
+      '"by_workspace_deleted_enabled_and_sort_order"',
+    )
+    expect(renderContextSource).toContain('["deletedAt", undefined]')
+    expect(renderContextSource).not.toContain('"by_workspace_and_sort_order"')
+  })
+
   it("deduplicates Svix ids and records delivery metrics after verification", () => {
     const httpSource = source("email/resendHttp.ts")
     const internalSource = source("email/webhookInternal.ts")

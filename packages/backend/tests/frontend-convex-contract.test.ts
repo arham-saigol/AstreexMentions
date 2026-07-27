@@ -33,7 +33,7 @@ const FRONTEND_ARGUMENT_KEYS = {
   "admin:deleteChangelogEntry": ["entryId"],
   "admin:getDeletionJob": ["deletionJobId"],
   "admin:getMetricsOverview": ["days"],
-  "admin:listChangelogEntries": ["status"],
+  "admin:listChangelogEntries": ["cursor", "status"],
   "admin:listFeatureRequests": ["cursor", "limit", "sort", "status"],
   "admin:listDeletionJobs": ["limit", "status"],
   "admin:publishChangelogEntry": ["entryId"],
@@ -239,6 +239,19 @@ describe("frontend Convex contract and public authorization inventory", () => {
   })
 
   it("derives customer tenants, exact-checks admins, and verifies providers", () => {
+    const publicChangelogSource = readFileSync(
+      fileURLToPath(
+        new URL("../../../apps/web/lib/changelog.ts", import.meta.url),
+      ),
+      "utf8",
+    )
+    expect(publicChangelogSource).toContain(
+      "title: z.string().trim().min(1).max(160)",
+    )
+    expect(publicChangelogSource).not.toContain(
+      "title: z.string().trim().min(1).max(140)",
+    )
+
     const authorizationSource = readFileSync(
       `${backendConvexDirectory}/lib/authorization.ts`,
       "utf8",

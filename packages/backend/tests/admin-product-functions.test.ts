@@ -22,7 +22,8 @@ const schema = defineSchema({
   changelogEntries: defineTable(v.any())
     .index("by_slug", ["slug"])
     .index("by_status_and_published_at", ["status", "publishedAt"])
-    .index("by_status_and_updated_at", ["status", "updatedAt"]),
+    .index("by_status_and_updated_at", ["status", "updatedAt"])
+    .index("by_updated_at", ["updatedAt"]),
   digestPreferences: defineTable(v.any()).index("by_workspace_and_user", [
     "workspaceId",
     "userId",
@@ -319,7 +320,9 @@ describe("admin feature request and changelog functions", () => {
     ).resolves.toBeNull()
     await admin.mutation(deleteChangelogEntry, { entryId: created.id })
 
-    await expect(admin.query(listChangelogEntries, {})).resolves.toEqual([])
+    await expect(admin.query(listChangelogEntries, {})).resolves.toEqual({
+      items: [],
+    })
     const auditEvents = await t.run(
       async (ctx) => await ctx.db.query("auditEvents").collect(),
     )
@@ -342,10 +345,10 @@ describe("admin feature request and changelog functions", () => {
   })
 
   it("paginates public changelog summaries and looks up one published body by slug", async () => {
-    const { t } = await setup()
+    const { admin, t } = await setup()
     const now = Date.now()
     await t.run(async (ctx) => {
-      for (let index = 0; index < 25; index += 1) {
+      for (let index = 0; index < 26; index += 1) {
         await ctx.db.insert("changelogEntries", {
           body: `Published body ${index}`,
           createdAt: now + index,
@@ -378,11 +381,23 @@ describe("admin feature request and changelog functions", () => {
       isDone: boolean
       nextCursor: string | null
     }
-    expect(second.entries).toHaveLength(1)
+    expect(second.entries).toHaveLength(2)
     expect(second).toMatchObject({ isDone: true, nextCursor: null })
     await expect(
-      t.query(getPublishedEntry, { slug: "published-entry-24" }),
-    ).resolves.toMatchObject({ body: "Published body 24" })
+      t.query(getPublishedEntry, { slug: "published-entry-25" }),
+    ).resolves.toMatchObject({ body: "Published body 25" })
+
+    const adminFirst = (await admin.query(listChangelogEntries, {})) as {
+      items: Array<Record<string, unknown>>
+      nextCursor?: string
+    }
+    expect(adminFirst.items).toHaveLength(25)
+    expect(adminFirst.nextCursor).toEqual(expect.any(String))
+    const adminSecond = (await admin.query(listChangelogEntries, {
+      cursor: adminFirst.nextCursor,
+    })) as { items: Array<Record<string, unknown>>; nextCursor?: string }
+    expect(adminSecond.items).toHaveLength(1)
+    expect(adminSecond.nextCursor).toBeUndefined()
   })
 
   it("paginates the global feature request queue with opaque cursors", async () => {

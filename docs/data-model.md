@@ -319,7 +319,7 @@ The canonical schema is `packages/backend/convex/schema.ts`. It defines 25 valid
 
 **Purpose.** Global admin-authored changelog with public published read access.
 
-**Invariants.** Slugs are validated and logically unique. Drafts use `requestedPublicationAt`; publishing moves it to `publishedAt` and clears the requested field; published entries must be unpublished before editing. Creator/updater Clerk IDs are exact admin subjects. Public listing returns fixed-size published summary pages without bodies; an indexed slug lookup returns at most one published body.
+**Invariants.** Slugs are validated and logically unique. Drafts use `requestedPublicationAt`; publishing moves it to `publishedAt` and clears the requested field; published entries must be unpublished before editing. Creator/updater Clerk IDs are exact admin subjects. Admin listing is an opaque-cursor page ordered by update time. Public listing returns fixed-size published summary pages without bodies; an indexed slug lookup returns at most one published body.
 
 **Indexes.**
 
@@ -328,6 +328,7 @@ The canonical schema is `packages/backend/convex/schema.ts`. It defines 25 valid
 - `by_status_and_requested_publication_at` (`status`, `requestedPublicationAt`) — draft scheduling/administration.
 - `by_published_at` (`publishedAt`) — chronological publication operations.
 - `by_status_and_updated_at` (`status`, `updatedAt`) — admin list by lifecycle/change time.
+- `by_updated_at` (`updatedAt`) — bounded global admin list by change time.
 - `by_created_at` (`createdAt`) — creation history.
 
 ## Operations, metrics, deletion, and audit

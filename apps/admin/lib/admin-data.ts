@@ -166,6 +166,10 @@ const changelogEntrySchema = z.object({
   title: z.string().min(1),
   updatedAt: timestamp,
 })
+const changelogPageSchema = z.object({
+  items: z.array(changelogEntrySchema),
+  nextCursor: z.string().min(1).optional(),
+})
 
 const deletionJobStatusSchema = z.enum([
   "pending",
@@ -218,6 +222,7 @@ export type MetricsOverview = z.infer<typeof metricsOverviewSchema>
 export type FeatureRequest = z.infer<typeof featureRequestSchema>
 export type FeatureRequestPage = z.infer<typeof featureRequestPageSchema>
 export type ChangelogEntry = z.infer<typeof changelogEntrySchema>
+export type ChangelogPage = z.infer<typeof changelogPageSchema>
 export type DeletionJob = z.infer<typeof deletionJobSchema>
 export type DeletionJobDetail = z.infer<typeof deletionJobDetailSchema>
 
@@ -240,8 +245,8 @@ export function parseFeatureRequestPage(
   return parsed.success ? parsed.data : null
 }
 
-export function parseChangelogEntries(value: unknown): ChangelogEntry[] | null {
-  const parsed = z.array(changelogEntrySchema).safeParse(value)
+export function parseChangelogPage(value: unknown): ChangelogPage | null {
+  const parsed = changelogPageSchema.safeParse(value)
   return parsed.success ? parsed.data : null
 }
 

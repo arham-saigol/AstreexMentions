@@ -13,7 +13,7 @@ import {
 import { runAdminQuery } from "@/lib/admin-convex"
 import {
   changelogStatuses,
-  parseChangelogEntries,
+  parseChangelogPage,
   type ChangelogEntry,
 } from "@/lib/admin-data"
 import { timestampToPublicationDate } from "@/lib/changelog"
@@ -190,12 +190,12 @@ function EntryGroup({
       ) : (
         <div className="admin-panel p-6 text-center">
           <h3 className="font-semibold">
-            No {isPublished ? "published entries" : "drafts"}
+            No {isPublished ? "published entries" : "drafts"} on this page
           </h3>
           <p className="text-muted-foreground mt-1 text-sm">
             {isPublished
-              ? "Publish a reviewed draft when an update is ready to go live."
-              : "Create a draft above to begin a changelog update."}
+              ? "Use the filters or pagination to inspect other published entries."
+              : "Use the filters or pagination to inspect other drafts."}
           </p>
         </div>
       )}
@@ -206,14 +206,18 @@ function EntryGroup({
 export default async function ChangelogPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string | string[] }>
+  searchParams: Promise<{
+    cursor?: string | string[]
+    status?: string | string[]
+  }>
 }) {
   const params = await searchParams
   const status = parseStatus(params.status)
-  const result = await runAdminQuery(
-    adminConvex.listChangelogEntries,
-    status ? { status } : {},
-  )
+  const cursor = singleValue(params.cursor)
+  const result = await runAdminQuery(adminConvex.listChangelogEntries, {
+    ...(cursor === undefined ? {} : { cursor }),
+    ...(status === undefined ? {} : { status }),
+  })
 
   if (result.status === "access-denied") {
     return <AccessState {...result.access} />
@@ -227,15 +231,15 @@ export default async function ChangelogPage({
     return <AccessState kind="unavailable" />
   }
 
-  const entries = parseChangelogEntries(result.data)
+  const page = parseChangelogPage(result.data)
 
-  if (!entries) {
+  if (!page) {
     return <AccessState kind="unavailable" />
   }
 
   const groups = (status ? [status] : changelogStatuses).map((groupStatus) => ({
     status: groupStatus,
-    entries: entries.filter((entry) => entry.status === groupStatus),
+    entries: page.items.filter((entry) => entry.status === groupStatus),
   }))
 
   return (
@@ -284,6 +288,43 @@ export default async function ChangelogPage({
           />
         ))}
       </div>
+
+      {(cursor || page.nextCursor) && (
+        <nav
+          aria-label="Changelog pagination"
+          className="flex items-center justify-between gap-4"
+        >
+          {cursor ? (
+            <Button asChild variant="outline">
+              <Link
+                href={{
+                  pathname: "/changelog",
+                  query: status ? { status } : {},
+                }}
+              >
+                Newest entries
+              </Link>
+            </Button>
+          ) : (
+            <span />
+          )}
+          {page.nextCursor && (
+            <Button asChild variant="outline">
+              <Link
+                href={{
+                  pathname: "/changelog",
+                  query: {
+                    cursor: page.nextCursor,
+                    ...(status ? { status } : {}),
+                  },
+                }}
+              >
+                Older entries
+              </Link>
+            </Button>
+          )}
+        </nav>
+      )}
     </div>
   )
 }

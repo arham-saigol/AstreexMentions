@@ -368,8 +368,12 @@ export const loadDailyDigestRenderContext = internalQuery({
       ctx.db.get("users", userId),
       ctx.db
         .query("categories")
-        .withIndex("by_workspace_and_sort_order", (q) =>
-          q.eq("workspaceId", workspaceId),
+        .withIndex("by_workspace_deleted_enabled_and_sort_order", (q) =>
+          indexEquals(
+            q,
+            ["workspaceId", workspaceId],
+            ["deletedAt", undefined],
+          ),
         )
         .collect(),
     ])) as [GenericRow | null, GenericRow | null, GenericRow[]]

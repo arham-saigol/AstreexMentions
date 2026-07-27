@@ -17,7 +17,7 @@ const timestampSchema = z
 
 const publishedEntrySummarySchema = z.object({
   slug: z.string().trim().min(1).max(120).regex(SLUG_PATTERN),
-  title: z.string().trim().min(1).max(140),
+  title: z.string().trim().min(1).max(160),
   summary: z.string().trim().min(1).max(320),
   publishedAt: timestampSchema,
   updatedAt: timestampSchema.optional(),

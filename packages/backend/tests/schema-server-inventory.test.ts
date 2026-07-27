@@ -184,6 +184,7 @@ describe("complete Convex schema", () => {
       "status",
       "requestedPublicationAt",
     ])
+    expectIndex("changelogEntries", "by_updated_at", ["updatedAt"])
     expectIndex(
       "providerMetricBuckets",
       "by_provider_operation_granularity_and_bucket",

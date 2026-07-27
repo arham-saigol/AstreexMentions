@@ -1276,25 +1276,32 @@ export const updateFeatureRequest = adminMutation({
 })
 
 export const listChangelogEntries = adminQuery({
-  args: { status: v.optional(changelogStatusValidator) },
-  returns: v.array(changelogEntryResultValidator),
+  args: {
+    cursor: v.optional(v.string()),
+    status: v.optional(changelogStatusValidator),
+  },
+  returns: v.object({
+    items: v.array(changelogEntryResultValidator),
+    nextCursor: v.optional(v.string()),
+  }),
   handler: async (ctx, args) => {
-    const rows = args.status
+    const result = args.status
       ? await ctx.db
           .query("changelogEntries")
           .withIndex("by_status_and_updated_at", (q) =>
             indexEquals(q, ["status", args.status]),
           )
           .order("desc")
-          .collect()
-      : await ctx.db.query("changelogEntries").collect()
-    const sorted = args.status
-      ? rows
-      : [...rows].sort(
-          (left, right) =>
-            (right.updatedAt as number) - (left.updatedAt as number),
-        )
-    return sorted.map((row) => formatChangelogEntry(row))
+          .paginate({ cursor: args.cursor ?? null, numItems: 25 })
+      : await ctx.db
+          .query("changelogEntries")
+          .withIndex("by_updated_at")
+          .order("desc")
+          .paginate({ cursor: args.cursor ?? null, numItems: 25 })
+    return {
+      items: result.page.map((row) => formatChangelogEntry(row)),
+      ...(result.isDone ? {} : { nextCursor: result.continueCursor }),
+    }
   },
 })
 
