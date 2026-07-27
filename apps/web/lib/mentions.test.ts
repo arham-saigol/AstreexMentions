@@ -1,12 +1,37 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  nextSparseMentionCursor,
   optimisticStatusHasSettled,
   savedViewsResultSchema,
   visibleMentionStatus,
 } from "./mentions"
 
 describe("mentions view contracts", () => {
+  it("advances across an empty bounded scan when filters remain active", () => {
+    expect(
+      nextSparseMentionCursor({
+        filtered: true,
+        itemCount: 0,
+        nextCursor: "cursor-after-sparse-window",
+      }),
+    ).toBe("cursor-after-sparse-window")
+    expect(
+      nextSparseMentionCursor({
+        filtered: false,
+        itemCount: 0,
+        nextCursor: "cursor-after-unfiltered-window",
+      }),
+    ).toBeUndefined()
+    expect(
+      nextSparseMentionCursor({
+        filtered: true,
+        itemCount: 1,
+        nextCursor: "cursor-after-match",
+      }),
+    ).toBeUndefined()
+  })
+
   it("keeps the synthetic All Mentions view out of custom saved views", () => {
     const result = savedViewsResultSchema.parse([
       {

@@ -92,11 +92,11 @@ The shared request body accepts:
 - optional `subreddit`;
 - optional `time`: `all`, `year`, `month`, `week`, `day`, or `hour`.
 
-The scheduler sends `limit: 25` and `sort: "new"` independently to posts and comments. It begins with `pages: 1`; while FetchLayer reports another page, it durably increases the requested page depth and reruns the same search window. Previously returned items are deduplicated during ingestion. Because FetchLayer returns all requested pages cumulatively, the action splits each normalized response into at-most-25-item Convex mutations. Intermediate batches retain the lease and provider run; only the final batch advances the checkpoint. A retry can safely reapply earlier batches through ingestion idempotency.
+The scheduler sends `limit: 25` and `sort: "new"` independently to posts and comments. It begins with `pages: 1`; while FetchLayer reports another page, it durably increases the requested page depth up to four cumulative pages and reruns the same search window. The ceiling bounds provider response time and action memory; reaching it settles the current window even when FetchLayer advertises more history. Previously returned items are deduplicated during ingestion. The action splits each normalized response into at-most-25-item Convex mutations. Intermediate batches retain the lease and provider run; only the final batch advances the checkpoint. A retry can safely reapply earlier batches through ingestion idempotency.
 
 Posts require enough data to derive stable ID, title/body, creation time, and Reddit permalink. Comments require stable ID, body, creation time, and permalink. Permalinks are accepted only for `reddit.com` or its subdomains and are canonicalized to `https://www.reddit.com/...`.
 
-FetchLayer reports provider-managed pagination such as `nextPageUrl`, `pagesRequested`, and `pagesScraped`, but the documented search input intentionally has no cursor. Astreex does not fetch the provider-supplied URL. Instead, it persists the page depth and increases `pages` until FetchLayer reports no next page; only then does it settle the current window.
+FetchLayer reports provider-managed pagination such as `nextPageUrl`, `pagesRequested`, and `pagesScraped`, but the documented search input intentionally has no cursor. Astreex does not fetch the provider-supplied URL. Instead, it persists the page depth and increases `pages` until FetchLayer reports no next page or the four-page cumulative ceiling is reached, then settles the current window.
 
 `FETCHLAYER_REQUESTS_PER_MINUTE` defaults to 30 and sets both the per-minute claim cap and the hourly budget multiplier.
 

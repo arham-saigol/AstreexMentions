@@ -27,6 +27,18 @@ const categoryColorTokenSchema = z.enum([
 
 export const ALL_MENTIONS_VIEW_ID = "all-mentions"
 
+export function nextSparseMentionCursor(input: {
+  filtered: boolean
+  itemCount: number
+  nextCursor?: string | null | undefined
+}): string | undefined {
+  if (!input.filtered || input.itemCount > 0) {
+    return undefined
+  }
+  const cursor = input.nextCursor?.trim()
+  return cursor ? cursor : undefined
+}
+
 const rawCategorySchema = z
   .object({
     _id: idSchema.optional(),

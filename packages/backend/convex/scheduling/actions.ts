@@ -12,6 +12,7 @@ import { env, internalAction } from "../server"
 import { readProviderRuntimeConfiguration } from "./config"
 import { ProviderResultContractError } from "./contracts"
 import { createProviderApplyBatches } from "./ingestion"
+import { MAX_FETCHLAYER_CUMULATIVE_PAGES } from "./model"
 import {
   applyTrackingProviderPageReference,
   failTrackingProviderRunReference,
@@ -83,7 +84,7 @@ async function searchProvider(
       }
       const input = {
         limit: MAX_INGESTION_CHUNK_SIZE,
-        pages: context.page ?? 1,
+        pages: Math.min(context.page ?? 1, MAX_FETCHLAYER_CUMULATIVE_PAGES),
         query: context.providerQuery,
         sort: "new" as const,
       }

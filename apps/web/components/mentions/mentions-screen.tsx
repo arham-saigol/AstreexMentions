@@ -22,6 +22,7 @@ import { useMutation, useQuery } from "convex/react"
 import {
   Component,
   useDeferredValue,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -49,6 +50,7 @@ import {
   copyMentionFilters,
   keywordsResultSchema,
   mentionFilterCount,
+  nextSparseMentionCursor,
   mentionResultSchema,
   mentionsPageResultSchema,
   savedViewsResultSchema,
@@ -460,6 +462,25 @@ export function MentionsScreen() {
     (mentionsResult.state === "ready" &&
       !mentionsResult.data.isDone &&
       Boolean(mentionsResult.data.nextCursor))
+  const sparsePageCursor =
+    mentionsResult.state === "ready"
+      ? nextSparseMentionCursor({
+          filtered,
+          itemCount: mentionsResult.data.items.length,
+          nextCursor: mentionsResult.data.nextCursor,
+        })
+      : undefined
+
+  useEffect(() => {
+    if (!sparsePageCursor || sparsePageCursor === cursor) {
+      return
+    }
+    const advanceTimer = window.setTimeout(() => {
+      setCursorHistory((current) => [...current, cursor])
+      setCursor(sparsePageCursor)
+    }, 0)
+    return () => window.clearTimeout(advanceTimer)
+  }, [cursor, sparsePageCursor])
 
   return (
     <div>

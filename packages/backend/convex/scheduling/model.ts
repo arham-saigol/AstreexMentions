@@ -4,6 +4,7 @@ export const TRACKING_LEASE_MS = 4 * MINUTE_MS
 export const MAX_DISPATCH_DELAY_MS = 55_000
 export const MAX_TRACKING_BACKOFF_MS = 6 * HOUR_MS
 export const TRACKING_BACKOFF_BASE_MS = 30_000
+export const MAX_FETCHLAYER_CUMULATIVE_PAGES = 4
 
 export type PlanId = "starter" | "growth" | "scale"
 export type TrackingSourceType =
@@ -513,11 +514,13 @@ export function planCheckpointTransition(input: {
         "Provider-managed pagination must advance with a page count",
       )
     }
-    return {
-      checkpointVersion,
-      inProgressPage: pagesRequested + 1,
-      kind: "continue",
-      nextRunAt: input.scheduledFor,
+    if (pagesRequested < MAX_FETCHLAYER_CUMULATIVE_PAGES) {
+      return {
+        checkpointVersion,
+        inProgressPage: pagesRequested + 1,
+        kind: "continue",
+        nextRunAt: input.scheduledFor,
+      }
     }
   }
 

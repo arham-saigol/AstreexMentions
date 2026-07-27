@@ -21,7 +21,10 @@ import {
   recordCheckoutReference,
   recordCreemProviderOperationReference,
 } from "./internal"
-import { effectiveEntitlementStatus } from "./lifecycle"
+import {
+  effectiveEntitlementStatus,
+  subscriptionStatusAllowsCheckout,
+} from "./lifecycle"
 
 const planIdValidator = v.union(
   v.literal("starter"),
@@ -234,6 +237,15 @@ export const createCheckout = customerAction({
         workspaceId: ctx.workspace.id,
       },
     )
+    if (
+      existing.subscription &&
+      !subscriptionStatusAllowsCheckout(String(existing.subscription.status))
+    ) {
+      billingError(
+        "BILLING_SUBSCRIPTION_ALREADY_EXISTS",
+        "Use the billing portal or upgrade flow for an existing subscription",
+      )
+    }
     if (existing.checkout) {
       if (existing.checkout.workspaceId !== ctx.workspace.id) {
         billingError(

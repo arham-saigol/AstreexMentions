@@ -15,6 +15,7 @@ import {
   completeCheckoutWithoutEntitlement,
   effectiveEntitlementStatus,
   planCreemSubscriptionTransition,
+  subscriptionStatusAllowsCheckout,
   type BillingUsageCycleState,
   type SubscriptionTransition,
 } from "../convex/billing/lifecycle"
@@ -74,6 +75,17 @@ function initialPaidState() {
 }
 
 describe("Creem subscription lifecycle", () => {
+  it("allows a new checkout only after a terminal subscription", () => {
+    expect(subscriptionStatusAllowsCheckout("canceled")).toBe(true)
+    expect(subscriptionStatusAllowsCheckout("expired")).toBe(true)
+    expect(subscriptionStatusAllowsCheckout("active")).toBe(false)
+    expect(subscriptionStatusAllowsCheckout("scheduled_cancel")).toBe(false)
+    expect(subscriptionStatusAllowsCheckout("paused")).toBe(false)
+    expect(subscriptionStatusAllowsCheckout("unknown_provider_state")).toBe(
+      false,
+    )
+  })
+
   it.each([
     {
       label: "80 percent",

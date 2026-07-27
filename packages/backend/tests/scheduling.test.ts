@@ -11,6 +11,7 @@ import { parseProviderSearchResultJson } from "../convex/scheduling/contracts"
 import { createProviderApplyBatches } from "../convex/scheduling/ingestion"
 import {
   HOUR_MS,
+  MAX_FETCHLAYER_CUMULATIVE_PAGES,
   MAX_DISPATCH_DELAY_MS,
   MINUTE_MS,
   TrackingSchedulingError,
@@ -393,6 +394,33 @@ describe("deterministic retry and checkpoint transitions", () => {
     })
   })
 
+  it("settles a FetchLayer window at the cumulative page ceiling", () => {
+    expect(
+      planCheckpointTransition({
+        checkpointVersion: 4,
+        completedAt: fixture.now,
+        intervalMs: HOUR_MS,
+        observation: {
+          newestProviderItemId: "reddit-limit",
+          newestPublishedAt: fixture.now - 1_000,
+        },
+        pagination: {
+          hasMore: true,
+          kind: "provider_pages",
+          pagesRequested: MAX_FETCHLAYER_CUMULATIVE_PAGES,
+        },
+        scheduledFor: fixture.now,
+        windowEndAt: fixture.now,
+      }),
+    ).toEqual({
+      checkpointVersion: 5,
+      kind: "settled",
+      nextRunAt: fixture.now + HOUR_MS,
+      settledWatermarkAt: fixture.now,
+      settledWatermarkItemId: "reddit-limit",
+    })
+  })
+
   it("settles terminal pages, clears work in persistence, and advances exactly", () => {
     const transition = planCheckpointTransition({
       checkpointVersion: 4,
@@ -565,7 +593,8 @@ describe("Convex dispatcher boundary", () => {
     expect(contextRead).toBeGreaterThan(-1)
     expect(configRead).toBeGreaterThan(contextRead)
     expect(providerCall).toBeGreaterThan(configRead)
-    expect(actionsSource).toContain("pages: context.page ?? 1")
+    expect(actionsSource).toContain("pages: Math.min(")
+    expect(actionsSource).toContain("MAX_FETCHLAYER_CUMULATIVE_PAGES")
 
     for (const guard of [
       'keyword.status !== "active"',

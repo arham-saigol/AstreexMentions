@@ -60,6 +60,11 @@ export type SubscriptionTransition =
       usageKind: "created" | "preserved" | "reset"
     }
 
+export function subscriptionStatusAllowsCheckout(status: string): boolean {
+  const normalized = normalizeCreemSubscriptionStatus(status)
+  return normalized === "canceled" || normalized === "expired"
+}
+
 function entitlementForStatusAtPeriod(
   status: string,
   providerCreatedAt: number,
