@@ -132,8 +132,8 @@ The canonical schema is `packages/backend/convex/schema.ts`. It defines 25 valid
 **Indexes.**
 
 - `by_workspace_and_normalized_phrase` (`workspaceId`, `normalizedPhrase`) — tenant-local duplicate detection.
-- `by_workspace_status_and_created_at` (`workspaceId`, `status`, `createdAt`) — tenant lists by lifecycle state.
-- `by_workspace_and_updated_at` (`workspaceId`, `updatedAt`) — current tenant listing and change ordering.
+- `by_workspace_status_and_created_at` (`workspaceId`, `status`, `createdAt`) — bounded live configuration reads select active and paused rows without scanning deleted tombstones.
+- `by_workspace_and_updated_at` (`workspaceId`, `updatedAt`) — complete tenant history and maintenance ordering, including tombstones.
 - `by_creator_and_created_at` (`createdByUserId`, `createdAt`) — creator history/audit support.
 - `by_status_and_updated_at` (`status`, `updatedAt`) — global lifecycle operations/metrics.
 

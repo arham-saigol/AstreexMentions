@@ -350,16 +350,26 @@ async function configuredKeywords(
   ctx: Pick<CustomerDatabaseCtx, "db">,
   workspaceId: WorkspaceId,
 ): Promise<GenericRow[]> {
-  const rows = (await ctx.db
-    .query("keywords")
-    .withIndex("by_workspace_and_updated_at", (q) =>
-      q.eq("workspaceId", workspaceId),
+  const rows = (
+    await Promise.all(
+      (["active", "paused"] as const).map(
+        async (status) =>
+          (await ctx.db
+            .query("keywords")
+            .withIndex("by_workspace_status_and_created_at", (q) =>
+              indexEquals(q, ["workspaceId", workspaceId], ["status", status]),
+            )
+            .collect()) as GenericRow[],
+      ),
     )
-    .order("desc")
-    .collect()) as GenericRow[]
-  return rows.filter(
-    (row) => row.status !== "deleted" && row.deletedAt === undefined,
-  )
+  ).flat()
+  return rows
+    .filter((row) => row.deletedAt === undefined)
+    .sort(
+      (left, right) =>
+        (right.updatedAt as number) - (left.updatedAt as number) ||
+        String(left._id).localeCompare(String(right._id), "en"),
+    )
 }
 
 async function assertUniquePhrase(

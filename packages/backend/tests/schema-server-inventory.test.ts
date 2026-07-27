@@ -103,6 +103,11 @@ describe("complete Convex schema", () => {
       "status",
       "nextRunAt",
     ])
+    expectIndex("keywords", "by_workspace_status_and_created_at", [
+      "workspaceId",
+      "status",
+      "createdAt",
+    ])
     expectIndex("mentions", "by_workspace_platform_content_provider_item", [
       "workspaceId",
       "platform",

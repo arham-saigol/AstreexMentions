@@ -37,6 +37,11 @@ const testSchema = defineSchema({
       "workspaceId",
       "normalizedPhrase",
     ])
+    .index("by_workspace_status_and_created_at", [
+      "workspaceId",
+      "status",
+      "createdAt",
+    ])
     .index("by_workspace_and_updated_at", ["workspaceId", "updatedAt"]),
   mentionKeywordMatches: defineTable(v.any())
     .index("by_keyword_and_mention", ["keywordId", "mentionId"])
@@ -911,5 +916,19 @@ describe("frontend function inventory", () => {
       expect(source).not.toContain('db.insert("providerRuns"')
       expect(source).not.toContain('db.insert("providerMetricBuckets"')
     }
+  })
+
+  it("selects live keyword statuses before reading configuration rows", () => {
+    const configuredKeywordQuery = keywordSource.slice(
+      keywordSource.indexOf("async function configuredKeywords"),
+      keywordSource.indexOf("async function assertUniquePhrase"),
+    )
+    expect(configuredKeywordQuery).toContain(
+      '"by_workspace_status_and_created_at"',
+    )
+    expect(configuredKeywordQuery).toContain('["active", "paused"]')
+    expect(configuredKeywordQuery).not.toContain(
+      '"by_workspace_and_updated_at"',
+    )
   })
 })
