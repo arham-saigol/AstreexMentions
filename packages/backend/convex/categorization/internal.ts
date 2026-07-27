@@ -2,6 +2,7 @@ import { type GenericId, v } from "convex/values"
 
 import {
   DEEPSEEK_CATEGORIZATION_MODEL,
+  MAX_CATEGORIZATION_BATCH_PROMPT_CHARS,
   MAX_CATEGORIZATION_BATCH_SIZE,
   type CategorizationCategory,
   type CategorizationMention,
@@ -556,8 +557,11 @@ async function claimableRowsWithMentions(
   ctx: MutationCtx,
   rows: readonly GenericRow[],
   now: number,
-): Promise<GenericRow[]> {
-  const claimable: GenericRow[] = []
+): Promise<Array<{ mention: CategorizationMention; row: GenericRow }>> {
+  const claimable: Array<{
+    mention: CategorizationMention
+    row: GenericRow
+  }> = []
   for (const row of rows) {
     if (await completeAlreadyCategorizedJob(ctx, row, now)) {
       continue
@@ -571,19 +575,43 @@ async function claimableRowsWithMentions(
       continue
     }
     try {
-      mentionText({
+      const text = mentionText({
         body: mention.body as string,
         ...(mention.title === undefined
           ? {}
           : { title: mention.title as string }),
       })
+      claimable.push({
+        mention: { id: String(mention._id), text },
+        row,
+      })
     } catch {
       await markJobDead(ctx, row, "invalid_mention", now)
       continue
     }
-    claimable.push(row)
   }
   return claimable
+}
+
+function promptBoundedJobs(
+  candidates: readonly {
+    mention: CategorizationMention
+    row: GenericRow
+  }[],
+): GenericRow[] {
+  const selected: CategorizationMention[] = []
+  for (const candidate of candidates) {
+    const next = [...selected, candidate.mention]
+    if (
+      selected.length > 0 &&
+      JSON.stringify({ mentions: next }).length >
+        MAX_CATEGORIZATION_BATCH_PROMPT_CHARS
+    ) {
+      break
+    }
+    selected.push(candidate.mention)
+  }
+  return candidates.slice(0, selected.length).map(({ row }) => row)
 }
 
 export const dispatchDueCategorizationJobs = internalMutation({
@@ -638,7 +666,11 @@ export const dispatchDueCategorizationJobs = internalMutation({
         continue
       }
 
-      const eligible = await claimableRowsWithMentions(ctx, selected, now)
+      const claimable = await claimableRowsWithMentions(ctx, selected, now)
+      const eligible = promptBoundedJobs(claimable)
+      for (const { row } of claimable.slice(eligible.length)) {
+        queue.push(row)
+      }
       if (eligible.length === 0) {
         continue
       }

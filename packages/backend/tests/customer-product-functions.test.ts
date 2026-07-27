@@ -30,7 +30,12 @@ const customerTestSchema = defineSchema({
   deletionJobs: defineTable(v.any())
     .index("by_idempotency_key", ["idempotencyKey"])
     .index("by_workspace_and_created_at", ["workspaceId", "createdAt"])
-    .index("by_account_user_and_created_at", ["accountUserId", "createdAt"]),
+    .index("by_account_user_and_created_at", ["accountUserId", "createdAt"])
+    .index("by_account_user_kind_and_created_at", [
+      "accountUserId",
+      "kind",
+      "createdAt",
+    ]),
   billingCheckouts: defineTable(v.any())
     .index("by_workspace_and_created_at", ["workspaceId", "createdAt"])
     .index("by_workspace_plan_and_created_at", [

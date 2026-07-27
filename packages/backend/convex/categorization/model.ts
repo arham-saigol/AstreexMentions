@@ -1,5 +1,6 @@
 import {
   MAX_CATEGORIZATION_BATCH_SIZE,
+  normalizeCategorizationMentionText,
   validateCategorizationBatch,
   validateCategorizationCatalog,
   validateCategorizationOutput,
@@ -89,7 +90,9 @@ export function mentionText(input: { body: string; title?: string }): string {
       "Mention body must be non-empty",
     )
   }
-  return title ? `${title}\n\n${body}` : body
+  return normalizeCategorizationMentionText(
+    title ? `${title}\n\n${body}` : body,
+  )
 }
 
 export function canClaimCategorizationJob(

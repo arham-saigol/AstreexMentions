@@ -218,6 +218,11 @@ describe("complete Convex schema", () => {
       "accountUserId",
       "createdAt",
     ])
+    expectIndex("deletionJobs", "by_account_user_kind_and_created_at", [
+      "accountUserId",
+      "kind",
+      "createdAt",
+    ])
     expectIndex("deletionJobs", "by_workspace_and_created_at", [
       "workspaceId",
       "createdAt",

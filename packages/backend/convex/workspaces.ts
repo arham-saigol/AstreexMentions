@@ -198,21 +198,13 @@ async function latestAccountDeletionJob(
   ctx: DatabaseCtx,
   userId: UserId,
 ): Promise<GenericRow | null> {
-  const rows = (await ctx.db
+  return (await ctx.db
     .query("deletionJobs")
-    .withIndex("by_account_user_and_created_at", (q) =>
-      q.eq("accountUserId", userId),
+    .withIndex("by_account_user_kind_and_created_at", (q) =>
+      indexEquals(q, ["accountUserId", userId], ["kind", "account"]),
     )
-    .collect()) as GenericRow[]
-  return (
-    rows
-      .filter((row) => row.kind === "account")
-      .sort(
-        (left, right) =>
-          (right.createdAt as number) - (left.createdAt as number) ||
-          String(right._id).localeCompare(String(left._id), "en"),
-      )[0] ?? null
-  )
+    .order("desc")
+    .first()) as GenericRow | null
 }
 
 function nextDeletionGeneration(existing: GenericRow | null): number {

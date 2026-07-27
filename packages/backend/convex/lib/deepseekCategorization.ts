@@ -1,7 +1,10 @@
 export const MAX_CATEGORIZATION_BATCH_SIZE = 50
+export const MAX_CATEGORIZATION_BATCH_PROMPT_CHARS = 48_000
+export const MAX_CATEGORIZATION_MENTION_TEXT_CHARS = 4_000
 export const DEEPSEEK_CATEGORIZATION_MODEL = "deepseek-v4-pro"
 export const DEFAULT_CATEGORIZATION_MAX_ATTEMPTS = 3
 export const DEFAULT_CATEGORIZATION_TIMEOUT_MS = 30_000
+const CATEGORIZATION_TEXT_TRUNCATION_MARKER = "\n\n[truncated]"
 
 export type CategorizationMention = {
   id: string
@@ -113,6 +116,20 @@ function requireNonEmptyString(
   return value
 }
 
+export function normalizeCategorizationMentionText(text: string): string {
+  const trimmed = text.trim()
+  if (trimmed.length <= MAX_CATEGORIZATION_MENTION_TEXT_CHARS) {
+    return trimmed
+  }
+  return `${trimmed
+    .slice(
+      0,
+      MAX_CATEGORIZATION_MENTION_TEXT_CHARS -
+        CATEGORIZATION_TEXT_TRUNCATION_MARKER.length,
+    )
+    .trimEnd()}${CATEGORIZATION_TEXT_TRUNCATION_MARKER}`
+}
+
 export function validateCategorizationBatch(
   mentions: readonly CategorizationMention[],
 ): CategorizationMention[] {
@@ -130,7 +147,7 @@ export function validateCategorizationBatch(
   }
 
   const ids = new Set<string>()
-  return mentions.map((mention, index) => {
+  const validated = mentions.map((mention, index) => {
     if (!isRecord(mention)) {
       throw new CategorizationValidationError(
         "INVALID_BATCH",
@@ -138,7 +155,9 @@ export function validateCategorizationBatch(
       )
     }
     const id = requireNonEmptyString(mention.id, `Mention ${index} id`)
-    const text = requireNonEmptyString(mention.text, `Mention ${index} text`)
+    const text = normalizeCategorizationMentionText(
+      requireNonEmptyString(mention.text, `Mention ${index} text`),
+    )
     if (ids.has(id)) {
       throw new CategorizationValidationError(
         "INVALID_BATCH",
@@ -148,6 +167,16 @@ export function validateCategorizationBatch(
     ids.add(id)
     return { id, text }
   })
+  if (
+    JSON.stringify({ mentions: validated }).length >
+    MAX_CATEGORIZATION_BATCH_PROMPT_CHARS
+  ) {
+    throw new CategorizationValidationError(
+      "BATCH_TOO_LARGE",
+      `Categorization prompt cannot exceed ${MAX_CATEGORIZATION_BATCH_PROMPT_CHARS} characters`,
+    )
+  }
+  return validated
 }
 
 export const assertValidCategorizationBatch = validateCategorizationBatch
@@ -212,16 +241,24 @@ export function chunkCategorizationMentions(
   mentions: readonly CategorizationMention[],
 ): CategorizationMention[][] {
   const batches: CategorizationMention[][] = []
-  for (
-    let start = 0;
-    start < mentions.length;
-    start += MAX_CATEGORIZATION_BATCH_SIZE
-  ) {
-    batches.push(
-      validateCategorizationBatch(
-        mentions.slice(start, start + MAX_CATEGORIZATION_BATCH_SIZE),
-      ),
-    )
+  let batch: CategorizationMention[] = []
+  for (const mention of mentions) {
+    const normalized = validateCategorizationBatch([mention])[0]!
+    const candidate = [...batch, normalized]
+    if (
+      batch.length > 0 &&
+      (candidate.length > MAX_CATEGORIZATION_BATCH_SIZE ||
+        JSON.stringify({ mentions: candidate }).length >
+          MAX_CATEGORIZATION_BATCH_PROMPT_CHARS)
+    ) {
+      batches.push(validateCategorizationBatch(batch))
+      batch = [normalized]
+    } else {
+      batch = candidate
+    }
+  }
+  if (batch.length > 0) {
+    batches.push(validateCategorizationBatch(batch))
   }
   return batches
 }

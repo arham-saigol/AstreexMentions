@@ -12,6 +12,8 @@ import {
 } from "../convex/categorization/model"
 import {
   buildDeepSeekCategorizationRequest,
+  MAX_CATEGORIZATION_BATCH_PROMPT_CHARS,
+  MAX_CATEGORIZATION_MENTION_TEXT_CHARS,
   type CategorizationCategory,
 } from "../convex/lib/deepseekCategorization"
 
@@ -392,6 +394,58 @@ describe("durable DeepSeek categorization worker", () => {
     expect(
       [...countsByLease.values()].sort((left, right) => right - left),
     ).toEqual([30, 30])
+  })
+
+  it("truncates mention text and leases batches within the prompt budget", async () => {
+    const t = createBackendTest()
+    const seeded = await seedCategorization(t, { mentionCount: 20 })
+    await t.run(async (ctx) => {
+      for (const mentionId of seeded.mentionIds) {
+        await ctx.db.patch("mentions", mentionId, {
+          body: "x".repeat(MAX_CATEGORIZATION_MENTION_TEXT_CHARS * 2),
+          title: "Long mention",
+        })
+      }
+    })
+
+    await expect(
+      t.mutation(dispatchReference, { now: NOW }),
+    ).resolves.toMatchObject({ batches: 2, claimed: seeded.jobIds.length })
+    const batches = await leasedBatchArguments(t, seeded)
+    expect(batches).toHaveLength(2)
+    expect(
+      batches.every(
+        ({ jobIds }) =>
+          jobIds.length > 0 && jobIds.length < seeded.jobIds.length,
+      ),
+    ).toBe(true)
+
+    const loadContext = makeFunctionReference<
+      "query",
+      {
+        categorySnapshotJson: string
+        jobIds: CategorizationJobId[]
+        leaseToken: string
+      },
+      {
+        mentions?: Array<{ id: string; text: string }>
+        state: string
+      }
+    >("categorization/internal:loadCategorizationBatchContext")
+    for (const args of batches) {
+      const context = await t.query(loadContext, args)
+      expect(context.state).toBe("ready")
+      expect(
+        JSON.stringify({ mentions: context.mentions }).length,
+      ).toBeLessThanOrEqual(MAX_CATEGORIZATION_BATCH_PROMPT_CHARS)
+      expect(
+        context.mentions?.every(
+          ({ text }) =>
+            text.length <= MAX_CATEGORIZATION_MENTION_TEXT_CHARS &&
+            text.endsWith("[truncated]"),
+        ),
+      ).toBe(true)
+    }
   })
 
   it("puts every enabled category description in the prompt and sends required DeepSeek controls", async () => {

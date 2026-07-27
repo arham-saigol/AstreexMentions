@@ -1076,6 +1076,11 @@ export default defineSchema({
     ])
     .index("by_workspace_and_created_at", ["workspaceId", "createdAt"])
     .index("by_account_user_and_created_at", ["accountUserId", "createdAt"])
+    .index("by_account_user_kind_and_created_at", [
+      "accountUserId",
+      "kind",
+      "createdAt",
+    ])
     .index("by_kind_status_and_created_at", ["kind", "status", "createdAt"]),
 
   auditEvents: defineTable({
