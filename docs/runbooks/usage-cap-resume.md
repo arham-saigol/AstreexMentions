@@ -20,7 +20,7 @@ The backend admin query calculates `usagePausedWorkspaces`, but the current admi
    - plan/limits snapshot is correct;
    - `mentionsUsed` and `mentionLimit` are non-negative integers.
 2. Inspect all non-deleted `trackingSources` for the workspace. Usage-capped rows are `paused` with `pauseReason: "usage"` and no active lease.
-3. Inspect the source checkpoint/window. A cap in the middle of a page must retain the unprocessed point; do not advance it manually.
+3. Inspect the source checkpoint/window and its ready `trackingProviderPages`. A cap in the middle of a batch must retain the unprocessed position; do not advance or delete it manually.
 4. Inspect the warning outbox keys `email:usage:<usageCycleId>:80` and `:100` and the cycle warning timestamps.
 5. Confirm whether missing `RESEND_FROM_EMAIL` caused ingestion retries around a warning threshold. If the owner has no deliverable email, expect the warning timestamp without a matching outbox row; ingestion must continue.
 
@@ -47,7 +47,7 @@ A customer can also pause/resume a keyword. Resume recalculates state from curre
 ## Verify
 
 - Sources are active only when entitlement and the current usage cycle both allow work.
-- The held provider page/window resumes without inserting earlier candidates twice.
+- The held provider batches drain in order before a new provider request, without inserting earlier candidates twice.
 - The first newly inserted canonical mention increments usage once.
 - Warning outbox idempotency prevents duplicate 80%/100% messages.
 - At the next cap, all active workspace sources pause again atomically.

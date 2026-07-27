@@ -156,6 +156,19 @@ The canonical schema is `packages/backend/convex/schema.ts`. It defines 25 valid
 - `by_source_type_status_and_lease_expires_at` (`sourceType`, `status`, `leaseExpiresAt`) — provider-specific lease recovery.
 - `by_status_and_updated_at` (`status`, `updatedAt`) — stale/error lifecycle operations and metrics.
 
+### `trackingProviderPages`
+
+**Purpose.** Durable normalized provider batches awaiting ingestion. All batches from one provider response are staged before they become eligible for application.
+
+**Invariants.** A source has at most four pending batches. Ready batches retain the source query, provider checkpoint/pagination, final-batch marker, and next unprocessed item position. A usage-cap pause preserves the current and later batches so the next eligible run drains the exact provider response before issuing another live request. Query changes discard incompatible batches.
+
+**Indexes.**
+
+- `by_source_generation_and_batch` (`trackingSourceId`, `generation`, `batchIndex`) — idempotent staging within one lease generation.
+- `by_source_ready_and_batch` (`trackingSourceId`, `ready`, `batchIndex`) — ordered resume/application.
+- `by_source_and_created_at` (`trackingSourceId`, `createdAt`) — bounded cleanup and invariant enforcement.
+- `by_workspace_and_created_at` (`workspaceId`, `createdAt`) — account deletion.
+
 ### `mentions`
 
 **Purpose.** Canonical normalized external posts/comments/tweets matched into a workspace.

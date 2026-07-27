@@ -18,10 +18,12 @@ import {
 } from "./ingestion"
 import { MAX_FETCHLAYER_CUMULATIVE_PAGES } from "./model"
 import {
-  applyTrackingProviderPageReference,
+  applyNextTrackingProviderPageReference,
+  commitTrackingProviderPagesReference,
   failTrackingProviderRunReference,
   loadTrackingExecutionContextReference,
   releaseIneligibleTrackingLeaseReference,
+  stageTrackingProviderPageReference,
   startTrackingProviderRunReference,
   type TrackingExecutionContext,
 } from "./internal"
@@ -145,16 +147,25 @@ export const executeTrackingSource = internalAction({
       return { state: context.state }
     }
 
-    const configuration = readProviderRuntimeConfiguration(
-      env,
-      context.sourceType,
-    )
-    if (configuration.state === "provider_unconfigured") {
-      await ctx.runMutation(releaseIneligibleTrackingLeaseReference, {
-        ...args,
-        reason: "provider_unconfigured",
-      })
-      return configuration
+    let configuration:
+      | Extract<
+          ReturnType<typeof readProviderRuntimeConfiguration>,
+          { state: "configured" }
+        >
+      | undefined
+    if (!context.hasPendingProviderPages) {
+      const providerConfiguration = readProviderRuntimeConfiguration(
+        env,
+        context.sourceType,
+      )
+      if (providerConfiguration.state === "provider_unconfigured") {
+        await ctx.runMutation(releaseIneligibleTrackingLeaseReference, {
+          ...args,
+          reason: "provider_unconfigured",
+        })
+        return providerConfiguration
+      }
+      configuration = providerConfiguration
     }
 
     const start = (await ctx.runMutation(
@@ -168,23 +179,57 @@ export const executeTrackingSource = internalAction({
     const startedAt = Date.now()
     let providerDurationMs = 0
     try {
-      const result = await searchProvider(context, configuration)
-      providerDurationMs = Math.max(0, Date.now() - startedAt)
-      const batches = createProviderApplyBatches(result)
+      if (!context.hasPendingProviderPages) {
+        if (!configuration) {
+          throw new TypeError("Provider configuration was not loaded")
+        }
+
+        const result = await searchProvider(context, configuration)
+        providerDurationMs = Math.max(0, Date.now() - startedAt)
+        const batches = createProviderApplyBatches(result)
+        for (const [batchIndex, batch] of batches.entries()) {
+          const staged = await ctx.runMutation(
+            stageTrackingProviderPageReference,
+            {
+              ...args,
+              batchIndex,
+              durationMs: providerDurationMs,
+              finalize: batch.finalize,
+              providerOutputCount: result.items.length,
+              resultJson: JSON.stringify(batch.result),
+            },
+          )
+          if (staged.state !== "staged") {
+            return staged
+          }
+        }
+        const committed = await ctx.runMutation(
+          commitTrackingProviderPagesReference,
+          {
+            ...args,
+            batchCount: batches.length,
+          },
+        )
+        if (committed.state !== "committed") {
+          return committed
+        }
+      }
+
       let outcome: { state: string } = { state: "stale_run" }
-      for (const batch of batches) {
-        outcome = await ctx.runMutation(applyTrackingProviderPageReference, {
-          ...args,
-          durationMs: providerDurationMs,
-          finalize: batch.finalize,
-          providerOutputCount: result.items.length,
-          resultJson: JSON.stringify(batch.result),
-        })
-        if (!batch.finalize && outcome.state !== "batch_applied") {
+      for (
+        let batchIndex = 0;
+        batchIndex < MAX_FETCHLAYER_CUMULATIVE_PAGES;
+        batchIndex += 1
+      ) {
+        outcome = await ctx.runMutation(
+          applyNextTrackingProviderPageReference,
+          args,
+        )
+        if (outcome.state !== "batch_applied") {
           return outcome
         }
       }
-      return outcome
+      throw new RangeError("Pending provider page count exceeds the maximum")
     } catch (error) {
       providerDurationMs = Math.max(0, Date.now() - startedAt)
       const failure = safeFailure(error)

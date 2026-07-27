@@ -162,7 +162,7 @@ Malformed JSON or an invalid normalized shape is a retryable provider execution 
 
 ## Atomic ingestion and deduplication
 
-One provider page is split into chunks of at most 25 candidates. Each chunk is applied in one Convex serializable mutation, including scope checks, dedupe reads, inserts/rediscovery patches, usage accounting, keyword association, categorization enqueue, warning enqueue, metrics, and cap pause.
+One provider response is split into durable batches of at most 25 candidates. Every batch is staged before any is marked ready, then each ready batch is applied in one Convex serializable mutation, including scope checks, dedupe reads, inserts/rediscovery patches, usage accounting, keyword association, categorization enqueue, warning enqueue, metrics, and cap pause.
 
 A candidate must match its source type. Canonical mention dedupe is workspace-scoped:
 
@@ -178,7 +178,7 @@ New mentions:
 - increment global and workspace mention metrics;
 - enqueue 80%/100% usage warnings when newly crossed.
 
-At the mention cap, active workspace sources are atomically paused for usage. The mutation returns the first unprocessed candidate position and holds the checkpoint. A new billing period or higher same-period limit resumes only billing/usage-paused sources when capacity is available.
+At the mention cap, active workspace sources are atomically paused for usage. The mutation stores the first unprocessed candidate position on the durable provider batch and holds the checkpoint. The current and later batches remain ready; after a new billing period or higher same-period limit resumes the source, they are drained before another live provider request.
 
 ## Other durable workflows
 

@@ -248,6 +248,7 @@ export const deletionPurgeStageValidator = v.union(
   v.literal("saved_views"),
   v.literal("feature_requests"),
   v.literal("mentions"),
+  v.literal("tracking_provider_pages"),
   v.literal("tracking_sources"),
   v.literal("keywords"),
   v.literal("categories"),
@@ -559,6 +560,34 @@ export default defineSchema({
       "leaseExpiresAt",
     ])
     .index("by_status_and_updated_at", ["status", "updatedAt"]),
+
+  trackingProviderPages: defineTable({
+    batchIndex: v.number(),
+    createdAt: v.number(),
+    durationMs: v.number(),
+    finalize: v.boolean(),
+    generation: v.number(),
+    providerOutputCount: v.number(),
+    providerQuery: v.string(),
+    ready: v.boolean(),
+    resultJson: v.string(),
+    startPosition: v.number(),
+    trackingSourceId: v.id("trackingSources"),
+    updatedAt: v.number(),
+    workspaceId: v.id("workspaces"),
+  })
+    .index("by_source_generation_and_batch", [
+      "trackingSourceId",
+      "generation",
+      "batchIndex",
+    ])
+    .index("by_source_ready_and_batch", [
+      "trackingSourceId",
+      "ready",
+      "batchIndex",
+    ])
+    .index("by_source_and_created_at", ["trackingSourceId", "createdAt"])
+    .index("by_workspace_and_created_at", ["workspaceId", "createdAt"]),
 
   mentions: defineTable({
     analysisState: mentionAnalysisStateValidator,

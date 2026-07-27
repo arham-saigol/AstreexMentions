@@ -54,8 +54,11 @@ const releaseReasonValidator = v.union(
 
 const HOUR_MS = 3_600_000
 const MAX_DUE_SCAN = 256
+const MAX_PENDING_PROVIDER_BATCHES = 4
+const MAX_PENDING_PROVIDER_PAGE_JSON_BYTES = 700_000
 
 type TrackingSourceId = GenericId<"trackingSources">
+type TrackingProviderPageId = GenericId<"trackingProviderPages">
 type KeywordId = GenericId<"keywords">
 type WorkspaceId = GenericId<"workspaces">
 type GenericRow = Record<string, unknown> & { _id: GenericId<string> }
@@ -218,6 +221,7 @@ type TrackingEligibility =
   | {
       cursor?: string | undefined
       intervalMs: number
+      hasPendingProviderPages: boolean
       keywordId: KeywordId
       page?: number | undefined
       planId: PlanId
@@ -294,9 +298,21 @@ async function readTrackingEligibility(
   const schedule = scheduleFromRow(source)
   const window = initialCheckpointWindow({ now, source: schedule })
   const planId = planIdFromRow(subscription)
+  const pendingProviderPage = (await db
+    .query("trackingProviderPages")
+    .withIndex("by_source_ready_and_batch", (q) =>
+      indexEquals(
+        q,
+        ["trackingSourceId", args.trackingSourceId],
+        ["ready", true],
+      ),
+    )
+    .first()) as GenericRow | null
 
   return {
     cursor: source.inProgressCursor as string | undefined,
+    hasPendingProviderPages:
+      pendingProviderPage?.providerQuery === source.providerQuery,
     intervalMs: trackingIntervalMs(sourceType, planId),
     keywordId,
     page: source.inProgressPage as number | undefined,
@@ -616,15 +632,43 @@ export const startTrackingProviderRun = internalMutation({
       args.leaseVersion,
     )
     const existing = await findTrackingProviderRun(ctx, idempotencyKey)
+
+    const pendingProviderPages = (await ctx.db
+      .query("trackingProviderPages")
+      .withIndex("by_source_and_created_at", (q) =>
+        q.eq("trackingSourceId", args.trackingSourceId),
+      )
+      .take(MAX_PENDING_PROVIDER_BATCHES + 1)) as GenericRow[]
+    if (pendingProviderPages.length > MAX_PENDING_PROVIDER_BATCHES) {
+      throw new RangeError("Pending provider page count exceeds the maximum")
+    }
+    let hasPendingProviderPages = false
+    for (const page of pendingProviderPages) {
+      if (page.ready === true && page.providerQuery === source.providerQuery) {
+        hasPendingProviderPages = true
+        continue
+      }
+      await ctx.db.delete(
+        "trackingProviderPages",
+        page._id as TrackingProviderPageId,
+      )
+    }
+
     if (existing) {
-      return { state: "duplicate" as const }
+      return {
+        state:
+          existing.status === "running"
+            ? ("started" as const)
+            : ("duplicate" as const),
+      }
     }
 
     const sourceType = sourceTypeFromRow(source)
     const retry =
       (source.consecutiveFailures as number) > 0 ||
       source.inProgressCursor !== undefined ||
-      ((source.inProgressPage as number | undefined) ?? 0) > 0
+      ((source.inProgressPage as number | undefined) ?? 0) > 0 ||
+      hasPendingProviderPages
     await ctx.db.insert("providerRuns", {
       attempt: (source.consecutiveFailures as number) + 1,
       createdAt: now,
@@ -660,6 +704,7 @@ async function ingestProviderPage(
     emailReplyTo?: string | undefined
     items: ReturnType<typeof parseProviderSearchResultJson>["items"]
     keywordId: KeywordId
+    startPosition?: number | undefined
     trackingSourceId: TrackingSourceId
     workspaceId: WorkspaceId
   },
@@ -668,6 +713,9 @@ async function ingestProviderPage(
   const chunks = createProviderIngestionChunks({
     items: input.items,
     keywordId: String(input.keywordId),
+    ...(input.startPosition === undefined
+      ? {}
+      : { startPosition: input.startPosition }),
     trackingSourceId: String(input.trackingSourceId),
     workspaceId: String(input.workspaceId),
   })
@@ -706,8 +754,9 @@ async function ingestProviderPage(
   return aggregate
 }
 
-export const applyTrackingProviderPage = internalMutation({
+export const stageTrackingProviderPage = internalMutation({
   args: {
+    batchIndex: v.number(),
     durationMs: v.number(),
     finalize: v.boolean(),
     leaseExpiresAt: v.number(),
@@ -736,14 +785,186 @@ export const applyTrackingProviderPage = internalMutation({
     if (!run || run.status !== "running") {
       return { state: "stale_run" as const }
     }
-
     const result = parseProviderSearchResultJson(args.resultJson)
     if (
-      result.items.length > MAX_INGESTION_CHUNK_SIZE ||
+      !Number.isSafeInteger(args.batchIndex) ||
+      args.batchIndex < 0 ||
+      args.batchIndex >= MAX_PENDING_PROVIDER_BATCHES ||
       !Number.isSafeInteger(args.providerOutputCount) ||
-      args.providerOutputCount < result.items.length
+      args.providerOutputCount < result.items.length ||
+      result.items.length > MAX_INGESTION_CHUNK_SIZE ||
+      new TextEncoder().encode(args.resultJson).byteLength >
+        MAX_PENDING_PROVIDER_PAGE_JSON_BYTES
     ) {
-      throw new RangeError("Provider apply batch is invalid")
+      throw new RangeError("Staged provider page is invalid")
+    }
+    const existing = await ctx.db
+      .query("trackingProviderPages")
+      .withIndex("by_source_generation_and_batch", (q) =>
+        indexEquals(
+          q,
+          ["trackingSourceId", args.trackingSourceId],
+          ["generation", args.leaseVersion],
+          ["batchIndex", args.batchIndex],
+        ),
+      )
+      .unique()
+    if (existing) {
+      if (
+        existing.resultJson !== args.resultJson ||
+        existing.finalize !== args.finalize ||
+        existing.providerOutputCount !== args.providerOutputCount
+      ) {
+        throw new RangeError("Staged provider page conflicts with its retry")
+      }
+      return { state: "staged" as const }
+    }
+
+    await ctx.db.insert("trackingProviderPages", {
+      batchIndex: args.batchIndex,
+      createdAt: now,
+      durationMs: args.durationMs,
+      finalize: args.finalize,
+      generation: args.leaseVersion,
+      providerOutputCount: args.providerOutputCount,
+      providerQuery: source.providerQuery as string,
+      ready: false,
+      resultJson: args.resultJson,
+      startPosition: 0,
+      trackingSourceId: args.trackingSourceId,
+      updatedAt: now,
+      workspaceId: source.workspaceId as WorkspaceId,
+    })
+    return { state: "staged" as const }
+  },
+})
+
+export const commitTrackingProviderPages = internalMutation({
+  args: {
+    batchCount: v.number(),
+    leaseExpiresAt: v.number(),
+    leaseToken: v.string(),
+    leaseVersion: v.number(),
+    trackingSourceId: v.id("trackingSources"),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now()
+    const source = (await ctx.db.get(
+      "trackingSources",
+      args.trackingSourceId,
+    )) as GenericRow | null
+    if (!currentLeaseMatches(source, leaseFromArguments(args), now)) {
+      return { state: "stale_lease" as const }
+    }
+    const run = await findTrackingProviderRun(
+      ctx,
+      trackingProviderRunIdempotencyKey(
+        args.trackingSourceId,
+        args.leaseVersion,
+      ),
+    )
+    if (!run || run.status !== "running") {
+      return { state: "stale_run" as const }
+    }
+    if (
+      !Number.isSafeInteger(args.batchCount) ||
+      args.batchCount < 1 ||
+      args.batchCount > MAX_PENDING_PROVIDER_BATCHES
+    ) {
+      throw new RangeError("Staged provider batch count is invalid")
+    }
+    const pages = (await ctx.db
+      .query("trackingProviderPages")
+      .withIndex("by_source_generation_and_batch", (q) =>
+        indexEquals(
+          q,
+          ["trackingSourceId", args.trackingSourceId],
+          ["generation", args.leaseVersion],
+        ),
+      )
+      .take(MAX_PENDING_PROVIDER_BATCHES + 1)) as GenericRow[]
+    if (
+      pages.length !== args.batchCount ||
+      pages.some(
+        (page, index) =>
+          page.batchIndex !== index ||
+          page.providerQuery !== source.providerQuery,
+      )
+    ) {
+      throw new RangeError("Staged provider pages are incomplete")
+    }
+    for (const page of pages) {
+      await ctx.db.patch(
+        "trackingProviderPages",
+        page._id as TrackingProviderPageId,
+        {
+          ready: true,
+          updatedAt: now,
+        },
+      )
+    }
+    return { state: "committed" as const }
+  },
+})
+
+export const applyNextTrackingProviderPage = internalMutation({
+  args: {
+    leaseExpiresAt: v.number(),
+    leaseToken: v.string(),
+    leaseVersion: v.number(),
+    trackingSourceId: v.id("trackingSources"),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now()
+    const source = (await ctx.db.get(
+      "trackingSources",
+      args.trackingSourceId,
+    )) as GenericRow | null
+    if (!currentLeaseMatches(source, leaseFromArguments(args), now)) {
+      return { state: "stale_lease" as const }
+    }
+    const run = await findTrackingProviderRun(
+      ctx,
+      trackingProviderRunIdempotencyKey(
+        args.trackingSourceId,
+        args.leaseVersion,
+      ),
+    )
+    if (!run || run.status !== "running") {
+      return { state: "stale_run" as const }
+    }
+
+    const pendingPage = (await ctx.db
+      .query("trackingProviderPages")
+      .withIndex("by_source_ready_and_batch", (q) =>
+        indexEquals(
+          q,
+          ["trackingSourceId", args.trackingSourceId],
+          ["ready", true],
+        ),
+      )
+      .first()) as GenericRow | null
+    if (!pendingPage || pendingPage.providerQuery !== source.providerQuery) {
+      return { state: "no_pending_page" as const }
+    }
+    const result = parseProviderSearchResultJson(
+      pendingPage.resultJson as string,
+    )
+    const providerOutputCount = pendingPage.providerOutputCount as number
+    if (
+      result.items.length > MAX_INGESTION_CHUNK_SIZE ||
+      !Number.isSafeInteger(providerOutputCount) ||
+      providerOutputCount < result.items.length
+    ) {
+      throw new RangeError("Pending provider page is invalid")
+    }
+    const startPosition = pendingPage.startPosition as number
+    if (
+      !Number.isSafeInteger(startPosition) ||
+      startPosition < 0 ||
+      startPosition > result.items.length
+    ) {
+      throw new RangeError("Pending provider page position is invalid")
     }
     const eligibility = await readTrackingEligibility(ctx.db, args, now)
     if (eligibility.state !== "ready") {
@@ -759,10 +980,10 @@ export const applyTrackingProviderPage = internalMutation({
       await finishTrackingProviderRun(
         ctx,
         {
-          durationMs: args.durationMs,
+          durationMs: pendingPage.durationMs as number,
           errorCode: "eligibility_changed",
           errorMessage: "Tracking eligibility changed before persistence",
-          outputCount: args.providerOutputCount,
+          outputCount: providerOutputCount,
           run,
           status: "failed",
         },
@@ -783,10 +1004,10 @@ export const applyTrackingProviderPage = internalMutation({
       await finishTrackingProviderRun(
         ctx,
         {
-          durationMs: args.durationMs,
+          durationMs: pendingPage.durationMs as number,
           errorCode: "resend_provider_unconfigured",
           errorMessage: "Resend email sender is not configured",
-          outputCount: args.providerOutputCount,
+          outputCount: providerOutputCount,
           run,
           status: "failed",
         },
@@ -801,6 +1022,7 @@ export const applyTrackingProviderPage = internalMutation({
         emailFrom: sender.from,
         items: result.items,
         keywordId: eligibility.keywordId,
+        startPosition,
         trackingSourceId: args.trackingSourceId,
         workspaceId: eligibility.workspaceId,
         ...(sender.replyTo === undefined
@@ -811,6 +1033,14 @@ export const applyTrackingProviderPage = internalMutation({
     )
 
     if (ingestion.usageExhausted) {
+      await ctx.db.patch(
+        "trackingProviderPages",
+        pendingPage._id as TrackingProviderPageId,
+        {
+          startPosition: ingestion.unprocessedPosition ?? result.items.length,
+          updatedAt: now,
+        },
+      )
       await ctx.db.patch("trackingSources", args.trackingSourceId, {
         backoffMs: 0,
         backoffUntil: undefined,
@@ -825,7 +1055,14 @@ export const applyTrackingProviderPage = internalMutation({
         status: "paused",
         updatedAt: now,
       })
-    } else if (args.finalize) {
+    } else {
+      await ctx.db.delete(
+        "trackingProviderPages",
+        pendingPage._id as TrackingProviderPageId,
+      )
+    }
+
+    if (!ingestion.usageExhausted && pendingPage.finalize === true) {
       const transition = planCheckpointTransition({
         checkpointVersion: source.checkpointVersion as number,
         completedAt: now,
@@ -848,10 +1085,8 @@ export const applyTrackingProviderPage = internalMutation({
         leaseExpiresAt: undefined,
         leaseToken: undefined,
         nextRunAt: transition.nextRunAt,
-        pauseReason: ingestion.usageExhausted ? ("usage" as const) : undefined,
-        status: ingestion.usageExhausted
-          ? ("paused" as const)
-          : ("active" as const),
+        pauseReason: undefined,
+        status: "active" as const,
         updatedAt: now,
       }
 
@@ -872,7 +1107,7 @@ export const applyTrackingProviderPage = internalMutation({
           settledWatermarkItemId: transition.settledWatermarkItemId,
         })
       }
-    } else {
+    } else if (!ingestion.usageExhausted) {
       return {
         associationsAdded: ingestion.associationsAdded,
         categorizationJobsEnqueued: ingestion.categorizationJobsEnqueued,
@@ -885,8 +1120,8 @@ export const applyTrackingProviderPage = internalMutation({
     await finishTrackingProviderRun(
       ctx,
       {
-        durationMs: args.durationMs,
-        outputCount: args.providerOutputCount,
+        durationMs: pendingPage.durationMs as number,
+        outputCount: providerOutputCount,
         run,
         status: "succeeded",
       },
@@ -1018,15 +1253,28 @@ export const startTrackingProviderRunReference =
     "scheduling/internal:startTrackingProviderRun",
   )
 
-export const applyTrackingProviderPageReference = internalMutationReference<
+export const stageTrackingProviderPageReference = internalMutationReference<
   LeaseArguments & {
+    batchIndex: number
     durationMs: number
     finalize: boolean
     providerOutputCount: number
     resultJson: string
   },
   { state: string }
->("scheduling/internal:applyTrackingProviderPage")
+>("scheduling/internal:stageTrackingProviderPage")
+
+export const commitTrackingProviderPagesReference = internalMutationReference<
+  LeaseArguments & {
+    batchCount: number
+  },
+  { state: string }
+>("scheduling/internal:commitTrackingProviderPages")
+
+export const applyNextTrackingProviderPageReference = internalMutationReference<
+  LeaseArguments,
+  { state: string }
+>("scheduling/internal:applyNextTrackingProviderPage")
 
 export const failTrackingProviderRunReference = internalMutationReference<
   LeaseArguments & {

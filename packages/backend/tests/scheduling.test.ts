@@ -735,4 +735,21 @@ describe("Convex dispatcher boundary", () => {
       expect(internalSource).toContain(guard)
     }
   })
+
+  it("durably commits provider pages before applying them and resumes staged pages first", () => {
+    const stage = actionsSource.indexOf("const staged =")
+    const commit = actionsSource.indexOf("const committed =", stage)
+    const apply = actionsSource.indexOf("outcome = await", commit)
+
+    expect(stage).toBeGreaterThan(-1)
+    expect(commit).toBeGreaterThan(stage)
+    expect(apply).toBeGreaterThan(commit)
+    expect(actionsSource).toContain("if (!context.hasPendingProviderPages)")
+    expect(internalSource).toContain(
+      "ingestion.unprocessedPosition ?? result.items.length",
+    )
+    expect(internalSource).toContain(
+      'ctx.db.patch(\n        "trackingProviderPages"',
+    )
+  })
 })

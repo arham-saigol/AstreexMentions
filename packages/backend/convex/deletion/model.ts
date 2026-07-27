@@ -27,6 +27,7 @@ export const ACCOUNT_DELETION_PURGE_STAGES = [
   "saved_views",
   "feature_requests",
   "mentions",
+  "tracking_provider_pages",
   "tracking_sources",
   "keywords",
   "categories",

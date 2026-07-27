@@ -132,6 +132,34 @@ function removeCategoryFromSavedViewFilters(
   }
 }
 
+async function removeCategoryFromActiveSavedViews(
+  ctx: MutationCtx,
+  workspaceId: WorkspaceId,
+  categoryId: CategoryId,
+  now: number,
+  failureCode: "CATEGORY_DELETE_FAILED" | "CATEGORY_UPDATE_FAILED",
+): Promise<void> {
+  const savedViews = await ctx.db
+    .query("savedViews")
+    .withIndex("by_workspace_deleted_and_updated_at", (q) =>
+      indexEquals(q, ["workspaceId", workspaceId], ["deletedAt", undefined]),
+    )
+    .take(MAX_ACTIVE_SAVED_VIEWS + 1)
+  if (savedViews.length > MAX_ACTIVE_SAVED_VIEWS) {
+    categoryError(failureCode, "Saved view count exceeds the supported maximum")
+  }
+  for (const savedView of savedViews) {
+    const filters = savedView.filters as SavedViewFilters
+    if (!filters.categoryIds?.includes(categoryId)) {
+      continue
+    }
+    await ctx.db.patch("savedViews", savedView._id as GenericId<"savedViews">, {
+      filters: removeCategoryFromSavedViewFilters(filters, categoryId),
+      updatedAt: now,
+    })
+  }
+}
+
 export function categoryResult(category: CategoryRecord): {
   colorToken: CategoryColorToken
   description: string
@@ -399,6 +427,16 @@ export const updateCategory = authenticatedMutation({
       }
     }
 
+    const now = Date.now()
+    if (current.enabled && args.enabled === false) {
+      await removeCategoryFromActiveSavedViews(
+        ctx,
+        workspace.id,
+        args.categoryId,
+        now,
+        "CATEGORY_UPDATE_FAILED",
+      )
+    }
     const patch = {
       ...(args.colorToken === undefined ? {} : { colorToken: args.colorToken }),
       ...(description === undefined ? {} : { description }),
@@ -406,7 +444,7 @@ export const updateCategory = authenticatedMutation({
       ...(name === undefined
         ? {}
         : { name, normalizedName: normalizeCategoryName(name) }),
-      updatedAt: Date.now(),
+      updatedAt: now,
     }
     await ctx.db.patch("categories", args.categoryId, patch)
 
@@ -454,28 +492,13 @@ export const deleteCategory = authenticatedMutation({
     }
 
     const now = Date.now()
-    const savedViews = await ctx.db
-      .query("savedViews")
-      .withIndex("by_workspace_deleted_and_updated_at", (q) =>
-        indexEquals(q, ["workspaceId", workspace.id], ["deletedAt", undefined]),
-      )
-      .take(MAX_ACTIVE_SAVED_VIEWS + 1)
-    if (savedViews.length > MAX_ACTIVE_SAVED_VIEWS) {
-      categoryError(
-        "CATEGORY_DELETE_FAILED",
-        "Saved view count exceeds the supported maximum",
-      )
-    }
-    for (const savedView of savedViews) {
-      const filters = savedView.filters as SavedViewFilters
-      if (!filters.categoryIds?.includes(categoryId)) {
-        continue
-      }
-      await ctx.db.patch("savedViews", savedView._id, {
-        filters: removeCategoryFromSavedViewFilters(filters, categoryId),
-        updatedAt: now,
-      })
-    }
+    await removeCategoryFromActiveSavedViews(
+      ctx,
+      workspace.id,
+      categoryId,
+      now,
+      "CATEGORY_DELETE_FAILED",
+    )
     await ctx.db.patch("categories", categoryId, {
       deletionPendingAt: row.deletionPendingAt ?? now,
       enabled: false,

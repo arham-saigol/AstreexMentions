@@ -530,6 +530,28 @@ describe("customer category functions", () => {
       name: "Sales leads",
       sort: "newest",
     })
+    await customer.mutation(updateCategory, {
+      categoryId: custom.id,
+      enabled: false,
+    })
+    let savedViews = (await customer.query(listSavedViews, {})) as Array<{
+      filters: { categoryIds?: string[] }
+      name: string
+    }>
+    expect(
+      savedViews.find(({ name }) => name === "Sales leads")?.filters
+        .categoryIds,
+    ).toEqual([other?.id])
+    await customer.mutation(updateCategory, {
+      categoryId: custom.id,
+      enabled: true,
+    })
+    await customer.mutation(createSavedView, {
+      filters: { categoryIds: [custom.id, other!.id] },
+      icon: "funnel",
+      name: "Sales leads for deletion",
+      sort: "newest",
+    })
 
     await t.run(async (ctx) => {
       for (let index = 0; index < 205; index += 1) {
@@ -555,13 +577,13 @@ describe("customer category functions", () => {
     expect(
       reassigned.every((mention) => mention.categoryId === other?.id),
     ).toBe(true)
-    const savedViews = (await customer.query(listSavedViews, {})) as Array<{
+    savedViews = (await customer.query(listSavedViews, {})) as Array<{
       filters: { categoryIds?: string[] }
       name: string
     }>
     expect(
-      savedViews.find(({ name }) => name === "Sales leads")?.filters
-        .categoryIds,
+      savedViews.find(({ name }) => name === "Sales leads for deletion")
+        ?.filters.categoryIds,
     ).toEqual([other?.id])
   })
 })

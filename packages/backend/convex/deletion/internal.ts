@@ -96,6 +96,10 @@ const workspaceIndexedStages = {
   saved_views: ["savedViews", "by_workspace_and_updated_at"],
   subscriptions: ["subscriptions", "by_workspace"],
   system_metric_buckets: ["systemMetricBuckets", "by_workspace_and_bucket"],
+  tracking_provider_pages: [
+    "trackingProviderPages",
+    "by_workspace_and_created_at",
+  ],
   tracking_sources: ["trackingSources", "by_workspace_and_created_at"],
   usage_cycles: ["usageCycles", "by_workspace_and_period_start"],
   workspace_members: ["workspaceMembers", "by_workspace"],

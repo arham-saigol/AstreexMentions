@@ -14,6 +14,7 @@ const REQUIRED_TABLES = [
   "usageCycles",
   "keywords",
   "trackingSources",
+  "trackingProviderPages",
   "mentions",
   "mentionKeywordMatches",
   "categories",
@@ -102,6 +103,11 @@ describe("complete Convex schema", () => {
       "sourceType",
       "status",
       "nextRunAt",
+    ])
+    expectIndex("trackingProviderPages", "by_source_ready_and_batch", [
+      "trackingSourceId",
+      "ready",
+      "batchIndex",
     ])
     expectIndex("keywords", "by_workspace_status_and_created_at", [
       "workspaceId",
