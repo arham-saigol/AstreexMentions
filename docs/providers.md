@@ -132,7 +132,7 @@ https://news.ycombinator.com/item?id={objectID}
 | Environment    | `DEEPSEEK_API_KEY`                               |
 | Endpoint       | `POST https://api.deepseek.com/chat/completions` |
 | Model          | `deepseek-v4-pro`                                |
-| Timeout        | `DEEPSEEK_TIMEOUT_MS`, default 30 seconds        |
+| Timeout        | `DEEPSEEK_TIMEOUT_MS`, default 120 seconds       |
 | Authentication | `Authorization: Bearer <DEEPSEEK_API_KEY>`       |
 
 The integration validates and sends this strict request shape:

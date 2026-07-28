@@ -16,6 +16,9 @@ const baseEnvironment = {
   CREEM_API_KEY: "creem_release",
   CREEM_CHECKOUT_SUCCESS_URL: "https://app.example.com/billing/success",
   CREEM_MODE: "production",
+  CREEM_PRODUCT_ID_GROWTH: "prod_growth",
+  CREEM_PRODUCT_ID_SCALE: "prod_scale",
+  CREEM_PRODUCT_ID_STARTER: "prod_starter",
   CREEM_WEBHOOK_SECRET: "creem_webhook_release",
   DEEPSEEK_API_KEY: "deepseek_release",
   DELETION_IDENTITY_FENCE_MS: "60000",
@@ -31,42 +34,22 @@ const baseEnvironment = {
   XQUIK_API_KEY: "xquik_release",
 }
 
-function runReleaseValidation(products: Record<string, unknown>) {
+function runReleaseValidation(
+  overrides: Readonly<Record<string, string | undefined>> = {},
+) {
   return spawnSync(process.execPath, [scriptPath], {
     encoding: "utf8",
     env: {
       ...process.env,
       ...baseEnvironment,
-      CREEM_PRODUCT_ALLOWLIST_JSON: JSON.stringify(products),
+      ...overrides,
     },
   })
 }
 
-const plans = {
-  growth: {
-    keywordLimit: 6,
-    mentionLimit: 20_000,
-    planId: "growth",
-  },
-  scale: {
-    keywordLimit: 10,
-    mentionLimit: 50_000,
-    planId: "scale",
-  },
-  starter: {
-    keywordLimit: 3,
-    mentionLimit: 2_000,
-    planId: "starter",
-  },
-}
-
 describe("release environment validation", () => {
-  it("accepts exactly one product mapping for every plan", () => {
-    const result = runReleaseValidation({
-      prod_growth: plans.growth,
-      prod_scale: plans.scale,
-      prod_starter: plans.starter,
-    })
+  it("accepts one distinct product ID for every plan", () => {
+    const result = runReleaseValidation()
     expect(result.status).toBe(0)
   })
 
@@ -80,11 +63,6 @@ describe("release environment validation", () => {
         ...process.env,
         ...baseEnvironment,
         [name]: value,
-        CREEM_PRODUCT_ALLOWLIST_JSON: JSON.stringify({
-          prod_growth: plans.growth,
-          prod_scale: plans.scale,
-          prod_starter: plans.starter,
-        }),
       },
     })
     expect(result.status).toBe(1)
@@ -100,11 +78,6 @@ describe("release environment validation", () => {
           ...process.env,
           ...baseEnvironment,
           ADMIN_CLERK_USER_ID: adminClerkUserId,
-          CREEM_PRODUCT_ALLOWLIST_JSON: JSON.stringify({
-            prod_growth: plans.growth,
-            prod_scale: plans.scale,
-            prod_starter: plans.starter,
-          }),
         },
       })
       expect(result.status).toBe(1)
@@ -114,16 +87,13 @@ describe("release environment validation", () => {
     },
   )
 
-  it("rejects an extra product mapped to a duplicate plan", () => {
+  it("rejects a product ID reused by multiple plans", () => {
     const result = runReleaseValidation({
-      prod_growth: plans.growth,
-      prod_growth_duplicate: plans.growth,
-      prod_scale: plans.scale,
-      prod_starter: plans.starter,
+      CREEM_PRODUCT_ID_SCALE: "prod_growth",
     })
     expect(result.status).toBe(1)
     expect(result.stderr).toContain(
-      "Creem product mapping must contain exactly three products.",
+      "Creem Starter, Growth, and Scale product IDs must be distinct.",
     )
   })
 })

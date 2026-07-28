@@ -135,22 +135,24 @@ Set backend variables with the Convex CLI or dashboard. Omitting the value from 
 
 ### Required production runtime values
 
-| Variable                       | Production value                                                                  |
-| ------------------------------ | --------------------------------------------------------------------------------- |
-| `CLERK_JWT_ISSUER_DOMAIN`      | Issuer from Clerk's `convex` JWT template                                         |
-| `ADMIN_CLERK_USER_ID`          | Exact allowed `user_...` ID                                                       |
-| `APP_URL`                      | Customer HTTPS origin used to build the daily-digest CTA; see the route gap below |
-| `CREEM_API_KEY`                | Creem live API key                                                                |
-| `CREEM_MODE`                   | `production`                                                                      |
-| `CREEM_WEBHOOK_SECRET`         | Secret for the production Creem webhook endpoint                                  |
-| `CREEM_PRODUCT_ALLOWLIST_JSON` | Live product-ID-to-plan map described below                                       |
-| `CREEM_CHECKOUT_SUCCESS_URL`   | Absolute HTTPS customer return URL, such as `https://app.example.com/onboarding`  |
-| `RESEND_API_KEY`               | Restricted production sending API key                                             |
-| `RESEND_WEBHOOK_SECRET`        | Secret for the production Resend webhook endpoint                                 |
-| `RESEND_FROM_EMAIL`            | Sender on a verified Resend domain                                                |
-| `XQUIK_API_KEY`                | Xquik API key                                                                     |
-| `FETCHLAYER_API_KEY`           | FetchLayer API key                                                                |
-| `DEEPSEEK_API_KEY`             | DeepSeek API key                                                                  |
+| Variable                     | Production value                                                                  |
+| ---------------------------- | --------------------------------------------------------------------------------- |
+| `CLERK_JWT_ISSUER_DOMAIN`    | Issuer from Clerk's `convex` JWT template                                         |
+| `ADMIN_CLERK_USER_ID`        | Exact allowed `user_...` ID                                                       |
+| `APP_URL`                    | Customer HTTPS origin used to build the daily-digest CTA; see the route gap below |
+| `CREEM_API_KEY`              | Creem live API key                                                                |
+| `CREEM_MODE`                 | `production`                                                                      |
+| `CREEM_WEBHOOK_SECRET`       | Secret for the production Creem webhook endpoint                                  |
+| `CREEM_PRODUCT_ID_STARTER`   | Live Starter product ID                                                           |
+| `CREEM_PRODUCT_ID_GROWTH`    | Live Growth product ID                                                            |
+| `CREEM_PRODUCT_ID_SCALE`     | Live Scale product ID                                                             |
+| `CREEM_CHECKOUT_SUCCESS_URL` | Absolute HTTPS customer return URL, such as `https://app.example.com/onboarding`  |
+| `RESEND_API_KEY`             | Restricted production sending API key                                             |
+| `RESEND_WEBHOOK_SECRET`      | Secret for the production Resend webhook endpoint                                 |
+| `RESEND_FROM_EMAIL`          | Sender on a verified Resend domain                                                |
+| `XQUIK_API_KEY`              | Xquik API key                                                                     |
+| `FETCHLAYER_API_KEY`         | FetchLayer API key                                                                |
+| `DEEPSEEK_API_KEY`           | DeepSeek API key                                                                  |
 
 Optional runtime values:
 
@@ -159,12 +161,12 @@ Optional runtime values:
 | `RESEND_REPLY_TO_EMAIL`          | No separate reply-to when blank                                             |
 | `CREEM_TIMEOUT_MS`               | 15000 ms                                                                    |
 | `RESEND_TIMEOUT_MS`              | 15000 ms                                                                    |
-| `DEEPSEEK_TIMEOUT_MS`            | 30000 ms                                                                    |
+| `DEEPSEEK_TIMEOUT_MS`            | 120000 ms                                                                   |
 | `XQUIK_REQUESTS_PER_SECOND`      | 100; hourly budget is value × 3,600 and minute cap is `min(60, value × 55)` |
 | `FETCHLAYER_REQUESTS_PER_MINUTE` | 30; used as the minute cap and multiplied by 60 for the hourly budget       |
 | `HN_REQUESTS_PER_HOUR`           | 9000; used as the hourly budget and minute cap `min(12, value)`             |
 
-All three dispatch settings must be positive integers; invalid values block tracking dispatch before work is claimed. `ADMIN_URL` is present in `.env.example` but is release metadata only; the current Convex runtime does not read it. Runtime and release validation both use `CREEM_MODE`, `CREEM_CHECKOUT_SUCCESS_URL`, and `CREEM_PRODUCT_ALLOWLIST_JSON`; there are no `CREEM_API_BASE_URL` or `CREEM_PRODUCT_ID_*` variables in the current contract.
+All three dispatch settings must be positive integers; invalid values block tracking dispatch before work is claimed. `ADMIN_URL` is present in `.env.example` but is release metadata only; the current Convex runtime does not read it. Runtime and release validation both use `CREEM_MODE`, `CREEM_CHECKOUT_SUCCESS_URL`, and all three `CREEM_PRODUCT_ID_*` variables. There is no `CREEM_API_BASE_URL` or JSON product allowlist in the current contract.
 
 ## 5. Creem
 
@@ -177,7 +179,7 @@ The billing client selects its API endpoint from `CREEM_MODE`:
 | `test`       | `https://test-api.creem.io/v1` | Creem test products | Developer/non-production Convex deployment |
 | `production` | `https://api.creem.io/v1`      | Creem live products | Controlled production Convex deployment    |
 
-Do not put test product IDs in the production allowlist or live product IDs in a test deployment. Do not reuse webhook secrets between test and live endpoints.
+Do not put test product IDs in the production deployment or live product IDs in a test deployment. Do not reuse webhook secrets between test and live endpoints.
 
 ### Create products and map IDs
 
@@ -189,35 +191,25 @@ Create Starter, Growth, and Scale products separately in Creem test mode and liv
 | Growth  |           $99 |             6 |                20,000 |
 | Scale   |          $199 |            10 |                50,000 |
 
-The runtime reads one JSON object whose **keys are the Creem product IDs**. Example for a test deployment:
+Install each test product ID in its corresponding variable:
 
-```json
-{
-  "prod_test_starter": {
-    "planId": "starter",
-    "keywordLimit": 3,
-    "mentionLimit": 2000
-  },
-  "prod_test_growth": {
-    "planId": "growth",
-    "keywordLimit": 6,
-    "mentionLimit": 20000
-  },
-  "prod_test_scale": {
-    "planId": "scale",
-    "keywordLimit": 10,
-    "mentionLimit": 50000
-  }
-}
+```dotenv
+CREEM_PRODUCT_ID_STARTER=prod_test_starter
+CREEM_PRODUCT_ID_GROWTH=prod_test_growth
+CREEM_PRODUCT_ID_SCALE=prod_test_scale
 ```
 
-Create an equivalent production JSON object with the three live product IDs. Each Astreex plan may appear only once. Install the complete JSON as `CREEM_PRODUCT_ALLOWLIST_JSON`; do not install placeholder IDs.
+Create equivalent production variables with the three live product IDs. The runtime requires all three IDs and rejects duplicates. Keyword and mention limits come from `packages/domain/src/plans.ts`, not deployment variables. Do not install placeholder IDs.
 
 For shell-independent entry, use the interactive form:
 
 ```sh
-pnpm --filter @astreex/backend exec convex env set CREEM_PRODUCT_ALLOWLIST_JSON
-pnpm --filter @astreex/backend exec convex env set --prod CREEM_PRODUCT_ALLOWLIST_JSON
+pnpm --filter @astreex/backend exec convex env set CREEM_PRODUCT_ID_STARTER
+pnpm --filter @astreex/backend exec convex env set CREEM_PRODUCT_ID_GROWTH
+pnpm --filter @astreex/backend exec convex env set CREEM_PRODUCT_ID_SCALE
+pnpm --filter @astreex/backend exec convex env set --prod CREEM_PRODUCT_ID_STARTER
+pnpm --filter @astreex/backend exec convex env set --prod CREEM_PRODUCT_ID_GROWTH
+pnpm --filter @astreex/backend exec convex env set --prod CREEM_PRODUCT_ID_SCALE
 ```
 
 ### Configure the webhook
@@ -328,7 +320,7 @@ The Hacker News adapter calls the public Algolia endpoint `https://hn.algolia.co
 - Endpoint: `https://api.deepseek.com/chat/completions`
 - Implemented model: `deepseek-v4-pro`
 - Request behavior: JSON response format, temperature `0`, high reasoning effort, thinking enabled
-- Optional timeout: `DEEPSEEK_TIMEOUT_MS`, default `30000`
+- Optional timeout: `DEEPSEEK_TIMEOUT_MS`, default `120000`
 
 The model name is fixed in code; there is no environment variable for selecting a different model. A one-minute Convex cron dispatches durable same-workspace batches of up to 50 jobs through four-minute leases, total-result validation, and atomic application. Missing/invalid DeepSeek configuration returns jobs to pending for five minutes without consuming an attempt or writing provider telemetry. A successful typecheck or fixture-backed worker test does not prove that the account has access to `deepseek-v4-pro`.
 
@@ -345,7 +337,9 @@ pnpm --filter @astreex/backend exec convex env set --prod APP_URL
 pnpm --filter @astreex/backend exec convex env set --prod CREEM_MODE production
 pnpm --filter @astreex/backend exec convex env set --prod CREEM_API_KEY
 pnpm --filter @astreex/backend exec convex env set --prod CREEM_WEBHOOK_SECRET
-pnpm --filter @astreex/backend exec convex env set --prod CREEM_PRODUCT_ALLOWLIST_JSON
+pnpm --filter @astreex/backend exec convex env set --prod CREEM_PRODUCT_ID_STARTER
+pnpm --filter @astreex/backend exec convex env set --prod CREEM_PRODUCT_ID_GROWTH
+pnpm --filter @astreex/backend exec convex env set --prod CREEM_PRODUCT_ID_SCALE
 pnpm --filter @astreex/backend exec convex env set --prod CREEM_CHECKOUT_SUCCESS_URL
 pnpm --filter @astreex/backend exec convex env set --prod RESEND_API_KEY
 pnpm --filter @astreex/backend exec convex env set --prod RESEND_WEBHOOK_SECRET
@@ -475,7 +469,9 @@ CREEM_API_KEY
 CREEM_MODE
 CREEM_WEBHOOK_SECRET
 CREEM_CHECKOUT_SUCCESS_URL
-CREEM_PRODUCT_ALLOWLIST_JSON
+CREEM_PRODUCT_ID_STARTER
+CREEM_PRODUCT_ID_GROWTH
+CREEM_PRODUCT_ID_SCALE
 RESEND_API_KEY
 RESEND_WEBHOOK_SECRET
 RESEND_FROM_EMAIL
@@ -488,7 +484,7 @@ It also:
 
 - requires `CREEM_MODE=production`;
 - requires HTTPS for `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_APP_URL`, `NEXT_PUBLIC_ADMIN_URL`, `APP_URL`, `ADMIN_URL`, and `CREEM_CHECKOUT_SUCCESS_URL`;
-- parses `CREEM_PRODUCT_ALLOWLIST_JSON` and requires all three plan IDs with the exact constants from `packages/domain/src/plans.ts`. The script does not independently reject an additional duplicate plan mapping, although runtime billing does.
+- requires all three `CREEM_PRODUCT_ID_*` values and rejects duplicate product IDs.
 
 It does **not** verify:
 

@@ -9,7 +9,7 @@ import {
 
 export const DEEPSEEK_CHAT_COMPLETIONS_URL =
   "https://api.deepseek.com/chat/completions"
-export const DEFAULT_DEEPSEEK_TIMEOUT_MS = 30_000
+export const DEFAULT_DEEPSEEK_TIMEOUT_MS = 120_000
 
 const nonEmptyStringSchema = z.string().trim().min(1)
 const systemMessageSchema = z

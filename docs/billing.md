@@ -14,7 +14,7 @@ The product catalog in `packages/domain/src/plans.ts` is:
 | Growth  |           $99 |             6 |                20,000 |
 | Scale   |          $199 |            10 |                50,000 |
 
-Runtime billing does not look up Creem products from those display definitions. `CREEM_PRODUCT_ALLOWLIST_JSON` maps environment-specific Creem product IDs to `planId`, `keywordLimit`, and `mentionLimit`. The runtime parser requires non-empty product IDs, non-negative integer limits, and at most one product per Astreex plan; it permits a partial allowlist, but an omitted plan cannot be checked out or upgraded to. The release validator requires all three plan IDs with the limits above, but it does not independently reject an additional duplicate mapping; runtime validation still fails closed on duplicates.
+Runtime billing reads the three environment-specific Creem product IDs from `CREEM_PRODUCT_ID_STARTER`, `CREEM_PRODUCT_ID_GROWTH`, and `CREEM_PRODUCT_ID_SCALE`. It derives each product's plan and limits from `packages/domain/src/plans.ts`; deployment configuration cannot redefine entitlements. All three IDs must be non-empty and distinct or billing fails closed as `provider_unconfigured`.
 
 There is **no free trial entitlement**. Only persisted subscription status `active` or `scheduled_cancel` grants entitlement. `trialing`, `past_due`, `unpaid`, `paused`, `canceled`, `expired`, unknown states, and invalid/missing state are inactive. A scheduled cancellation remains active only through `currentPeriodEnd`.
 
@@ -22,21 +22,23 @@ There is **no free trial entitlement**. Only persisted subscription status `acti
 
 ## Runtime configuration
 
-| Variable                       | Contract                                                      |
-| ------------------------------ | ------------------------------------------------------------- |
-| `CREEM_MODE`                   | Required: `test` or `production`. Selects the API base below. |
-| `CREEM_API_KEY`                | Required for checkout, upgrade, and portal calls.             |
-| `CREEM_WEBHOOK_SECRET`         | Required for `/webhooks/creem`.                               |
-| `CREEM_PRODUCT_ALLOWLIST_JSON` | Required product-ID-to-plan/limits mapping.                   |
-| `CREEM_CHECKOUT_SUCCESS_URL`   | Required absolute URL for checkout creation.                  |
-| `CREEM_TIMEOUT_MS`             | Optional positive number; defaults to 15,000 ms.              |
+| Variable                     | Contract                                                      |
+| ---------------------------- | ------------------------------------------------------------- |
+| `CREEM_MODE`                 | Required: `test` or `production`. Selects the API base below. |
+| `CREEM_API_KEY`              | Required for checkout, upgrade, and portal calls.             |
+| `CREEM_WEBHOOK_SECRET`       | Required for `/webhooks/creem`.                               |
+| `CREEM_PRODUCT_ID_STARTER`   | Required Starter product ID for the selected Creem mode.      |
+| `CREEM_PRODUCT_ID_GROWTH`    | Required Growth product ID for the selected Creem mode.       |
+| `CREEM_PRODUCT_ID_SCALE`     | Required Scale product ID for the selected Creem mode.        |
+| `CREEM_CHECKOUT_SUCCESS_URL` | Required absolute URL for checkout creation.                  |
+| `CREEM_TIMEOUT_MS`           | Optional positive number; defaults to 15,000 ms.              |
 
 | Mode         | API base                       |
 | ------------ | ------------------------------ |
 | `test`       | `https://test-api.creem.io/v1` |
 | `production` | `https://api.creem.io/v1`      |
 
-The release validator and runtime both use `CREEM_MODE`, `CREEM_CHECKOUT_SUCCESS_URL`, and `CREEM_PRODUCT_ALLOWLIST_JSON`. The current environment contract has no `CREEM_API_BASE_URL` or separate `CREEM_PRODUCT_ID_STARTER/GROWTH/SCALE` variables.
+The release validator and runtime both use `CREEM_MODE`, `CREEM_CHECKOUT_SUCCESS_URL`, and the three `CREEM_PRODUCT_ID_*` variables. The current environment contract has no `CREEM_API_BASE_URL` or JSON product allowlist.
 
 Missing or invalid runtime configuration returns an explicit `provider_unconfigured` result with variable names, not secret values.
 

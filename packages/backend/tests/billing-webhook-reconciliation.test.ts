@@ -32,19 +32,37 @@ const applyIncompleteWebhook = makeFunctionReference<
   { kind: string }
 >("billing/internal:applyIncompleteCreemBillingEvent")
 
-const originalAllowlist = process.env.CREEM_PRODUCT_ALLOWLIST_JSON
+const creemProductEnvironmentNames = [
+  "CREEM_PRODUCT_ID_GROWTH",
+  "CREEM_PRODUCT_ID_SCALE",
+  "CREEM_PRODUCT_ID_STARTER",
+] as const
+const originalCreemProductEnvironment = Object.fromEntries(
+  creemProductEnvironmentNames.map((name) => [name, process.env[name]]),
+) as Record<(typeof creemProductEnvironmentNames)[number], string | undefined>
+
+function configureCreemProducts(): void {
+  process.env.CREEM_PRODUCT_ID_GROWTH = "prod_growth"
+  process.env.CREEM_PRODUCT_ID_SCALE = "prod_scale"
+  process.env.CREEM_PRODUCT_ID_STARTER = "prod_starter"
+}
 
 afterEach(() => {
-  if (originalAllowlist === undefined) {
-    delete process.env.CREEM_PRODUCT_ALLOWLIST_JSON
-  } else {
-    process.env.CREEM_PRODUCT_ALLOWLIST_JSON = originalAllowlist
+  for (const name of creemProductEnvironmentNames) {
+    const original = originalCreemProductEnvironment[name]
+    if (original === undefined) {
+      delete process.env[name]
+    } else {
+      process.env[name] = original
+    }
   }
 })
 
 describe("Creem webhook reconciliation", () => {
   it("settles and redacts subscription events for already-purged workspaces", async () => {
-    delete process.env.CREEM_PRODUCT_ALLOWLIST_JSON
+    for (const name of creemProductEnvironmentNames) {
+      delete process.env[name]
+    }
     const paidEvent = JSON.parse(
       readFileSync(
         fileURLToPath(
@@ -126,13 +144,7 @@ describe("Creem webhook reconciliation", () => {
   })
 
   it("finalizes in-flight tracking runs before billing pauses their sources", async () => {
-    process.env.CREEM_PRODUCT_ALLOWLIST_JSON = JSON.stringify({
-      prod_growth: {
-        keywordLimit: 6,
-        mentionLimit: 20_000,
-        planId: "growth",
-      },
-    })
+    configureCreemProducts()
     const paidEvent = JSON.parse(
       readFileSync(
         fileURLToPath(
@@ -266,18 +278,7 @@ describe("Creem webhook reconciliation", () => {
   })
 
   it("pauses excess keywords when a subscription is downgraded", async () => {
-    process.env.CREEM_PRODUCT_ALLOWLIST_JSON = JSON.stringify({
-      prod_scale: {
-        keywordLimit: 10,
-        mentionLimit: 50_000,
-        planId: "scale",
-      },
-      prod_starter: {
-        keywordLimit: 3,
-        mentionLimit: 2_000,
-        planId: "starter",
-      },
-    })
+    configureCreemProducts()
     const scaleEvent = JSON.parse(
       readFileSync(
         fileURLToPath(
@@ -404,23 +405,7 @@ describe("Creem webhook reconciliation", () => {
   })
 
   it("orders reconciled incomplete periods by the authoritative subscription version", async () => {
-    process.env.CREEM_PRODUCT_ALLOWLIST_JSON = JSON.stringify({
-      prod_growth: {
-        keywordLimit: 6,
-        mentionLimit: 20_000,
-        planId: "growth",
-      },
-      prod_scale: {
-        keywordLimit: 10,
-        mentionLimit: 50_000,
-        planId: "scale",
-      },
-      prod_starter: {
-        keywordLimit: 3,
-        mentionLimit: 2_000,
-        planId: "starter",
-      },
-    })
+    configureCreemProducts()
     const paidEvent = JSON.parse(
       readFileSync(
         fileURLToPath(

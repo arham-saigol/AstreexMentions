@@ -43,7 +43,7 @@ The admin metrics page can show Creem request success/failure totals if metric b
 ## Recover pending events
 
 1. Correct the target condition:
-   - install a valid `CREEM_PRODUCT_ALLOWLIST_JSON` containing the event product;
+   - install all three distinct `CREEM_PRODUCT_ID_*` values, including the product referenced by the event;
    - ensure checkout metadata contains the active Astreex workspace ID and a matching checkout exists when required;
    - restore the matching webhook secret and route;
    - keep test and live products/secrets/deployments separate.
