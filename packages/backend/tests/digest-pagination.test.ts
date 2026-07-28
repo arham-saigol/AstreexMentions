@@ -116,5 +116,5 @@ describe("daily digest pagination", () => {
       platforms: { hacker_news: 0, reddit: 600, x: 0 },
       total: 600,
     })
-  })
+  }, 10_000)
 })

@@ -53,6 +53,7 @@ import {
   nextSparseMentionCursor,
   mentionResultSchema,
   mentionsPageResultSchema,
+  optimisticStatusHasSettled,
   savedViewsResultSchema,
   visibleMentionStatus,
   type MentionCategory,
@@ -340,8 +341,38 @@ export function MentionsScreen() {
 
   const updateMentionStatus = useMutation(customerConvex.mentions.updateStatus)
 
-  const mentions =
-    mentionsResult.state === "ready" ? mentionsResult.data.items : []
+  const mentions = useMemo(
+    () => (mentionsResult.state === "ready" ? mentionsResult.data.items : []),
+    [mentionsResult],
+  )
+
+  useEffect(() => {
+    const serverStatuses = new Map(
+      mentions.map((mention) => [mention.id, mention.status]),
+    )
+    const settleTimer = window.setTimeout(() => {
+      setOptimisticStatuses((current) => {
+        const settledIds = Object.entries(current)
+          .filter(([mentionId, optimistic]) =>
+            optimisticStatusHasSettled(
+              serverStatuses.get(mentionId),
+              optimistic,
+            ),
+          )
+          .map(([mentionId]) => mentionId)
+        if (settledIds.length === 0) {
+          return current
+        }
+
+        const next = { ...current }
+        for (const mentionId of settledIds) {
+          delete next[mentionId]
+        }
+        return next
+      })
+    }, 0)
+    return () => window.clearTimeout(settleTimer)
+  }, [mentions])
 
   const visibleMentions: MentionItem[] = mentions.map((mention) => ({
     ...mention,

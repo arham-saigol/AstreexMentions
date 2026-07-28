@@ -566,6 +566,19 @@ describe("customer category functions", () => {
     await expect(
       customer.mutation(deleteCategory, { categoryId: custom.id }),
     ).resolves.toEqual({ state: "accepted" })
+    await expect(customer.query(listCategories, {})).resolves.not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: custom.id,
+        }),
+      ]),
+    )
+    await expect(
+      customer.mutation(updateCategory, {
+        categoryId: custom.id,
+        name: "Too late",
+      }),
+    ).rejects.toMatchObject({ data: { code: "CATEGORY_NOT_FOUND" } })
     await t.finishAllScheduledFunctions(vi.runAllTimers)
     const row = await t.run(async (ctx) => await ctx.db.get(custom.id as never))
     expect(row).toMatchObject({ enabled: false })

@@ -194,13 +194,16 @@ async function currentCategories(
       indexEquals(q, ["workspaceId", workspaceId], ["deletedAt", undefined]),
     )
     .take(MAX_ACTIVE_CATEGORIES + 1)
-  if (rows.length > MAX_ACTIVE_CATEGORIES) {
+  const availableRows = rows.filter(
+    (row) => row.deletionPendingAt === undefined,
+  )
+  if (availableRows.length > MAX_ACTIVE_CATEGORIES) {
     categoryError(
       "CATEGORY_LIMIT_REACHED",
       `A workspace can have at most ${MAX_ACTIVE_CATEGORIES} active categories`,
     )
   }
-  const categories = rows
+  const categories = availableRows
     .map(categoryRecord)
     .sort(
       (left, right) =>
@@ -400,7 +403,8 @@ export const updateCategory = authenticatedMutation({
     if (
       !row ||
       row.workspaceId !== workspace.id ||
-      row.deletedAt !== undefined
+      row.deletedAt !== undefined ||
+      row.deletionPendingAt !== undefined
     ) {
       categoryError("CATEGORY_NOT_FOUND", "Category not found")
     }
