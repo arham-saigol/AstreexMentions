@@ -1,0 +1,30 @@
+[
+  {
+    "mentionLimit": 100,
+    "mentionsUsed": 79,
+    "expected": []
+  },
+  {
+    "mentionLimit": 100,
+    "mentionsUsed": 80,
+    "expected": [80]
+  },
+  {
+    "mentionLimit": 100,
+    "mentionsUsed": 100,
+    "expected": [80, 100]
+  },
+  {
+    "mentionLimit": 100,
+    "mentionsUsed": 100,
+    "sent80At": 1,
+    "expected": [100]
+  },
+  {
+    "mentionLimit": 100,
+    "mentionsUsed": 100,
+    "sent80At": 1,
+    "sent100At": 2,
+    "expected": []
+  }
+]

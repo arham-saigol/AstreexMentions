@@ -1,0 +1,38 @@
+{
+  "id": "evt_checkout_completed_1",
+  "eventType": "checkout.completed",
+  "created_at": 1782864000000,
+  "object": {
+    "id": "ch_fixture_1",
+    "object": "checkout",
+    "request_id": "checkout-request-fixture-1",
+    "product": {
+      "id": "prod_growth",
+      "object": "product"
+    },
+    "customer": {
+      "id": "cust_fixture_1",
+      "object": "customer"
+    },
+    "subscription": {
+      "id": "sub_fixture_1",
+      "object": "subscription",
+      "product": "prod_growth",
+      "customer": "cust_fixture_1",
+      "collection_method": "charge_automatically",
+      "status": "active",
+      "canceled_at": null,
+      "created_at": "2026-07-01T00:00:00.000Z",
+      "updated_at": "2026-07-01T00:00:00.000Z",
+      "metadata": {
+        "internal_customer_id": "workspace_fixture_1"
+      },
+      "mode": "test"
+    },
+    "status": "completed",
+    "metadata": {
+      "internal_customer_id": "workspace_fixture_1"
+    },
+    "mode": "test"
+  }
+}

@@ -1,0 +1,10 @@
+node_modules
+.next
+out
+dist
+coverage
+playwright-report
+test-results
+**/next-env.d.ts
+packages/backend/convex/_generated
+pnpm-lock.yaml

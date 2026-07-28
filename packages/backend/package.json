@@ -1,0 +1,37 @@
+{
+  "name": "@astreex/backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./api": "./convex/_generated/api.js",
+    "./data-model": "./convex/_generated/dataModel.d.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "codegen": "convex codegen",
+    "dev": "convex dev",
+    "dev:local": "convex dev --local",
+    "deploy": "convex deploy",
+    "lint": "eslint convex --max-warnings=0",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@astreex/domain": "workspace:*",
+    "@astreex/email": "workspace:*",
+    "@js-temporal/polyfill": "^0.5.1",
+    "convex": "^1.42.0",
+    "convex-helpers": "^0.1.120",
+    "resend": "^6.0.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@astreex/config": "workspace:*",
+    "@types/node": "^24.0.0",
+    "convex-test": "^0.0.54",
+    "eslint": "^9.0.0",
+    "typescript": "^6.0.0",
+    "vitest": "^4.0.0"
+  }
+}

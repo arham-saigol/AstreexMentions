@@ -1,0 +1,32 @@
+{
+  "id": "evt_trialing_20260701",
+  "eventType": "subscription.trialing",
+  "created_at": 1782864000000,
+  "object": {
+    "id": "sub_fixture_trial",
+    "object": "subscription",
+    "product": "prod_growth",
+    "customer": "cust_fixture_trial",
+    "items": [
+      {
+        "id": "item_fixture_trial",
+        "object": "subscription_item",
+        "product_id": "prod_growth",
+        "price_id": "price_growth_monthly",
+        "units": 1,
+        "mode": "test"
+      }
+    ],
+    "collection_method": "charge_automatically",
+    "status": "trialing",
+    "current_period_start_date": "2026-07-01T00:00:00.000Z",
+    "current_period_end_date": "2026-08-01T00:00:00.000Z",
+    "canceled_at": null,
+    "created_at": "2026-07-01T00:00:00.000Z",
+    "updated_at": "2026-07-01T00:00:00.000Z",
+    "metadata": {
+      "internal_customer_id": "workspace_fixture_trial"
+    },
+    "mode": "test"
+  }
+}

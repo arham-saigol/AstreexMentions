@@ -1,0 +1,56 @@
+{
+  "batchCases": [
+    { "mentionCount": 1, "expectedBatchSizes": [1] },
+    { "mentionCount": 50, "expectedBatchSizes": [50] },
+    { "mentionCount": 51, "expectedBatchSizes": [50, 1] }
+  ],
+  "categories": [
+    {
+      "description": "Requests for help, explanations, or setup guidance.",
+      "enabled": true,
+      "isSystem": true,
+      "name": "Question",
+      "systemKey": "question"
+    },
+    {
+      "description": "Reports of crashes, incorrect behavior, or regressions.",
+      "enabled": true,
+      "isSystem": true,
+      "name": "Bug",
+      "systemKey": "bug"
+    },
+    {
+      "description": "Anything that does not fit another enabled category.",
+      "enabled": true,
+      "isSystem": true,
+      "name": "Other",
+      "systemKey": "other"
+    }
+  ],
+  "disabledCategory": {
+    "description": "A disabled category that must never be sent to DeepSeek.",
+    "enabled": false,
+    "isSystem": false,
+    "name": "Disabled fixture category"
+  },
+  "invalidOutputs": [
+    "missing_mapping",
+    "duplicate_mapping",
+    "unknown_mention",
+    "unknown_category"
+  ],
+  "mentions": [
+    {
+      "body": "How can I connect the workspace integration?",
+      "title": "Setup help"
+    },
+    {
+      "body": "The export crashes after I select a date range.",
+      "title": "Export regression"
+    }
+  ],
+  "providerFailures": {
+    "permanentStatus": 401,
+    "transientStatus": 500
+  }
+}

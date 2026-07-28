@@ -1,0 +1,41 @@
+{
+  "listingType": "search",
+  "items": [
+    {
+      "id": "1abcde",
+      "fullname": "t3_1abcde",
+      "subreddit": "SaaS",
+      "subredditPrefixed": "r/SaaS",
+      "author": "founder_one",
+      "title": "How do you monitor brand mentions?",
+      "permalink": "/r/SaaS/comments/1abcde/how_do_you_monitor_brand_mentions/",
+      "url": "https://example.com/brand-monitoring",
+      "createdAt": "2026-07-25T15:30:00Z",
+      "score": 84,
+      "commentCount": 21,
+      "previewText": "We need a reliable way to catch customer questions.",
+      "nsfw": false,
+      "spoiler": false,
+      "locked": false,
+      "stickied": false
+    },
+    {
+      "id": "1abcd0",
+      "fullname": "t3_1abcd0",
+      "subreddit": "startups",
+      "subredditPrefixed": "r/startups",
+      "author": "builder_two",
+      "title": "Astreex feedback",
+      "permalink": "https://old.reddit.com/r/startups/comments/1abcd0/astreex_feedback/",
+      "createdAt": "2026-07-25T14:00:00Z",
+      "score": 7,
+      "commentCount": 2
+    }
+  ],
+  "itemCount": 2,
+  "nextPageUrl": "https://www.reddit.com/search/?q=astreex&after=t3_1abcd0",
+  "pagesRequested": 2,
+  "pagesScraped": 2,
+  "responseStatus": 200,
+  "scrapedAt": "2026-07-25T15:31:00Z"
+}
