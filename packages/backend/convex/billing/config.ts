@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { PLAN_IDS, PLANS } from "@astreex/domain"
 
 import { DEFAULT_CREEM_TIMEOUT_MS, type CreemMode } from "../integrations/creem"
 import type { AstreexPlanId } from "../lib/creemBilling"
@@ -38,15 +39,15 @@ type Environment = Readonly<Record<string, string | undefined>>
 
 const modeSchema = z.enum(["production", "test"])
 const positiveTimeoutSchema = z.coerce.number().finite().positive()
-const planSchema = z
-  .object({
-    keywordLimit: z.number().int().nonnegative(),
-    mentionLimit: z.number().int().nonnegative(),
-    planId: z.enum(["starter", "growth", "scale"]),
-  })
-  .strict()
+const CREEM_PRODUCT_ENV_BY_PLAN = {
+  growth: "CREEM_PRODUCT_ID_GROWTH",
+  scale: "CREEM_PRODUCT_ID_SCALE",
+  starter: "CREEM_PRODUCT_ID_STARTER",
+} as const satisfies Readonly<Record<AstreexPlanId, string>>
 
-const productAllowlistSchema = z.record(z.string().trim().min(1), planSchema)
+export const CREEM_PRODUCT_ENV_NAMES = Object.freeze(
+  PLAN_IDS.map((planId) => CREEM_PRODUCT_ENV_BY_PLAN[planId]),
+)
 
 function providerUnconfigured(...missing: string[]): ProviderUnconfigured {
   return {
@@ -104,33 +105,35 @@ export function readCreemApiConfiguration(
 export function readCreemProductAllowlist(
   environment: Environment,
 ): ReadonlyMap<string, CreemPlanMapping> | ProviderUnconfigured {
-  const raw = environment.CREEM_PRODUCT_ALLOWLIST_JSON?.trim()
-  if (!raw) {
-    return providerUnconfigured("CREEM_PRODUCT_ALLOWLIST_JSON")
+  const productIds = PLAN_IDS.map((planId) => {
+    const environmentName = CREEM_PRODUCT_ENV_BY_PLAN[planId]
+    return {
+      environmentName,
+      planId,
+      productId: environment[environmentName]?.trim(),
+    }
+  })
+  const missing = productIds
+    .filter(({ productId }) => !productId)
+    .map(({ environmentName }) => environmentName)
+  if (missing.length > 0) {
+    return providerUnconfigured(...missing)
   }
 
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(raw) as unknown
-  } catch {
-    return providerUnconfigured("CREEM_PRODUCT_ALLOWLIST_JSON")
-  }
-
-  const result = productAllowlistSchema.safeParse(parsed)
-  if (!result.success || Object.keys(result.data).length === 0) {
-    return providerUnconfigured("CREEM_PRODUCT_ALLOWLIST_JSON")
+  const configuredProductIds = productIds.map(({ productId }) => productId!)
+  if (new Set(configuredProductIds).size !== configuredProductIds.length) {
+    return providerUnconfigured(...CREEM_PRODUCT_ENV_NAMES)
   }
 
   const plansByProductId = new Map<string, CreemPlanMapping>()
-  const seenPlans = new Set<AstreexPlanId>()
-  for (const [productId, plan] of Object.entries(result.data)) {
-    if (seenPlans.has(plan.planId)) {
-      return providerUnconfigured("CREEM_PRODUCT_ALLOWLIST_JSON")
-    }
-    seenPlans.add(plan.planId)
-    plansByProductId.set(productId, {
-      ...plan,
-      productId,
+  for (const { planId, productId } of productIds) {
+    const plan = PLANS[planId]
+    const configuredProductId = productId!
+    plansByProductId.set(configuredProductId, {
+      keywordLimit: plan.keywordLimit,
+      mentionLimit: plan.monthlyMentionLimit,
+      planId,
+      productId: configuredProductId,
     })
   }
 

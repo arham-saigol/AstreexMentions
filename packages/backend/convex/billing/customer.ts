@@ -562,7 +562,11 @@ export const upgradeSubscription = customerAction({
           workspaceId: ctx.workspace.id,
         })
         return {
-          missing: ["CREEM_PRODUCT_ALLOWLIST_JSON"],
+          missing: [
+            "CREEM_PRODUCT_ID_GROWTH",
+            "CREEM_PRODUCT_ID_SCALE",
+            "CREEM_PRODUCT_ID_STARTER",
+          ],
           state: "provider_unconfigured" as const,
         }
       }

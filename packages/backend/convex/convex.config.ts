@@ -3,6 +3,6 @@ import { v } from "convex/values"
 
 export default defineApp({
   env: {
-    ADMIN_CLERK_USER_ID: v.string(),
+    ADMIN_CLERK_USER_ID: v.optional(v.string()),
   },
 })

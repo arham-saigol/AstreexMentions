@@ -237,29 +237,32 @@ describe("Creem configuration", () => {
         "CREEM_API_KEY",
         "CREEM_CHECKOUT_SUCCESS_URL",
         "CREEM_MODE",
-        "CREEM_PRODUCT_ALLOWLIST_JSON",
+        "CREEM_PRODUCT_ID_GROWTH",
+        "CREEM_PRODUCT_ID_SCALE",
+        "CREEM_PRODUCT_ID_STARTER",
       ],
       state: "provider_unconfigured",
     })
     expect(readCreemWebhookConfiguration({})).toEqual({
-      missing: ["CREEM_PRODUCT_ALLOWLIST_JSON", "CREEM_WEBHOOK_SECRET"],
+      missing: [
+        "CREEM_PRODUCT_ID_GROWTH",
+        "CREEM_PRODUCT_ID_SCALE",
+        "CREEM_PRODUCT_ID_STARTER",
+        "CREEM_WEBHOOK_SECRET",
+      ],
       state: "provider_unconfigured",
     })
   })
 
-  it("accepts an explicit product allowlist mapping", () => {
+  it("maps separate product IDs to domain-owned plan limits", () => {
     const result = readCreemCheckoutConfiguration(
       {
         CREEM_API_KEY: "creem_secret_fixture",
         CREEM_CHECKOUT_SUCCESS_URL: "https://app.example.test/billing/return",
         CREEM_MODE: "test",
-        CREEM_PRODUCT_ALLOWLIST_JSON: JSON.stringify({
-          prod_growth: {
-            keywordLimit: 10,
-            mentionLimit: 5_000,
-            planId: "growth",
-          },
-        }),
+        CREEM_PRODUCT_ID_GROWTH: "prod_growth",
+        CREEM_PRODUCT_ID_SCALE: "prod_scale",
+        CREEM_PRODUCT_ID_STARTER: "prod_starter",
       },
       "growth",
     )
@@ -267,13 +270,31 @@ describe("Creem configuration", () => {
     expect(result).toMatchObject({
       mode: "test",
       plan: {
-        keywordLimit: 10,
-        mentionLimit: 5_000,
+        keywordLimit: 6,
+        mentionLimit: 20_000,
         planId: "growth",
         productId: "prod_growth",
       },
       state: "configured",
     })
     expect(result.state).toBe("configured")
+  })
+
+  it("rejects a product ID reused by multiple plans", () => {
+    expect(
+      readCreemWebhookConfiguration({
+        CREEM_PRODUCT_ID_GROWTH: "prod_duplicate",
+        CREEM_PRODUCT_ID_SCALE: "prod_duplicate",
+        CREEM_PRODUCT_ID_STARTER: "prod_starter",
+        CREEM_WEBHOOK_SECRET: "webhook_secret",
+      }),
+    ).toEqual({
+      missing: [
+        "CREEM_PRODUCT_ID_GROWTH",
+        "CREEM_PRODUCT_ID_SCALE",
+        "CREEM_PRODUCT_ID_STARTER",
+      ],
+      state: "provider_unconfigured",
+    })
   })
 })
