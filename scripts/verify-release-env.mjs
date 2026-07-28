@@ -94,7 +94,7 @@ const creemProductIds = [
   process.env.CREEM_PRODUCT_ID_STARTER,
   process.env.CREEM_PRODUCT_ID_GROWTH,
   process.env.CREEM_PRODUCT_ID_SCALE,
-]
+].map((productId) => productId.trim())
 if (new Set(creemProductIds).size !== creemProductIds.length) {
   console.error(
     "Creem Starter, Growth, and Scale product IDs must be distinct.",

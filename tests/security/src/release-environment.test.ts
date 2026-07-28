@@ -96,4 +96,14 @@ describe("release environment validation", () => {
       "Creem Starter, Growth, and Scale product IDs must be distinct.",
     )
   })
+
+  it("rejects product IDs that become duplicates after trimming", () => {
+    const result = runReleaseValidation({
+      CREEM_PRODUCT_ID_SCALE: " prod_growth ",
+    })
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain(
+      "Creem Starter, Growth, and Scale product IDs must be distinct.",
+    )
+  })
 })
