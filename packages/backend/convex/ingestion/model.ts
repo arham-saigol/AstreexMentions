@@ -4,6 +4,18 @@ export const INGESTED_MENTION_METRIC = "mentions_ingested"
 export const INGESTED_MENTION_PLATFORM_METRIC_PREFIX =
   "mentions_ingested_platform:"
 export const CATEGORIZED_MENTION_METRIC_PREFIX = "mentions_categorized:"
+export const CATEGORIZED_MENTION_GROUPS = [
+  { key: "question", label: "Question" },
+  { key: "complaint", label: "Complaint" },
+  { key: "praise", label: "Praise" },
+  { key: "bug", label: "Bug" },
+  { key: "feature_request", label: "Feature Request" },
+  { key: "competitor_mention", label: "Competitor Mention" },
+  { key: "other", label: "Other" },
+  { key: "custom", label: "Custom" },
+] as const
+export type CategorizedMentionGroup =
+  (typeof CATEGORIZED_MENTION_GROUPS)[number]["key"]
 export const USAGE_WARNING_THRESHOLDS = [80, 100] as const
 export type UsageWarningThreshold = (typeof USAGE_WARNING_THRESHOLDS)[number]
 export type IngestionTrackingSourceType =
@@ -15,8 +27,10 @@ export function ingestedMentionPlatformMetric(
   return `${INGESTED_MENTION_PLATFORM_METRIC_PREFIX}${platform}`
 }
 
-export function categorizedMentionMetric(categoryId: string): string {
-  return `${CATEGORIZED_MENTION_METRIC_PREFIX}${categoryId}`
+export function categorizedMentionMetric(
+  group: CategorizedMentionGroup,
+): string {
+  return `${CATEGORIZED_MENTION_METRIC_PREFIX}${group}`
 }
 
 export function candidateMatchesTrackingSource(

@@ -154,7 +154,7 @@ const creemCheckoutResponseSchema = z
 
 const creemPortalResponseSchema = z
   .object({
-    customer_portal_link: z.string().url(),
+    customer_portal_link: httpsUrlSchema,
   })
   .passthrough()
 

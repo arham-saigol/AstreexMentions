@@ -1,11 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import {
-  isPublicationDate,
-  publicationDateToTimestamp,
-  sanitizeChangelogPreview,
-  timestampToPublicationDate,
-} from "./changelog"
+import { isPublicationDate, sanitizeChangelogPreview } from "./changelog"
 
 describe("sanitizeChangelogPreview", () => {
   it("removes executable markup and HTML tags", () => {
@@ -27,10 +22,5 @@ describe("publication date helpers", () => {
     expect(isPublicationDate("2026-07-26")).toBe(true)
     expect(isPublicationDate("2026-02-30")).toBe(false)
     expect(isPublicationDate("07/26/2026")).toBe(false)
-  })
-
-  it("round-trips a UTC publication date", () => {
-    const timestamp = publicationDateToTimestamp("2026-07-26")
-    expect(timestampToPublicationDate(timestamp)).toBe("2026-07-26")
   })
 })

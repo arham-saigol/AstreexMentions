@@ -1,7 +1,8 @@
-import { ConvexError, type GenericId, v } from "convex/values"
+import { internal } from "./_generated/api"
+import { ConvexError, v } from "convex/values"
+import type { Id } from "./_generated/dataModel"
 
 import { authenticatedMutation, authenticatedQuery } from "./lib/authorization"
-import { internalMutationReference } from "./lib/functionReferences"
 import {
   assertCategoryCatalog,
   assertCategoryDeletionAllowed,
@@ -13,14 +14,14 @@ import {
   type CategorySystemKey,
 } from "./lib/categories"
 import { categoryColorTokenValidator } from "./schema"
-import { indexEquals, internalMutation, type MutationCtx } from "./server"
+import { internalMutation, type MutationCtx } from "./_generated/server"
 import { resolveCurrentCustomer } from "./users"
 
-type CategoryId = GenericId<"categories">
-type WorkspaceId = GenericId<"workspaces">
+type CategoryId = Id<"categories">
+type WorkspaceId = Id<"workspaces">
 type SavedViewFilters = {
   categoryIds?: CategoryId[]
-  keywordIds?: GenericId<"keywords">[]
+  keywordIds?: Id<"keywords">[]
   mentionStatuses?: Array<"new" | "saved" | "dismissed">
   platforms?: Array<"x" | "reddit" | "hacker_news">
   publishedAfter?: number
@@ -142,7 +143,7 @@ async function removeCategoryFromActiveSavedViews(
   const savedViews = await ctx.db
     .query("savedViews")
     .withIndex("by_workspace_deleted_and_updated_at", (q) =>
-      indexEquals(q, ["workspaceId", workspaceId], ["deletedAt", undefined]),
+      q.eq("workspaceId", workspaceId).eq("deletedAt", undefined),
     )
     .take(MAX_ACTIVE_SAVED_VIEWS + 1)
   if (savedViews.length > MAX_ACTIVE_SAVED_VIEWS) {
@@ -153,7 +154,7 @@ async function removeCategoryFromActiveSavedViews(
     if (!filters.categoryIds?.includes(categoryId)) {
       continue
     }
-    await ctx.db.patch("savedViews", savedView._id as GenericId<"savedViews">, {
+    await ctx.db.patch("savedViews", savedView._id, {
       filters: removeCategoryFromSavedViewFilters(filters, categoryId),
       updatedAt: now,
     })
@@ -186,24 +187,26 @@ export function categoryResult(category: CategoryRecord): {
 
 async function currentCategories(
   ctx: Parameters<typeof resolveCurrentCustomer>[0],
-  workspaceId: GenericId<"workspaces">,
+  workspaceId: Id<"workspaces">,
 ): Promise<CategoryRecord[]> {
   const rows = await ctx.db
     .query("categories")
-    .withIndex("by_workspace_deleted_enabled_and_sort_order", (q) =>
-      indexEquals(q, ["workspaceId", workspaceId], ["deletedAt", undefined]),
+    .withIndex(
+      "by_workspace_deleted_at_and_deletion_pending_at_and_sort_order",
+      (q) =>
+        q
+          .eq("workspaceId", workspaceId)
+          .eq("deletedAt", undefined)
+          .eq("deletionPendingAt", undefined),
     )
     .take(MAX_ACTIVE_CATEGORIES + 1)
-  const availableRows = rows.filter(
-    (row) => row.deletionPendingAt === undefined,
-  )
-  if (availableRows.length > MAX_ACTIVE_CATEGORIES) {
+  if (rows.length > MAX_ACTIVE_CATEGORIES) {
     categoryError(
       "CATEGORY_LIMIT_REACHED",
       `A workspace can have at most ${MAX_ACTIVE_CATEGORIES} active categories`,
     )
   }
-  const categories = availableRows
+  const categories = rows
     .map(categoryRecord)
     .sort(
       (left, right) =>
@@ -220,18 +223,16 @@ async function currentCategories(
 
 async function findDuplicateName(
   ctx: Parameters<typeof resolveCurrentCustomer>[0],
-  workspaceId: GenericId<"workspaces">,
+  workspaceId: Id<"workspaces">,
   normalizedName: string,
 ): Promise<Record<string, unknown> | null> {
   return await ctx.db
     .query("categories")
     .withIndex("by_workspace_normalized_name_and_deleted_at", (q) =>
-      indexEquals(
-        q,
-        ["workspaceId", workspaceId],
-        ["normalizedName", normalizedName],
-        ["deletedAt", undefined],
-      ),
+      q
+        .eq("workspaceId", workspaceId)
+        .eq("normalizedName", normalizedName)
+        .eq("deletedAt", undefined),
     )
     .unique()
 }
@@ -489,7 +490,7 @@ export const deleteCategory = authenticatedMutation({
     const other = await ctx.db
       .query("categories")
       .withIndex("by_workspace_and_system_key", (q) =>
-        indexEquals(q, ["workspaceId", workspace.id], ["systemKey", "other"]),
+        q.eq("workspaceId", workspace.id).eq("systemKey", "other"),
       )
       .unique()
     if (
@@ -518,11 +519,15 @@ export const deleteCategory = authenticatedMutation({
       enabled: false,
       updatedAt: now,
     })
-    await ctx.scheduler.runAfter(0, reassignCategoryDeletionBatchReference, {
-      categoryId,
-      otherCategoryId: other._id as CategoryId,
-      workspaceId: workspace.id,
-    })
+    await ctx.scheduler.runAfter(
+      0,
+      internal.categories.reassignCategoryDeletionBatch,
+      {
+        categoryId,
+        otherCategoryId: other._id as CategoryId,
+        workspaceId: workspace.id,
+      },
+    )
 
     return { state: "accepted" as const }
   },
@@ -566,11 +571,7 @@ export const reassignCategoryDeletionBatch = internalMutation({
     const mentions = await ctx.db
       .query("mentions")
       .withIndex("by_workspace_category_and_published_at", (q) =>
-        indexEquals(
-          q,
-          ["workspaceId", args.workspaceId],
-          ["categoryId", args.categoryId],
-        ),
+        q.eq("workspaceId", args.workspaceId).eq("categoryId", args.categoryId),
       )
       .take(CATEGORY_REASSIGN_BATCH_SIZE)
     for (const mention of mentions) {
@@ -581,11 +582,15 @@ export const reassignCategoryDeletionBatch = internalMutation({
     }
 
     if (mentions.length === CATEGORY_REASSIGN_BATCH_SIZE) {
-      await ctx.scheduler.runAfter(0, reassignCategoryDeletionBatchReference, {
-        categoryId: args.categoryId,
-        otherCategoryId: args.otherCategoryId,
-        workspaceId: args.workspaceId,
-      })
+      await ctx.scheduler.runAfter(
+        0,
+        internal.categories.reassignCategoryDeletionBatch,
+        {
+          categoryId: args.categoryId,
+          otherCategoryId: args.otherCategoryId,
+          workspaceId: args.workspaceId,
+        },
+      )
       return {
         reassignedCount: mentions.length,
         state: "in_progress" as const,
@@ -601,10 +606,3 @@ export const reassignCategoryDeletionBatch = internalMutation({
     return { reassignedCount: mentions.length, state: "completed" as const }
   },
 })
-
-export const reassignCategoryDeletionBatchReference =
-  internalMutationReference<{
-    categoryId: CategoryId
-    otherCategoryId: CategoryId
-    workspaceId: WorkspaceId
-  }>("categories:reassignCategoryDeletionBatch")

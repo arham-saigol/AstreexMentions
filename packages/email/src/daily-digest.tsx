@@ -1,6 +1,5 @@
 import {
   canonicalizeMentionUrl,
-  localDateSchema,
   MENTION_CATEGORIES,
   PLATFORMS,
   type MentionCategory,
@@ -8,6 +7,7 @@ import {
 } from "@astreex/domain"
 import { Button, Heading, Link, Section, Text } from "react-email"
 import type { CSSProperties } from "react"
+import { z } from "zod"
 
 import { colors, EmailLayout, fontFamily } from "./email-layout"
 import {
@@ -203,7 +203,7 @@ function assertDigestProps({
   topMentions,
   workspaceName,
 }: DailyDigestEmailProps): void {
-  localDateSchema.parse(localDate)
+  z.iso.date().parse(localDate)
   assertCounts(counts)
   if (counts.total === 0) {
     throw new RangeError("Daily digest emails require at least one mention")
@@ -222,7 +222,7 @@ export function dailyDigestSubject(
   localDate: string,
   mentionCount: number,
 ): string {
-  localDateSchema.parse(localDate)
+  z.iso.date().parse(localDate)
   assertNonNegativeSafeInteger("mentionCount", mentionCount)
   const noun = mentionCount === 1 ? "mention" : "mentions"
   return `Astreex daily digest: ${formatInteger(mentionCount)} ${noun} for ${localDate}`

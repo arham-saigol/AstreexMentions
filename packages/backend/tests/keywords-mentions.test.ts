@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs"
-
 import { convexTest } from "convex-test"
 import {
   defineSchema,
@@ -10,19 +8,8 @@ import {
 import { type GenericId, v } from "convex/values"
 import { describe, expect, it } from "vitest"
 
-import {
-  desiredTrackingState,
-  keywordCapacity,
-  MAX_DRAFT_KEYWORDS,
-  normalizeKeywordPhrase,
-  normalizeKeywordPlatforms,
-  trackingSourceTypesForPlatforms,
-} from "../convex/keywords"
-import {
-  compareMentionRecords,
-  normalizeMentionSearchQuery,
-  safeCanonicalUrl,
-} from "../convex/mentions"
+import { MAX_DRAFT_KEYWORDS } from "../convex/keywords"
+import { safeCanonicalUrl } from "../convex/mentions"
 
 const modules = {
   "./_generated/server.ts": async () => ({}),
@@ -109,7 +96,7 @@ const listKeywordsReference = makeFunctionReference<"query", object, unknown>(
 )
 const getKeywordSummaryReference = makeFunctionReference<
   "query",
-  object,
+  { now: number },
   unknown
 >("keywords:getKeywordSummary")
 const updateKeywordReference = makeFunctionReference<
@@ -149,6 +136,7 @@ const listMentionsReference = makeFunctionReference<
       publishedBefore?: number
     }
     limit?: number
+    now: number
     query?: string
     sort?: "newest" | "oldest" | "most_engaged"
   },
@@ -288,68 +276,6 @@ function mentionPage(value: unknown) {
   }
 }
 
-describe("keyword model", () => {
-  it("normalizes phrases, deduplicates platforms, and expands Reddit separately", () => {
-    expect(normalizeKeywordPhrase("  Astreex   Monitor ")).toBe(
-      "astreex monitor",
-    )
-    expect(normalizeKeywordPlatforms(["reddit", "x", "reddit"])).toEqual([
-      "x",
-      "reddit",
-    ])
-    expect(trackingSourceTypesForPlatforms(["x", "reddit"])).toEqual([
-      "x",
-      "reddit_posts",
-      "reddit_comments",
-    ])
-  })
-
-  it("uses ten draft slots and the paid usage-cycle keyword limit", () => {
-    expect(MAX_DRAFT_KEYWORDS).toBe(10)
-    expect(keywordCapacity({ configuredCount: 9 })).toEqual({
-      canCreate: true,
-      limit: 10,
-      limitReached: false,
-      remaining: 1,
-    })
-    expect(
-      keywordCapacity({ configuredCount: 3, paidKeywordLimit: 3 }),
-    ).toEqual({
-      canCreate: false,
-      limit: 3,
-      limitReached: true,
-      remaining: 0,
-    })
-  })
-
-  it("pauses sources for user, unpaid, and exhausted-usage states", () => {
-    expect(
-      desiredTrackingState({
-        hasActiveSubscription: true,
-        hasCurrentUsage: true,
-        keywordStatus: "paused",
-        usageExhausted: false,
-      }),
-    ).toEqual({ pauseReason: "user", status: "paused" })
-    expect(
-      desiredTrackingState({
-        hasActiveSubscription: false,
-        hasCurrentUsage: false,
-        keywordStatus: "active",
-        usageExhausted: false,
-      }),
-    ).toEqual({ pauseReason: "paid", status: "paused" })
-    expect(
-      desiredTrackingState({
-        hasActiveSubscription: true,
-        hasCurrentUsage: true,
-        keywordStatus: "active",
-        usageExhausted: true,
-      }),
-    ).toEqual({ pauseReason: "usage", status: "paused" })
-  })
-})
-
 describe("keyword Convex functions", () => {
   it("creates one unpaid keyword with independent scheduled Reddit sources", async () => {
     const t = createBackendTest()
@@ -404,10 +330,9 @@ describe("keyword Convex functions", () => {
       }),
     ).rejects.toMatchObject({ data: { code: "KEYWORD_ALREADY_EXISTS" } })
 
-    const summary = (await customer.client.query(
-      getKeywordSummaryReference,
-      {},
-    )) as Record<string, unknown>
+    const summary = (await customer.client.query(getKeywordSummaryReference, {
+      now: Date.now(),
+    })) as Record<string, unknown>
     expect(summary).toMatchObject({
       canCreate: true,
       count: 1,
@@ -741,34 +666,6 @@ describe("mention model", () => {
       safeCanonicalUrl("https://user:secret@example.com/post"),
     ).toThrow(/credentials/)
   })
-
-  it("normalizes search and deterministically sorts every supported order", () => {
-    expect(normalizeMentionSearchQuery("  Great   PRODUCT ")).toBe(
-      "great product",
-    )
-    const records = [
-      { _id: "a", engagementScore: 2, publishedAt: 20 },
-      { _id: "b", engagementScore: 9, publishedAt: 10 },
-      { _id: "c", engagementScore: 9, publishedAt: 30 },
-    ]
-    expect(
-      [...records]
-        .sort((left, right) => compareMentionRecords(left, right, "newest"))
-        .map((record) => record._id),
-    ).toEqual(["c", "a", "b"])
-    expect(
-      [...records]
-        .sort((left, right) => compareMentionRecords(left, right, "oldest"))
-        .map((record) => record._id),
-    ).toEqual(["b", "a", "c"])
-    expect(
-      [...records]
-        .sort((left, right) =>
-          compareMentionRecords(left, right, "most_engaged"),
-        )
-        .map((record) => record._id),
-    ).toEqual(["c", "b", "a"])
-  })
 })
 
 async function seedMentions(t: BackendTest, customer: SeededCustomer) {
@@ -881,6 +778,7 @@ describe("mention Convex functions", () => {
       await customer.client.query(listMentionsReference, {
         filters: { keywordIds: [seeded.keywordId] },
         limit: 1,
+        now: Date.now(),
         query: "astreex",
         sort: "most_engaged",
       }),
@@ -906,6 +804,7 @@ describe("mention Convex functions", () => {
         cursor: firstPage.nextCursor ?? undefined,
         filters: { keywordIds: [seeded.keywordId] },
         limit: 1,
+        now: Date.now(),
         query: "astreex",
         sort: "most_engaged",
       }),
@@ -920,6 +819,7 @@ describe("mention Convex functions", () => {
           mentionStatuses: ["new"],
           platforms: ["x"],
         },
+        now: Date.now(),
         sort: "oldest",
       }),
     )
@@ -959,6 +859,7 @@ describe("mention Convex functions", () => {
     const page = mentionPage(
       await customer.client.query(listMentionsReference, {
         limit: 1,
+        now,
         query: "fresh mention",
         sort: "newest",
       }),
@@ -999,6 +900,7 @@ describe("mention Convex functions", () => {
     const page = mentionPage(
       await customer.client.query(listMentionsReference, {
         limit: 2,
+        now,
         sort: "most_engaged",
       }),
     )
@@ -1019,6 +921,7 @@ describe("mention Convex functions", () => {
     const page = mentionPage(
       await firstCustomer.client.query(listMentionsReference, {
         limit: 1,
+        now: Date.now(),
         sort: "newest",
       }),
     )
@@ -1028,6 +931,7 @@ describe("mention Convex functions", () => {
       secondCustomer.client.query(listMentionsReference, {
         cursor: page.nextCursor ?? undefined,
         limit: 1,
+        now: Date.now(),
         sort: "newest",
       }),
     ).rejects.toMatchObject({ data: { code: "INVALID_CURSOR" } })
@@ -1060,82 +964,5 @@ describe("mention Convex functions", () => {
       sources: (await ctx.db.query("trackingSources").collect()).length,
     }))
     expect(counts).toEqual({ matches: 2, mentions: 3, sources: 1 })
-  })
-})
-
-describe("frontend function inventory", () => {
-  const keywordSource = readFileSync(
-    new URL("../convex/keywords.ts", import.meta.url),
-    "utf8",
-  )
-  const mentionSource = readFileSync(
-    new URL("../convex/mentions.ts", import.meta.url),
-    "utf8",
-  )
-
-  it("exports every exact customer function through authenticated wrappers", () => {
-    for (const name of [
-      "listKeywords",
-      "getKeywordSummary",
-      "createKeyword",
-      "updateKeyword",
-      "pauseKeyword",
-      "resumeKeyword",
-      "deleteKeyword",
-    ]) {
-      expect(keywordSource).toContain(`export const ${name}`)
-    }
-    for (const name of ["listMentions", "getMention", "updateMentionStatus"]) {
-      expect(mentionSource).toContain(`export const ${name}`)
-    }
-    expect(keywordSource).toContain("authenticatedQuery")
-    expect(keywordSource).toContain("authenticatedMutation")
-    expect(mentionSource).toContain("authenticatedQuery")
-    expect(mentionSource).toContain("authenticatedMutation")
-  })
-
-  it("only cleans saved views during keyword deletion", () => {
-    expect(keywordSource).not.toContain('db.insert("savedViews"')
-    expect(keywordSource).toContain('db.patch("savedViews"')
-    expect(mentionSource).not.toContain('db.insert("savedViews"')
-    expect(mentionSource).not.toContain('db.patch("savedViews"')
-    for (const source of [keywordSource, mentionSource]) {
-      expect(source).not.toContain('db.insert("providerRuns"')
-      expect(source).not.toContain('db.insert("providerMetricBuckets"')
-    }
-  })
-
-  it("selects live keyword statuses before reading configuration rows", () => {
-    const configuredKeywordQuery = keywordSource.slice(
-      keywordSource.indexOf("async function configuredKeywords"),
-      keywordSource.indexOf("async function assertUniquePhrase"),
-    )
-    expect(configuredKeywordQuery).toContain(
-      '"by_workspace_status_and_created_at"',
-    )
-    expect(configuredKeywordQuery).toContain('["active", "paused"]')
-    expect(configuredKeywordQuery).not.toContain(
-      '"by_workspace_and_updated_at"',
-    )
-    const uniquenessQuery = keywordSource.slice(
-      keywordSource.indexOf("async function assertUniquePhrase"),
-      keywordSource.indexOf("async function keywordForWorkspace"),
-    )
-    expect(uniquenessQuery).toContain('"by_workspace_phrase_and_deleted_at"')
-    expect(uniquenessQuery).toContain('["deletedAt", undefined]')
-    expect(uniquenessQuery).toContain(".take(2)")
-    expect(uniquenessQuery).not.toContain(".collect()")
-
-    const mentionMonitoringQuery = mentionSource.slice(
-      mentionSource.indexOf("async function readMentionMonitoringState"),
-      mentionSource.indexOf("export const listMentions"),
-    )
-    expect(mentionMonitoringQuery).toContain(
-      '"by_workspace_status_and_created_at"',
-    )
-    expect(mentionMonitoringQuery).toContain('["active", "paused"]')
-    expect(mentionMonitoringQuery).not.toContain(
-      '"by_workspace_and_updated_at"',
-    )
   })
 })

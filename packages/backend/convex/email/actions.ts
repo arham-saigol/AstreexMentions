@@ -1,19 +1,15 @@
 "use node"
 
+import { internal } from "../_generated/api"
+
 import { v } from "convex/values"
 
 import {
   createResendClient,
   ResendIntegrationError,
 } from "../integrations/resend"
-import { env, internalAction } from "../server"
+import { env, internalAction } from "../_generated/server"
 import { readResendDeliveryConfiguration } from "./config"
-import {
-  completeEmailDeliveryReference,
-  failEmailDeliveryReference,
-  loadLeasedEmailReference,
-  releaseEmailBlockedConfigReference,
-} from "./internal"
 
 type LeasedEmailContext =
   | { state: "stale_lease" }
@@ -57,7 +53,7 @@ export const deliverEmail = internalAction({
   },
   handler: async (ctx, args) => {
     const leased = (await ctx.runMutation(
-      loadLeasedEmailReference,
+      internal.email.internal.loadLeasedEmail,
       args,
     )) as LeasedEmailContext
     if (leased.state === "stale_lease") {
@@ -66,7 +62,10 @@ export const deliverEmail = internalAction({
 
     const configuration = readResendDeliveryConfiguration(env)
     if (configuration.state === "provider_unconfigured") {
-      await ctx.runMutation(releaseEmailBlockedConfigReference, args)
+      await ctx.runMutation(
+        internal.email.internal.releaseEmailBlockedConfig,
+        args,
+      )
       return {
         missing: configuration.missing,
         state: "blocked_config" as const,
@@ -82,14 +81,17 @@ export const deliverEmail = internalAction({
         ...leased.payload,
         idempotencyKey: leased.idempotencyKey,
       })
-      return await ctx.runMutation(completeEmailDeliveryReference, {
-        ...args,
-        durationMs: Math.max(0, Date.now() - startedAt),
-        providerMessageId: response.id,
-      })
+      return await ctx.runMutation(
+        internal.email.internal.completeEmailDelivery,
+        {
+          ...args,
+          durationMs: Math.max(0, Date.now() - startedAt),
+          providerMessageId: response.id,
+        },
+      )
     } catch (error) {
       const failure = safeFailure(error)
-      return await ctx.runMutation(failEmailDeliveryReference, {
+      return await ctx.runMutation(internal.email.internal.failEmailDelivery, {
         ...args,
         durationMs: Math.max(0, Date.now() - startedAt),
         errorCode: failure.code,

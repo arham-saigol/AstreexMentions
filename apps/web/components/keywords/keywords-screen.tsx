@@ -1,5 +1,6 @@
 "use client"
 
+import { api } from "@astreex/backend/api"
 import {
   CreditCardIcon,
   PlusIcon,
@@ -9,7 +10,7 @@ import { Badge } from "@astreex/ui/components/badge"
 import { Button } from "@astreex/ui/components/button"
 import { Progress } from "@astreex/ui/components/progress"
 import { useMutation, useQuery } from "convex/react"
-import { useMemo, useState } from "react"
+import { useState } from "react"
 
 import {
   KeywordConfirmationDialog,
@@ -19,40 +20,13 @@ import {
 import { KeywordRow } from "@/components/keywords/keyword-row"
 import {
   KeywordsEmptyState,
-  KeywordsErrorState,
   KeywordsLoadingState,
   UnpaidKeywordNotice,
   UsagePausedNotice,
 } from "@/components/keywords/keyword-states"
 import { useProductContext } from "@/components/product/product-context"
-import { customerConvex, type Platform } from "@/lib/customer-convex"
-import {
-  keywordListResultSchema,
-  keywordSummaryResultSchema,
-  type KeywordItem,
-} from "@/lib/keywords"
-
-type ParsedResult<T> =
-  { state: "loading" } | { state: "invalid" } | { data: T; state: "ready" }
-
-function useParsedResult<T>(
-  value: unknown | undefined,
-  schema: {
-    safeParse: (
-      input: unknown,
-    ) => { success: true; data: T } | { success: false }
-  },
-): ParsedResult<T> {
-  return useMemo(() => {
-    if (value === undefined) {
-      return { state: "loading" as const }
-    }
-    const parsed = schema.safeParse(value)
-    return parsed.success
-      ? { data: parsed.data, state: "ready" as const }
-      : { state: "invalid" as const }
-  }, [schema, value])
-}
+import { type KeywordItem, type Platform } from "@/lib/keywords"
+import { useQueryClock } from "@/lib/use-query-clock"
 
 function KeywordUsage({
   count,
@@ -112,6 +86,7 @@ function KeywordUsage({
 }
 
 export function KeywordsScreen() {
+  const now = useQueryClock()
   const { access, billing, workspace } = useProductContext()
   const monitoringActive = access.mode === "active"
   const [formOpen, setFormOpen] = useState(false)
@@ -121,26 +96,18 @@ export function KeywordsScreen() {
     keyword: KeywordItem
   } | null>(null)
 
-  const listValue = useQuery(customerConvex.keywords.list, {})
-  const summaryValue = useQuery(customerConvex.keywords.getSummary, {})
-  const listResult = useParsedResult(listValue, keywordListResultSchema)
-  const summaryResult = useParsedResult(
-    summaryValue,
-    keywordSummaryResultSchema,
-  )
+  const listValue = useQuery(api.keywords.listKeywords, {})
+  const summaryValue = useQuery(api.keywords.getKeywordSummary, { now })
 
-  const createKeyword = useMutation(customerConvex.keywords.create)
-  const updateKeyword = useMutation(customerConvex.keywords.update)
-  const pauseKeyword = useMutation(customerConvex.keywords.pause)
-  const resumeKeyword = useMutation(customerConvex.keywords.resume)
-  const deleteKeyword = useMutation(customerConvex.keywords.remove)
+  const createKeyword = useMutation(api.keywords.createKeyword)
+  const updateKeyword = useMutation(api.keywords.updateKeyword)
+  const pauseKeyword = useMutation(api.keywords.pauseKeyword)
+  const resumeKeyword = useMutation(api.keywords.resumeKeyword)
+  const deleteKeyword = useMutation(api.keywords.deleteKeyword)
 
-  const loading =
-    listResult.state === "loading" || summaryResult.state === "loading"
-  const invalid =
-    listResult.state === "invalid" || summaryResult.state === "invalid"
-  const keywords = listResult.state === "ready" ? listResult.data : []
-  const summary = summaryResult.state === "ready" ? summaryResult.data : null
+  const loading = listValue === undefined || summaryValue === undefined
+  const keywords = listValue ?? []
+  const summary = summaryValue ?? null
   const limit = summary?.limit ?? billing.usage?.keywordLimit ?? null
   const atLimit =
     summary?.canCreate === false ||
@@ -209,14 +176,14 @@ export function KeywordsScreen() {
               Usage paused
             </Badge>
           )}
-          <Button onClick={openAdd} disabled={loading || invalid || atLimit}>
+          <Button onClick={openAdd} disabled={loading || atLimit}>
             <PlusIcon aria-hidden="true" />
             Add keyword
           </Button>
         </div>
       </div>
 
-      {!loading && !invalid && (
+      {!loading && (
         <KeywordUsage count={keywords.length} limit={limit} atLimit={atLimit} />
       )}
 
@@ -228,12 +195,7 @@ export function KeywordsScreen() {
         )}
         {usagePaused && monitoringActive && <UsagePausedNotice />}
 
-        {invalid ? (
-          <KeywordsErrorState
-            description="The connected data service returned keyword or usage data this version of Astreex cannot safely display or edit."
-            onRetry={() => window.location.reload()}
-          />
-        ) : loading ? (
+        {loading ? (
           <KeywordsLoadingState />
         ) : keywords.length === 0 ? (
           <KeywordsEmptyState

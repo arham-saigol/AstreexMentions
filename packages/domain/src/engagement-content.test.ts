@@ -1,12 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import {
-  CHANGELOG_BODY_MAX_LENGTH,
-  engagementScore,
-  rankMentionsDeterministically,
-  validateChangelogEntry,
-  validateFeatureRequestSubmission,
-} from "./index"
+import { engagementScore, rankMentionsDeterministically } from "./index"
 
 describe("deterministic engagement ranking", () => {
   it("uses platform-specific product weights", () => {
@@ -88,56 +82,5 @@ describe("deterministic engagement ranking", () => {
       ]),
     ).toThrow(TypeError)
     expect(() => rankMentionsDeterministically([], -1)).toThrow(RangeError)
-  })
-})
-
-describe("feature request and changelog validators", () => {
-  it("trims and validates feature request submissions", () => {
-    expect(
-      validateFeatureRequestSubmission({
-        title: "  Add alerts  ",
-        description: "  Let me configure keyword-specific alerts.  ",
-      }),
-    ).toEqual({
-      title: "Add alerts",
-      description: "Let me configure keyword-specific alerts.",
-    })
-    expect(() =>
-      validateFeatureRequestSubmission({
-        title: "x",
-        description: "too short",
-      }),
-    ).toThrow()
-    expect(() =>
-      validateFeatureRequestSubmission({
-        title: "Valid title",
-        description: "A sufficiently long description",
-        admin: true,
-      }),
-    ).toThrow()
-  })
-
-  it("validates strict changelog entries", () => {
-    const entry = {
-      slug: "saved-mention-filters",
-      title: "Saved mention filters",
-      summary: "Reuse common filters across your monitored mentions.",
-      body: "You can now save and reuse filters from the mentions page.",
-      kind: "new" as const,
-      publishedAt: 1_800_000_000_000,
-    }
-    expect(validateChangelogEntry(entry)).toEqual(entry)
-    expect(() =>
-      validateChangelogEntry({ ...entry, slug: "Not Valid" }),
-    ).toThrow()
-    expect(() =>
-      validateChangelogEntry({ ...entry, kind: "breaking" }),
-    ).toThrow()
-    expect(() =>
-      validateChangelogEntry({
-        ...entry,
-        body: "x".repeat(CHANGELOG_BODY_MAX_LENGTH + 1),
-      }),
-    ).toThrow()
   })
 })

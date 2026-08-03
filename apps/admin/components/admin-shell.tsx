@@ -7,7 +7,9 @@ import {
   ListIcon,
   NewspaperIcon,
 } from "@phosphor-icons/react/dist/ssr"
-import { AstreexWordmark, ThemeToggle, cn } from "@astreex/ui"
+import { AstreexWordmark } from "@astreex/ui/components/astreex-wordmark"
+import { ThemeToggle } from "@astreex/ui/components/theme-toggle"
+import { cn } from "@astreex/ui/lib/utils"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useRef, type KeyboardEvent, type ReactNode } from "react"

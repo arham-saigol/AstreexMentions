@@ -1,12 +1,12 @@
-import type { GenericId } from "convex/values"
+import type { Id } from "../_generated/dataModel"
 
-import { indexEquals, type MutationCtx } from "../server"
+import { type MutationCtx } from "../_generated/server"
 
-type GenericRow = Record<string, unknown> & { _id: GenericId<string> }
-type SystemMetricBucketId = GenericId<"systemMetricBuckets">
-type WorkspaceId = GenericId<"workspaces">
+type SystemMetricBucketId = Id<"systemMetricBuckets">
+type WorkspaceId = Id<"workspaces">
 
 const HOUR_MS = 3_600_000
+const DAY_MS = 86_400_000
 export const SYSTEM_METRIC_GAUGE_BUCKET_START_AT = 0
 
 export async function adjustSystemMetricGauge(
@@ -24,19 +24,17 @@ export async function adjustSystemMetricGauge(
   for (const scope of ["global", "workspace"] as const) {
     const metricWorkspaceId =
       scope === "workspace" ? input.workspaceId : undefined
-    const bucket = (await ctx.db
+    const bucket = await ctx.db
       .query("systemMetricBuckets")
       .withIndex("by_metric_scope_workspace_granularity_and_bucket", (q) =>
-        indexEquals(
-          q,
-          ["metric", input.metric],
-          ["scope", scope],
-          ["workspaceId", metricWorkspaceId],
-          ["granularity", "hour"],
-          ["bucketStartAt", bucketStartAt],
-        ),
+        q
+          .eq("metric", input.metric)
+          .eq("scope", scope)
+          .eq("workspaceId", metricWorkspaceId)
+          .eq("granularity", "hour")
+          .eq("bucketStartAt", bucketStartAt),
       )
-      .unique()) as GenericRow | null
+      .unique()
 
     if (!bucket) {
       // Older rows may predate gauge accounting. A missing decrement is a
@@ -79,7 +77,7 @@ export async function adjustSystemMetricGauge(
   }
 }
 
-export async function incrementHourlySystemMetric(
+export async function incrementDailySystemMetric(
   ctx: MutationCtx,
   input: {
     bucketAt: number
@@ -89,8 +87,8 @@ export async function incrementHourlySystemMetric(
     workspaceId: WorkspaceId
   },
 ): Promise<void> {
-  const bucketStartAt = Math.floor(input.bucketAt / HOUR_MS) * HOUR_MS
-  const bucketEndAt = bucketStartAt + HOUR_MS
+  const bucketStartAt = Math.floor(input.bucketAt / DAY_MS) * DAY_MS
+  const bucketEndAt = bucketStartAt + DAY_MS
 
   const scopes =
     input.scope === "global"
@@ -99,19 +97,17 @@ export async function incrementHourlySystemMetric(
   for (const scope of scopes) {
     const metricWorkspaceId =
       scope === "workspace" ? input.workspaceId : undefined
-    const bucket = (await ctx.db
+    const bucket = await ctx.db
       .query("systemMetricBuckets")
       .withIndex("by_metric_scope_workspace_granularity_and_bucket", (q) =>
-        indexEquals(
-          q,
-          ["metric", input.metric],
-          ["scope", scope],
-          ["workspaceId", metricWorkspaceId],
-          ["granularity", "hour"],
-          ["bucketStartAt", bucketStartAt],
-        ),
+        q
+          .eq("metric", input.metric)
+          .eq("scope", scope)
+          .eq("workspaceId", metricWorkspaceId)
+          .eq("granularity", "day")
+          .eq("bucketStartAt", bucketStartAt),
       )
-      .unique()) as GenericRow | null
+      .unique()
 
     if (bucket) {
       await ctx.db.patch(
@@ -133,7 +129,7 @@ export async function incrementHourlySystemMetric(
       bucketEndAt,
       bucketStartAt,
       count: 1,
-      granularity: "hour",
+      granularity: "day",
       maximum: 1,
       metric: input.metric,
       minimum: 1,

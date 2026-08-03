@@ -1,7 +1,7 @@
 "use client"
 
 import { ClerkProvider, useAuth } from "@clerk/nextjs"
-import { ThemeProvider } from "@astreex/ui"
+import { ThemeProvider } from "@astreex/ui/components/theme-provider"
 import { ConvexReactClient } from "convex/react"
 import { ConvexProviderWithClerk } from "convex/react-clerk"
 import { useState, type ReactNode } from "react"

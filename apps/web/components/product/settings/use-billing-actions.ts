@@ -1,15 +1,18 @@
 "use client"
 
+import { api } from "@astreex/backend/api"
+import type { PlanId } from "@astreex/domain"
+import type { FunctionReturnType } from "convex/server"
 import { useAction } from "convex/react"
 import { useCallback, useRef, useState } from "react"
 
-import { customerConvex, type PlanId } from "@/lib/customer-convex"
-import {
-  billingRedirectResultSchema,
-  billingUpgradeResultSchema,
-} from "@/lib/settings-convex"
-
 type BillingAction = "portal" | `checkout:${PlanId}` | `upgrade:${PlanId}`
+type BillingRedirectResult =
+  | FunctionReturnType<typeof api.billing.customer.createBillingPortal>
+  | FunctionReturnType<typeof api.billing.customer.createCheckout>
+type BillingUpgradeResult = FunctionReturnType<
+  typeof api.billing.customer.upgradeSubscription
+>
 
 function checkoutIdempotencyKey(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -20,39 +23,27 @@ function checkoutIdempotencyKey(): string {
 }
 
 export function useBillingActions() {
-  const createCheckout = useAction(customerConvex.billing.createCheckout)
-  const createPortal = useAction(customerConvex.billing.createPortal)
+  const createCheckout = useAction(api.billing.customer.createCheckout)
+  const createPortal = useAction(api.billing.customer.createBillingPortal)
   const upgradeSubscription = useAction(
-    customerConvex.billing.upgradeSubscription,
+    api.billing.customer.upgradeSubscription,
   )
   const checkoutIntentKeys = useRef<Partial<Record<PlanId, string>>>({})
   const [pending, setPending] = useState<BillingAction | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const followBillingRedirect = useCallback((value: unknown) => {
-    const parsed = billingRedirectResultSchema.safeParse(value)
-    if (!parsed.success) {
-      setError("The billing provider returned an unexpected response.")
-      return false
-    }
-
-    if (parsed.data.state === "provider_unconfigured") {
+  const followBillingRedirect = useCallback((value: BillingRedirectResult) => {
+    if (value.state === "provider_unconfigured") {
       setError("Creem billing is not configured for this deployment.")
       return false
     }
 
-    window.location.assign(parsed.data.url)
+    window.location.assign(value.url)
     return true
   }, [])
 
-  const handleBillingUpgrade = useCallback((value: unknown) => {
-    const parsed = billingUpgradeResultSchema.safeParse(value)
-    if (!parsed.success) {
-      setError("The billing provider returned an unexpected response.")
-      return false
-    }
-
-    if (parsed.data.state === "provider_unconfigured") {
+  const handleBillingUpgrade = useCallback((value: BillingUpgradeResult) => {
+    if (value.state === "provider_unconfigured") {
       setError("Creem billing is not configured for this deployment.")
       return false
     }

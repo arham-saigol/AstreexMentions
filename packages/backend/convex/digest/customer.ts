@@ -3,7 +3,6 @@ import { z } from "zod"
 
 import { customerMutation, customerQuery } from "../lib/authorization"
 import { nextDailyDigestRunAt } from "../lib/dailyDigest"
-import { indexEquals } from "../server"
 
 const digestPreferenceSchema = z
   .object({
@@ -47,11 +46,7 @@ export const getDailyDigestPreference = customerQuery({
     const preference = await ctx.db
       .query("digestPreferences")
       .withIndex("by_workspace_and_user", (q) =>
-        indexEquals(
-          q,
-          ["workspaceId", ctx.workspace.id],
-          ["userId", ctx.viewer.id],
-        ),
+        q.eq("workspaceId", ctx.workspace.id).eq("userId", ctx.viewer.id),
       )
       .unique()
 
@@ -98,11 +93,7 @@ export const updateDailyDigestPreference = customerMutation({
     const preference = await ctx.db
       .query("digestPreferences")
       .withIndex("by_workspace_and_user", (q) =>
-        indexEquals(
-          q,
-          ["workspaceId", ctx.workspace.id],
-          ["userId", ctx.viewer.id],
-        ),
+        q.eq("workspaceId", ctx.workspace.id).eq("userId", ctx.viewer.id),
       )
       .unique()
     if (!preference) {

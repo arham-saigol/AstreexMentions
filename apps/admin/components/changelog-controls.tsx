@@ -34,7 +34,7 @@ import {
   sanitizeChangelogPreview,
   timestampToPublicationDate,
 } from "@/lib/changelog"
-import type { ChangelogStatus } from "@/lib/convex-references"
+import type { ChangelogStatus } from "@/lib/admin-data"
 
 type ChangelogEditorValues = {
   body: string

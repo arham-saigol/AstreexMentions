@@ -147,14 +147,7 @@ describe("personal workspace bootstrap", () => {
     expect(store.insertUser).not.toHaveBeenCalled()
     expect(store.insertWorkspace).not.toHaveBeenCalled()
     expect(store.insertMembership).not.toHaveBeenCalled()
-    expect(store.patchUser).toHaveBeenCalledWith("user_1", {
-      clerkUserId: identity.subject,
-      email: undefined,
-      imageUrl: undefined,
-      personalWorkspaceId: "workspace_1",
-      tokenIdentifier: identity.tokenIdentifier,
-      updatedAt: 200,
-    })
+    expect(store.patchUser).not.toHaveBeenCalled()
   })
 
   it("preserves a workspace-owned name during recurring bootstrap", async () => {
@@ -192,10 +185,53 @@ describe("personal workspace bootstrap", () => {
       300,
     )
 
-    expect(store.patchUser).toHaveBeenCalledWith(
-      "user_1",
-      expect.not.objectContaining({ name: expect.anything() }),
+    expect(store.patchUser).not.toHaveBeenCalled()
+  })
+
+  it("patches only when a recurring identity field changes", async () => {
+    const existingUser = {
+      clerkUserId: identity.subject,
+      email: "old@example.com",
+      id: "user_1",
+      personalWorkspaceId: "workspace_1",
+      tokenIdentifier: identity.tokenIdentifier,
+    }
+    const store = {
+      findMembership: vi.fn().mockResolvedValue({
+        id: "membership_1",
+        role: "owner",
+        userId: "user_1",
+        workspaceId: "workspace_1",
+      }),
+      findPersonalWorkspaceByOwner: vi.fn().mockResolvedValue(null),
+      findUserByClerkUserId: vi.fn().mockResolvedValue(existingUser),
+      findUserByTokenIdentifier: vi.fn().mockResolvedValue(existingUser),
+      getWorkspace: vi.fn().mockResolvedValue({
+        id: "workspace_1",
+        kind: "personal",
+        ownerUserId: "user_1",
+      }),
+      insertMembership: vi.fn().mockResolvedValue("membership_1"),
+      insertUser: vi.fn().mockResolvedValue("user_1"),
+      insertWorkspace: vi.fn().mockResolvedValue("workspace_1"),
+      patchMembership: vi.fn().mockResolvedValue(undefined),
+      patchUser: vi.fn().mockResolvedValue(undefined),
+    } satisfies PersonalWorkspaceBootstrapStore<string, string, string>
+
+    await bootstrapPersonalWorkspace(
+      store,
+      { ...identity, email: "new@example.com" },
+      400,
     )
+
+    expect(store.patchUser).toHaveBeenCalledWith("user_1", {
+      clerkUserId: identity.subject,
+      email: "new@example.com",
+      imageUrl: undefined,
+      personalWorkspaceId: "workspace_1",
+      tokenIdentifier: identity.tokenIdentifier,
+      updatedAt: 400,
+    })
   })
 })
 

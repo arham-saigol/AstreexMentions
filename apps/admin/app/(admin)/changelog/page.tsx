@@ -1,3 +1,4 @@
+import { api } from "@astreex/backend/api"
 import { Badge } from "@astreex/ui/components/badge"
 import { Button } from "@astreex/ui/components/button"
 import type { Metadata } from "next"
@@ -13,11 +14,10 @@ import {
 import { runAdminQuery } from "@/lib/admin-convex"
 import {
   changelogStatuses,
-  parseChangelogPage,
+  type ChangelogStatus,
   type ChangelogEntry,
 } from "@/lib/admin-data"
 import { timestampToPublicationDate } from "@/lib/changelog"
-import { adminConvex, type ChangelogStatus } from "@/lib/convex-references"
 
 export const metadata: Metadata = {
   title: "Changelog",
@@ -214,7 +214,7 @@ export default async function ChangelogPage({
   const params = await searchParams
   const status = parseStatus(params.status)
   const cursor = singleValue(params.cursor)
-  const result = await runAdminQuery(adminConvex.listChangelogEntries, {
+  const result = await runAdminQuery(api.admin.listChangelogEntries, {
     ...(cursor === undefined ? {} : { cursor }),
     ...(status === undefined ? {} : { status }),
   })
@@ -231,11 +231,7 @@ export default async function ChangelogPage({
     return <AccessState kind="unavailable" />
   }
 
-  const page = parseChangelogPage(result.data)
-
-  if (!page) {
-    return <AccessState kind="unavailable" />
-  }
+  const page = result.data
 
   const groups = (status ? [status] : changelogStatuses).map((groupStatus) => ({
     status: groupStatus,

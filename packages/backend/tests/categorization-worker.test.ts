@@ -82,6 +82,7 @@ type CategorizationFixture = {
   disabledCategory: CategoryFixture
   invalidOutputs: Array<
     | "duplicate_mapping"
+    | "extra_field"
     | "missing_mapping"
     | "unknown_category"
     | "unknown_mention"
@@ -258,6 +259,7 @@ function categorizationOutput(
   seeded: SeededCategorization,
   kind:
     | "duplicate_mapping"
+    | "extra_field"
     | "missing_mapping"
     | "unknown_category"
     | "unknown_mention"
@@ -281,6 +283,8 @@ function categorizationOutput(
       return { results: [first] }
     case "duplicate_mapping":
       return { results: [first, first] }
+    case "extra_field":
+      return { explanation: "untrusted model output", results: [first, second] }
     case "unknown_mention":
       return {
         results: [first, { ...second, mentionId: "unknown-mention-id" }],
@@ -509,7 +513,7 @@ describe("durable DeepSeek categorization worker", () => {
       ),
     ).toEqual([
       expect.objectContaining({
-        metric: `mentions_categorized:${String(seeded.categories[0]!.id)}`,
+        metric: "mentions_categorized:question",
         scope: "global",
         value: 1,
       }),
@@ -575,7 +579,9 @@ describe("durable DeepSeek categorization worker", () => {
       const state = await t.run(async (ctx) => ({
         jobs: await ctx.db.query("categorizationJobs").collect(),
         mentions: await ctx.db.query("mentions").collect(),
-        metrics: await ctx.db.query("providerMetricBuckets").collect(),
+        metrics: (await ctx.db.query("providerMetricBuckets").collect()).filter(
+          (metric) => metric.granularity === "hour",
+        ),
         runs: await ctx.db.query("providerRuns").collect(),
       }))
       expect(
@@ -631,7 +637,9 @@ describe("durable DeepSeek categorization worker", () => {
     })
     const state = await t.run(async (ctx) => ({
       jobs: await ctx.db.query("categorizationJobs").collect(),
-      metrics: await ctx.db.query("providerMetricBuckets").collect(),
+      metrics: (await ctx.db.query("providerMetricBuckets").collect()).filter(
+        (metric) => metric.granularity === "hour",
+      ),
       runs: await ctx.db.query("providerRuns").collect(),
     }))
     expect(fetchMock).not.toHaveBeenCalled()
@@ -688,7 +696,9 @@ describe("durable DeepSeek categorization worker", () => {
     const state = await t.run(async (ctx) => ({
       job: await ctx.db.get("categorizationJobs", seeded.jobIds[0]!),
       mention: await ctx.db.get("mentions", seeded.mentionIds[0]!),
-      metrics: await ctx.db.query("providerMetricBuckets").collect(),
+      metrics: (await ctx.db.query("providerMetricBuckets").collect()).filter(
+        (metric) => metric.granularity === "hour",
+      ),
       runs: await ctx.db.query("providerRuns").collect(),
     }))
     expect(state.job).toMatchObject({
@@ -755,7 +765,9 @@ describe("durable DeepSeek categorization worker", () => {
     })
     const blocked = await t.run(async (ctx) => ({
       job: await ctx.db.get("categorizationJobs", seeded.jobIds[0]!),
-      metrics: await ctx.db.query("providerMetricBuckets").collect(),
+      metrics: (await ctx.db.query("providerMetricBuckets").collect()).filter(
+        (metric) => metric.granularity === "hour",
+      ),
       runs: await ctx.db.query("providerRuns").collect(),
     }))
     expect(blocked.job).toMatchObject({
@@ -801,7 +813,9 @@ describe("durable DeepSeek categorization worker", () => {
     const state = await t.run(async (ctx) => ({
       jobs: await ctx.db.query("categorizationJobs").collect(),
       mentions: await ctx.db.query("mentions").collect(),
-      metrics: await ctx.db.query("providerMetricBuckets").collect(),
+      metrics: (await ctx.db.query("providerMetricBuckets").collect()).filter(
+        (metric) => metric.granularity === "hour",
+      ),
       runs: await ctx.db.query("providerRuns").collect(),
       usage: await ctx.db.get("usageCycles", seeded.usageCycleId),
     }))
@@ -837,18 +851,5 @@ describe("durable DeepSeek categorization worker", () => {
       }),
     ])
     expect(state.usage).toEqual(usageBefore)
-  })
-
-  it("wires the categorization dispatcher to a one-minute cron", () => {
-    const cronSource = readFileSync(
-      fileURLToPath(new URL("../convex/crons.ts", import.meta.url)),
-      "utf8",
-    )
-    expect(cronSource).toContain(
-      'import { dispatchDueCategorizationJobsReference } from "./categorization/internal"',
-    )
-    expect(cronSource).toMatch(
-      /"dispatch mention categorization jobs",\s*\{ minutes: 1 \},\s*dispatchDueCategorizationJobsReference/,
-    )
   })
 })

@@ -1,53 +1,47 @@
+import { internal } from "./_generated/api"
 import { cronJobs } from "convex/server"
-
-import { dispatchPendingCreemBillingEventsReference } from "./billing/internal"
-import { dispatchDueCategorizationJobsReference } from "./categorization/internal"
-import { dispatchDueAccountDeletionsReference } from "./deletion/internal"
-import { dispatchDueDailyDigestsReference } from "./digest/internal"
-import { dispatchPendingEmailsReference } from "./email/internal"
-import { dispatchDueTrackingSourcesReference } from "./scheduling/internal"
 
 const crons = cronJobs()
 
 crons.interval(
   "dispatch durable account deletions",
   { minutes: 1 },
-  dispatchDueAccountDeletionsReference,
+  internal.deletion.internal.dispatchDueAccountDeletions,
   {},
 )
 
 crons.interval(
   "retry persisted Creem billing events",
   { minutes: 1 },
-  dispatchPendingCreemBillingEventsReference,
+  internal.billing.internal.dispatchPendingCreemBillingEvents,
   {},
 )
 
 crons.interval(
   "dispatch persisted tracking schedules",
   { minutes: 1 },
-  dispatchDueTrackingSourcesReference,
+  internal.scheduling.internal.dispatchDueTrackingSources,
   {},
 )
 
 crons.interval(
   "dispatch mention categorization jobs",
   { minutes: 1 },
-  dispatchDueCategorizationJobsReference,
+  internal.categorization.internal.dispatchDueCategorizationJobs,
   {},
 )
 
 crons.interval(
   "dispatch daily digest schedules",
   { minutes: 1 },
-  dispatchDueDailyDigestsReference,
+  internal.digest.internal.dispatchDueDailyDigests,
   {},
 )
 
 crons.interval(
   "dispatch durable email outbox",
   { minutes: 1 },
-  dispatchPendingEmailsReference,
+  internal.email.internal.dispatchPendingEmails,
   {},
 )
 

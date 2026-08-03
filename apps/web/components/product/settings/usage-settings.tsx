@@ -1,5 +1,6 @@
 "use client"
 
+import { api } from "@astreex/backend/api"
 import {
   CheckCircleIcon,
   ClockCounterClockwiseIcon,
@@ -10,11 +11,8 @@ import {
 import { Badge } from "@astreex/ui/components/badge"
 import { Progress } from "@astreex/ui/components/progress"
 import { useQuery } from "convex/react"
-import { useMemo } from "react"
 
 import { useProductContext } from "@/components/product/product-context"
-import { customerConvex } from "@/lib/customer-convex"
-import { keywordsResultSchema } from "@/lib/mentions"
 
 function formatDate(timestamp: number): string {
   return new Intl.DateTimeFormat("en-US", {
@@ -25,21 +23,14 @@ function formatDate(timestamp: number): string {
 
 export function UsageSettings() {
   const { access, billing } = useProductContext()
-  const keywordValue = useQuery(customerConvex.keywords.list, {})
-  const keywordResult = useMemo(
-    () =>
-      keywordValue === undefined
-        ? null
-        : keywordsResultSchema.safeParse(keywordValue),
-    [keywordValue],
-  )
+  const keywordValue = useQuery(api.keywords.listKeywords, {})
   const usage = billing.usage
   const allowance = usage?.mentionLimit ?? 0
   const used = usage?.mentionsUsed ?? 0
   const remaining = Math.max(0, allowance - used)
   const percent =
     allowance > 0 ? Math.min(100, Math.round((used / allowance) * 100)) : 0
-  const keywords = keywordResult?.success ? keywordResult.data : null
+  const keywords = keywordValue ?? null
   const activeKeywords = keywords?.filter(
     (keyword) => keyword.status === "active",
   ).length

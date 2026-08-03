@@ -1,10 +1,10 @@
+import { api } from "@astreex/backend/api"
 import "server-only"
 
 import { auth } from "@clerk/nextjs/server"
 import { ConvexHttpClient } from "convex/browser"
 import { z } from "zod"
 
-import { customerConvex } from "@/lib/customer-convex"
 import { getRuntimeConfiguration } from "@/lib/env"
 
 const deletionMutationResultSchema = z.discriminatedUnion("state", [
@@ -114,10 +114,9 @@ export async function deleteCurrentAccount(
 
   let deletionValue: unknown
   try {
-    deletionValue = await convex.mutation(
-      customerConvex.workspaces.deleteAccount,
-      { confirmation },
-    )
+    deletionValue = await convex.mutation(api.workspaces.deleteAccount, {
+      confirmation,
+    })
   } catch {
     return {
       code: "ACCOUNT_DELETE_REJECTED",

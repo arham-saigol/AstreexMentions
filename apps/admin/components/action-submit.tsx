@@ -1,6 +1,6 @@
 "use client"
 
-import { Button } from "@astreex/ui"
+import { Button } from "@astreex/ui/components/button"
 import { useFormStatus } from "react-dom"
 
 export function ActionSubmit({

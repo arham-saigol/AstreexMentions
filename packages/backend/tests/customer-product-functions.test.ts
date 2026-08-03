@@ -1,6 +1,3 @@
-import { readFileSync } from "node:fs"
-import { fileURLToPath } from "node:url"
-
 import { convexTest } from "convex-test"
 import {
   defineSchema,
@@ -19,6 +16,12 @@ const customerTestSchema = defineSchema({
       "workspaceId",
       "normalizedName",
       "deletedAt",
+    ])
+    .index("by_workspace_deleted_at_and_deletion_pending_at_and_sort_order", [
+      "workspaceId",
+      "deletedAt",
+      "deletionPendingAt",
+      "sortOrder",
     ])
     .index("by_workspace_deleted_enabled_and_sort_order", [
       "workspaceId",
@@ -297,6 +300,34 @@ describe("customer user and workspace functions", () => {
     )
   })
 
+  it("uses the server-materialized entitlement status", async () => {
+    const { bootstrap, customer, t } = await bootstrappedCustomer()
+    const now = Date.now()
+    await t.run(async (ctx) => {
+      await ctx.db.insert("subscriptions", {
+        cancelAtPeriodEnd: false,
+        createdAt: now,
+        currentPeriodEnd: now - 1_000,
+        currentPeriodStart: now - 2_000,
+        entitlementStatus: "inactive",
+        lastSyncedAt: now,
+        planId: "starter",
+        provider: "creem",
+        providerCustomerId: "cust_refreshable_time",
+        providerSubscriptionId: "sub_refreshable_time",
+        status: "expired",
+        updatedAt: now,
+        workspaceId: bootstrap.workspaceId as never,
+      })
+    })
+
+    await expect(customer.query(getBillingOverview, {})).resolves.toMatchObject(
+      {
+        subscription: { entitlementStatus: "inactive" },
+      },
+    )
+  })
+
   it("stages portal-blocked deletion before scheduling the inactive job", async () => {
     const { bootstrap, customer, t } = await bootstrappedCustomer()
     const now = Date.now()
@@ -485,6 +516,51 @@ describe("customer category functions", () => {
       }
     })
 
+    await expect(
+      customer.mutation(createCategory, {
+        colorToken: "cyan",
+        description: "One category too many",
+        name: "Overflow",
+      }),
+    ).rejects.toMatchObject({ data: { code: "CATEGORY_LIMIT_REACHED" } })
+  })
+
+  it("does not count pending category deletions against the read limit", async () => {
+    const { bootstrap, customer, t } = await bootstrappedCustomer()
+    await t.run(async (ctx) => {
+      const now = Date.now()
+      for (let index = 0; index < 43; index += 1) {
+        await ctx.db.insert("categories", {
+          colorToken: "blue",
+          createdAt: now + index,
+          description: `Custom category ${index}`,
+          enabled: true,
+          isSystem: false,
+          name: `Custom ${index}`,
+          normalizedName: `custom ${index}`,
+          sortOrder: 7 + index,
+          updatedAt: now + index,
+          workspaceId: bootstrap.workspaceId,
+        })
+      }
+      for (let index = 0; index < 2; index += 1) {
+        await ctx.db.insert("categories", {
+          colorToken: "blue",
+          createdAt: now + 100 + index,
+          deletionPendingAt: now,
+          description: `Deleting category ${index}`,
+          enabled: false,
+          isSystem: false,
+          name: `Deleting ${index}`,
+          normalizedName: `deleting ${index}`,
+          sortOrder: 100 + index,
+          updatedAt: now + 100 + index,
+          workspaceId: bootstrap.workspaceId,
+        })
+      }
+    })
+
+    await expect(customer.query(listCategories, {})).resolves.toHaveLength(50)
     await expect(
       customer.mutation(createCategory, {
         colorToken: "cyan",
@@ -723,80 +799,5 @@ describe("customer settings functions", () => {
         timeZone: "America/New_York",
       },
     })
-  })
-})
-
-describe("customer frontend function inventory", () => {
-  it("exports exact names through authenticated wrappers and avoids direct deletion", () => {
-    const convexDirectory = fileURLToPath(
-      new URL("../convex/", import.meta.url),
-    )
-    const sources = Object.fromEntries(
-      ["users", "workspaces", "categories", "savedViews", "settings"].map(
-        (name) => [name, readFileSync(`${convexDirectory}/${name}.ts`, "utf8")],
-      ),
-    )
-    const deletionBillingSource = readFileSync(
-      `${convexDirectory}/deletion/billing.ts`,
-      "utf8",
-    )
-
-    for (const name of [
-      "bootstrapCurrentUser",
-      "getCurrentUser",
-      "updateCurrentUser",
-    ]) {
-      expect(sources.users).toContain(`export const ${name}`)
-    }
-    for (const name of [
-      "getCurrentWorkspace",
-      "updateCurrentWorkspace",
-      "getAccountDeletionReadiness",
-      "getAccountDeletionStatus",
-      "deleteAccount",
-    ]) {
-      expect(sources.workspaces).toContain(`export const ${name}`)
-    }
-    for (const name of [
-      "listCategories",
-      "createCategory",
-      "updateCategory",
-      "deleteCategory",
-    ]) {
-      expect(sources.categories).toContain(`export const ${name}`)
-    }
-    for (const name of [
-      "listSavedViews",
-      "createSavedView",
-      "updateSavedView",
-      "reorderSavedViews",
-      "deleteSavedView",
-    ]) {
-      expect(sources.savedViews).toContain(`export const ${name}`)
-    }
-    expect(sources.settings).toContain("export const getSettings")
-    expect(sources.settings).toContain("export const updateDigestPreferences")
-
-    for (const source of Object.values(sources)) {
-      expect(source).toMatch(/authenticated(Query|Mutation)/)
-      expect(source).not.toContain("ctx.db.delete(")
-    }
-    expect(sources.workspaces).toContain('"deletionJobs"')
-    expect(sources.workspaces).toContain("withoutUndefinedValues")
-    const keywordCountQuery = sources.workspaces.slice(
-      sources.workspaces.indexOf("async function activeKeywordCount"),
-      sources.workspaces.indexOf("export const getCurrentWorkspace"),
-    )
-    expect(keywordCountQuery).toContain('"by_workspace_status_and_created_at"')
-    expect(keywordCountQuery).toContain('["active", "paused"]')
-    expect(keywordCountQuery).not.toContain('"by_workspace_and_updated_at"')
-    expect(deletionBillingSource).toContain(
-      '"by_workspace_status_and_received_at"',
-    )
-    expect(deletionBillingSource).toContain('["status", "pending"]')
-    expect(deletionBillingSource).toContain('["status", "leased"]')
-    expect(deletionBillingSource).not.toContain(
-      '.query("billingEvents")\n      .withIndex("by_workspace_and_received_at"',
-    )
   })
 })

@@ -4,8 +4,6 @@ import { act, renderHook } from "@testing-library/react"
 import { useAction } from "convex/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import { customerConvex } from "@/lib/customer-convex"
-
 import { useBillingActions } from "./use-billing-actions"
 
 vi.mock("convex/react", () => ({
@@ -19,18 +17,11 @@ describe("useBillingActions", () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(useAction).mockImplementation((reference) => {
-      if (reference === customerConvex.billing.createCheckout) {
-        return createCheckout
-      }
-      if (reference === customerConvex.billing.createPortal) {
-        return createPortal
-      }
-      if (reference === customerConvex.billing.upgradeSubscription) {
-        return upgradeSubscription
-      }
-      throw new TypeError("Unexpected billing action reference")
-    })
+    const actions = [createCheckout, createPortal, upgradeSubscription]
+    let actionIndex = 0
+    vi.mocked(useAction).mockImplementation(
+      () => actions[actionIndex++ % actions.length]!,
+    )
   })
 
   it("reuses the checkout key after a failed provider attempt", async () => {

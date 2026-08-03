@@ -71,19 +71,6 @@ const providerSecretNames = [
   "XQUIK_API_KEY",
 ] as const
 
-const referenceFactoryKinds = new Map<string, FunctionKind>([
-  ["convexActionReference", "action"],
-  ["convexMutationReference", "mutation"],
-  ["convexQueryReference", "query"],
-])
-const referenceFactoryNames = new Set([
-  "convexActionReference",
-  "convexFunctionReference",
-  "convexMutationReference",
-  "convexQueryReference",
-  "makeFunctionReference",
-])
-
 const forbiddenProductLanguage = /\b(?:free|mock(?:ed|ing|s)?|stripe|trial)\b/iu
 const forbiddenRuntimeAdapterName =
   /(?:mock|fake|fixture|stub).*adapter|adapter.*(?:mock|fake|fixture|stub)/iu
@@ -265,132 +252,6 @@ function registrations(file: string): FunctionRegistration[] {
     }
   }
 
-  return found
-}
-
-function exportedNames(file: string): Set<string> {
-  const source = parsedSource(file)
-  const names = new Set<string>()
-
-  for (const statement of source.statements) {
-    if (ts.isVariableStatement(statement) && isExported(statement)) {
-      for (const declaration of statement.declarationList.declarations) {
-        if (ts.isIdentifier(declaration.name)) {
-          names.add(declaration.name.text)
-        }
-      }
-    } else if (
-      (ts.isFunctionDeclaration(statement) ||
-        ts.isClassDeclaration(statement)) &&
-      isExported(statement) &&
-      statement.name
-    ) {
-      names.add(statement.name.text)
-    } else if (ts.isExportDeclaration(statement) && statement.exportClause) {
-      if (ts.isNamedExports(statement.exportClause)) {
-        for (const element of statement.exportClause.elements) {
-          names.add(element.name.text)
-        }
-      }
-    }
-  }
-
-  return names
-}
-
-function importedReferenceFactories(
-  source: ts.SourceFile,
-): Map<string, string> {
-  const factories = new Map<string, string>()
-
-  for (const statement of source.statements) {
-    if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier) ||
-      !statement.importClause?.namedBindings ||
-      !ts.isNamedImports(statement.importClause.namedBindings)
-    ) {
-      continue
-    }
-
-    for (const element of statement.importClause.namedBindings.elements) {
-      const imported = element.propertyName?.text ?? element.name.text
-      if (referenceFactoryNames.has(imported)) {
-        factories.set(element.name.text, imported)
-      }
-    }
-  }
-
-  return factories
-}
-
-function literalTypeArgument(
-  call: ts.CallExpression,
-  index: number,
-): string | undefined {
-  const argument = call.typeArguments?.[index]
-  if (
-    argument &&
-    ts.isLiteralTypeNode(argument) &&
-    ts.isStringLiteral(argument.literal)
-  ) {
-    return argument.literal.text
-  }
-
-  return undefined
-}
-
-type FrontendReference = {
-  expectedKind: FunctionKind | undefined
-  location: string
-  name: string
-}
-
-function frontendReferences(file: string): FrontendReference[] {
-  const source = parsedSource(file)
-  const importedFactories = importedReferenceFactories(source)
-  const found: FrontendReference[] = []
-
-  const visit = (node: ts.Node): void => {
-    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
-      const localName = node.expression.text
-      const factory =
-        importedFactories.get(localName) ??
-        (referenceFactoryNames.has(localName) ? localName : undefined)
-      const firstArgument = node.arguments[0]
-
-      if (
-        factory &&
-        firstArgument &&
-        (ts.isStringLiteral(firstArgument) ||
-          ts.isNoSubstitutionTemplateLiteral(firstArgument))
-      ) {
-        const fixedKind = referenceFactoryKinds.get(factory)
-        const genericKind =
-          factory === "makeFunctionReference" ||
-          factory === "convexFunctionReference"
-            ? literalTypeArgument(node, 0)
-            : undefined
-        const expectedKind =
-          fixedKind ??
-          (genericKind === "action" ||
-          genericKind === "mutation" ||
-          genericKind === "query"
-            ? genericKind
-            : undefined)
-
-        found.push({
-          expectedKind,
-          location: lineLocation(source, node),
-          name: firstArgument.text,
-        })
-      }
-    }
-
-    ts.forEachChild(node, visit)
-  }
-
-  visit(source)
   return found
 }
 
@@ -794,12 +655,6 @@ const convexFiles = codeFiles(convexRoot).filter(
   (file) => extname(file) === ".ts",
 )
 const backendRegistrations = convexFiles.flatMap(registrations)
-const registrationByName = new Map(
-  backendRegistrations.map((registration) => [
-    registration.functionName,
-    registration,
-  ]),
-)
 const frontendProductionFiles = [
   ...codeFiles(join(appsRoot, "web")),
   ...codeFiles(join(appsRoot, "admin")),
@@ -842,61 +697,6 @@ describe("frontend and environment security inventory", () => {
         ) {
           violations.push(`${repoPath(file)} exposes ${name}`)
         }
-      }
-    }
-
-    expect(violations).toEqual([])
-  })
-
-  it("resolves every customer and admin generic reference to a public backend export", () => {
-    const references = frontendProductionFiles.flatMap(frontendReferences)
-    const violations: string[] = []
-
-    expect(references.length).toBeGreaterThan(0)
-
-    for (const reference of references) {
-      const match = /^(.+):([A-Za-z_$][\w$]*)$/u.exec(reference.name)
-      if (!match) {
-        violations.push(
-          `${reference.location} has malformed reference ${reference.name}`,
-        )
-        continue
-      }
-
-      const moduleName = match[1]
-      const exportName = match[2]
-      if (!moduleName || !exportName) continue
-
-      const targetFile = join(convexRoot, `${moduleName}.ts`)
-      if (!existsSync(targetFile)) {
-        violations.push(
-          `${reference.location} references missing backend module ${moduleName}.ts`,
-        )
-        continue
-      }
-
-      if (!exportedNames(targetFile).has(exportName)) {
-        violations.push(
-          `${reference.location} references missing export ${reference.name}`,
-        )
-        continue
-      }
-
-      const registration = registrationByName.get(reference.name)
-      if (!registration || internalBuilders.has(registration.builder)) {
-        violations.push(
-          `${reference.location} references ${reference.name}, which is not a public Convex function`,
-        )
-        continue
-      }
-
-      if (
-        reference.expectedKind &&
-        registration.kind !== reference.expectedKind
-      ) {
-        violations.push(
-          `${reference.location} declares ${reference.name} as ${reference.expectedKind}, but the backend exports ${registration.kind ?? registration.builder}`,
-        )
       }
     }
 

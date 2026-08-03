@@ -1,6 +1,4 @@
 import type { UserIdentity } from "convex/server"
-import { makeFunctionReference, type FunctionReference } from "convex/server"
-import type { GenericId } from "convex/values"
 import { ConvexError, v } from "convex/values"
 import {
   customAction,
@@ -11,14 +9,15 @@ import {
 import {
   action,
   env,
-  indexEquals,
   internalQuery,
   mutation,
   query,
   type ActionCtx,
   type MutationCtx,
   type QueryCtx,
-} from "../server"
+} from "../_generated/server"
+import { internal } from "../_generated/api"
+import type { Id } from "../_generated/dataModel"
 import { assertAdminClerkUserId } from "./adminAuthorization"
 import {
   authorizeCurrentCustomerTenant,
@@ -32,9 +31,9 @@ import {
 type AuthorizationErrorCode =
   "BOOTSTRAP_REQUIRED" | "FORBIDDEN" | "TENANT_NOT_FOUND" | "UNAUTHENTICATED"
 
-type UserId = GenericId<"users">
-type WorkspaceId = GenericId<"workspaces">
-type MembershipId = GenericId<"workspaceMembers">
+type UserId = Id<"users">
+type WorkspaceId = Id<"workspaces">
+type MembershipId = Id<"workspaceMembers">
 
 type AuthorizedViewer = CustomerUser<UserId, WorkspaceId> & {
   _id: UserId
@@ -111,7 +110,7 @@ function customerStore(
       const membership = await ctx.db
         .query("workspaceMembers")
         .withIndex("by_workspace_and_user", (q) =>
-          indexEquals(q, ["workspaceId", workspaceId], ["userId", userId]),
+          q.eq("workspaceId", workspaceId).eq("userId", userId),
         )
         .unique()
 
@@ -225,24 +224,8 @@ export const resolveCurrentCustomerAuthorizationForAction = internalQuery({
     }),
 })
 
-const resolveCurrentCustomerAuthorizationReference = makeFunctionReference<
-  "query",
-  {
-    clerkUserId: string
-    tokenIdentifier: string
-  },
-  CurrentCustomerAuthorization
->(
-  "lib/authorization:resolveCurrentCustomerAuthorizationForAction",
-) as unknown as FunctionReference<
-  "query",
-  "internal",
-  {
-    clerkUserId: string
-    tokenIdentifier: string
-  },
-  CurrentCustomerAuthorization
->
+const resolveCurrentCustomerAuthorizationReference =
+  internal.lib.authorization.resolveCurrentCustomerAuthorizationForAction
 
 export const authenticatedQuery = customQuery(query, {
   args: {},

@@ -1,86 +1,57 @@
-1. Core Rules
+# Astreex
 
-- Add packages with an install command. Do not edit package.json manually.
-- Run the project's check, format, and lint commands before considering the task complete. For larger tasks consider running them after every batch of changes.
-- Avoid explicit return types unless they add real value.
-- Treat 'as any' as a last resort. Use real type safety and rely on type inference where possible.
-- Use good defaults and keep setup to a minimum. Users should get value with no setup.
-- Never trade security for ease of use.
+Astreex helps users monitor the keywords that matter to them across Reddit, X, and Hacker News. A keyword might be their brand name, a competitor, or any other term they want to track. Astreex finds matching mentions and uses AI to organize them into categories such as Questions, Complaints, Praise, and Bugs. Users can also create custom categories for the conversations specific to their business.
 
-2. Think Before Coding
+The value comes from what users can do with those mentions: catch bug reports, answer questions, correct misinformation before it spreads, collect testimonials, learn what people dislike about competitors, and spot opportunities to move first. Categorization should make important conversations easier to find and act on while preserving the original context.
 
-Don't assume. Don't hide confusion. Surface tradeoffs.
+Because Astreex handles customer data, billing, external providers, and durable background work, correctness includes authorization, bounded work, failure recovery, and behavior under real load—not only the happy path.
 
-Before implementing:
+## The lazy senior
 
-- State your assumptions explicitly. If uncertain, ask.
-- If multiple interpretations exist, present them - don't pick silently.
-- If a simpler approach exists, say so. Push back when warranted.
-- If something is unclear, stop. Name what's confusing. Ask.
+I want ambitious products built from simple systems and software that feels obvious. Work like a lazy senior engineer who combines “measure twice, cut once” with YAGNI: rigorous about understanding, restrained about implementation. Lazy means efficient, not careless. The best code is code we never have to own.
 
-3. Simplicity First
+Trace the real flow, callers, boundaries, and failure modes before choosing a fix. A small diff in the wrong place is a second bug. Fix the root cause at the narrowest shared boundary.
 
-Minimum code that solves the problem. Nothing speculative.
+For a consequential design choice, inspect local precedents and dependencies, then current official documentation and proven patterns in established products. Know the constraint, the invariant, and why a simpler alternative does not hold. Research in proportion to the decision.
 
-- No features beyond what was asked.
-- No abstractions for single-use code.
-- No "flexibility" or "configurability" that wasn't requested.
-- No error handling for impossible scenarios.
-- If you write 200 lines and it could be 50, rewrite it.
+Treat these instructions as strong defaults. The user’s explicit intent and the reality of the problem take precedence.
 
-Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
+## Spend the complexity budget
 
-4. Surgical Changes
+Climb this ladder in order:
 
-Touch only what you must. Clean up only your own mess.
+1. Remove the need or reduce the requirement.
+2. Reuse a capability already present when it solves the problem cleanly.
+3. Use the language, browser, framework, or platform primitive.
+4. Use an established, well-maintained library.
+5. Only then write the smallest custom implementation that fully solves the problem.
 
-When editing existing code:
+Check the installed version’s documentation and types before judging a dependency. Prefer an existing dependency when it fits. Add a package when it removes more code and operational risk than it adds; weigh maintenance, adoption, security, API stability, and transitive cost. Use established libraries for solved, non-domain problems, with only the boundary code the application genuinely needs. Custom code is for the remaining project-specific gap.
 
-- Don't "improve" adjacent code, comments, or formatting.
-- Don't refactor things that aren't broken.
-- Match existing style, even if you'd do it differently.
-- If you notice unrelated dead code, mention it - don't delete it.
+Every new line is a liability. Prefer deletion, consolidation, boring control flow, good defaults, and one obvious path. Let abstractions emerge from stable repetition; predicted reuse is not reuse. Flexibility, configuration, fallbacks, and compatibility need a present product requirement.
 
-When your changes create orphans:
+Smallest means the least system we can maintain, not the fewest characters. Preserve trust-boundary validation, accessibility, type safety, security, and error handling that prevents corrupt or lost data.
 
-- Remove imports/variables/functions that YOUR changes made unused.
-- Don't remove pre-existing dead code unless asked.
+## Build for the boring future
 
-The test: Every changed line should trace directly to the user's request.
+A fix should remain the right design after real users and data arrive. On affected production paths, consider the relevant limits: tenant isolation, authoritative backend authorization, bounded data access, concurrency, idempotency, retries, stale work, time-based state, external contracts, and secret-safe failures. Scale the design to evidence, not imaginary infrastructure.
 
-5. Goal-Driven Execution
+Choose a maintainable current design over “temporary” architecture. If simplicity creates a real ceiling, make the ceiling explicit. Legacy behavior earns its cost only when deployed data, clients, or the user require it; otherwise replace the obsolete path cleanly.
 
-Define success criteria. Loop until verified.
+For Convex work, read the repository’s generated Convex AI guidelines at `packages/backend/convex/_generated/ai/guidelines.md` before editing. Its current API rules override model memory.
 
-Transform tasks into verifiable goals:
+## Tests are evidence
 
-- "Add validation" → "Write tests for invalid inputs, then make them pass"
-- "Fix the bug" → "Write a test that reproduces it, then make it pass"
-- "Refactor X" → "Ensure tests pass before and after"
+Test count is not a goal. Test observable outcomes at public seams so the suite reads like a specification and survives internal refactors.
 
-For multi-step tasks, state a brief plan:
+- A bug fix gets the smallest regression test that fails for the defect.
+- Start new behavior with one high-value example. Add another only for a distinct behavior or risk, not a branch, function, or permutation.
+- Prefer the existing seam and harness. Add a fixture or test file only for a genuinely new boundary or setup.
+- Assert through public behavior. Private methods, internal call order, and mocks of code we own make brittle tests.
+- Derive expected values from an independent fact, never a copy of the implementation.
 
-```text
-1. [Step] → verify: [check]
-2. [Step] → verify: [check]
-3. [Step] → verify: [check]
-```
+Run the narrowest relevant tests and static checks while iterating. Before completion, verify each changed package and boundary. Use repository-wide checks for cross-cutting or release-critical work. A green suite proves only what it exercises.
 
-Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
+## Keep changes honest
 
-6. Development Stage
-
-This project is still in active development.
-
-- Do not add data backfills, migrations, old data support, or compatibility code unless the user asks for it.
-- Do not preserve weak code or design choices just because they already exist.
-- You may propose large changes or refactors when they would make the project simpler, faster, safer, or easier to maintain.
-- Explain the reason, scope, and tradeoffs before making a large change.
-- Prefer fixing the root cause over adding code that works around it.
-
-<!-- convex-ai-start -->
-
-This project uses [Convex](https://convex.dev) as its backend.
-
-When working on Convex code, **always read `packages/backend/convex/_generated/ai/guidelines.md` first** for important guidelines on how to correctly use Convex APIs and patterns. The file contains rules that override what you may have learned about Convex from training data.
-<!-- convex-ai-end -->
+Make every changed line trace to the requested outcome or its necessary root fix. Match local conventions, remove superseded paths and artifacts, and leave unrelated cleanup for separate work.

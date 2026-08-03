@@ -1,10 +1,10 @@
 import type { UserIdentity } from "convex/server"
-import type { GenericId } from "convex/values"
 import { ConvexError, v } from "convex/values"
 
 import { effectiveEntitlementStatus } from "./billing/lifecycle"
+import type { Doc, Id } from "./_generated/dataModel"
 import { authenticatedMutation, authenticatedQuery } from "./lib/authorization"
-import { indexEquals, type MutationCtx, type QueryCtx } from "./server"
+import { type MutationCtx, type QueryCtx } from "./_generated/server"
 import { resolveCurrentCustomer } from "./users"
 
 const DEFAULT_PAGE_SIZE = 12
@@ -88,17 +88,16 @@ const mentionPageResultValidator = v.object({
   totalCount: v.optional(v.number()),
 })
 
-type UserId = GenericId<"users">
-type WorkspaceId = GenericId<"workspaces">
-type MentionId = GenericId<"mentions">
-type KeywordId = GenericId<"keywords">
-type CategoryId = GenericId<"categories">
+type UserId = Id<"users">
+type WorkspaceId = Id<"workspaces">
+type MentionId = Id<"mentions">
+type KeywordId = Id<"keywords">
+type CategoryId = Id<"categories">
 type Platform = "x" | "reddit" | "hacker_news"
 type MentionStatus = "new" | "saved" | "dismissed"
 type MentionSort = "newest" | "oldest" | "most_engaged"
 type MentionMonitoringState =
   "active" | "paused" | "setup_required" | "usage_limited"
-type GenericRow = Record<string, unknown> & { _id: GenericId<string> }
 
 type CustomerDatabaseCtx = {
   db: QueryCtx["db"] | MutationCtx["db"]
@@ -150,10 +149,10 @@ async function requireCurrentCustomer(
   return { userId: viewer.id, workspaceId: workspace.id }
 }
 
-function normalizedIdArray<Id extends GenericId<string>>(
-  values: readonly Id[] | undefined,
+function normalizedIdArray<TableName extends "categories" | "keywords">(
+  values: readonly Id<TableName>[] | undefined,
   label: string,
-): Id[] {
+): Id<TableName>[] {
   if (!values) {
     return []
   }
@@ -413,7 +412,7 @@ async function assertAuthorizedFilterIds(
 }
 
 function mentionMatchesFilters(
-  row: GenericRow,
+  row: Doc<"mentions">,
   input: {
     filters: NormalizedMentionFilters
     query: string
@@ -462,33 +461,33 @@ function mentionMatchesFilters(
 async function mentionMatchesKeywordFilter(
   ctx: Pick<CustomerDatabaseCtx, "db">,
   workspaceId: WorkspaceId,
-  mentionId: GenericId<string>,
+  mentionId: MentionId,
   keywordIds: ReadonlySet<string>,
 ): Promise<boolean> {
   if (keywordIds.size === 0) {
     return true
   }
 
-  const matches = (await ctx.db
+  const matches = await ctx.db
     .query("mentionKeywordMatches")
     .withIndex("by_workspace_and_mention", (q) =>
-      indexEquals(q, ["workspaceId", workspaceId], ["mentionId", mentionId]),
+      q.eq("workspaceId", workspaceId).eq("mentionId", mentionId),
     )
-    .collect()) as GenericRow[]
+    .collect()
   return matches.some((match) => keywordIds.has(String(match.keywordId)))
 }
 
 async function filterMentionRows(
   ctx: Pick<CustomerDatabaseCtx, "db">,
   workspaceId: WorkspaceId,
-  rows: readonly GenericRow[],
+  rows: readonly Doc<"mentions">[],
   input: {
     filters: NormalizedMentionFilters
     keywordIds: ReadonlySet<string>
     query: string
   },
-): Promise<GenericRow[]> {
-  const filtered: GenericRow[] = []
+): Promise<Doc<"mentions">[]> {
+  const filtered: Doc<"mentions">[] = []
   for (const row of rows) {
     if (
       row.workspaceId === workspaceId &&
@@ -510,13 +509,10 @@ async function bufferedMentionRows(
   ctx: Pick<CustomerDatabaseCtx, "db">,
   workspaceId: WorkspaceId,
   mentionIds: readonly string[],
-): Promise<GenericRow[]> {
-  const rows: GenericRow[] = []
+): Promise<Doc<"mentions">[]> {
+  const rows: Doc<"mentions">[] = []
   for (const mentionId of mentionIds) {
-    const row = (await ctx.db.get(
-      "mentions",
-      mentionId as MentionId,
-    )) as GenericRow | null
+    const row = await ctx.db.get("mentions", mentionId as MentionId)
     if (row?.workspaceId === workspaceId) {
       rows.push(row)
     }
@@ -528,8 +524,8 @@ async function mentionForWorkspace(
   ctx: Pick<CustomerDatabaseCtx, "db">,
   workspaceId: WorkspaceId,
   mentionId: MentionId,
-): Promise<GenericRow> {
-  const mention = (await ctx.db.get("mentions", mentionId)) as GenericRow | null
+): Promise<Doc<"mentions">> {
+  const mention = await ctx.db.get("mentions", mentionId)
   if (!mention || mention.workspaceId !== workspaceId) {
     mentionError("MENTION_NOT_FOUND", "Mention not found")
   }
@@ -538,7 +534,7 @@ async function mentionForWorkspace(
 
 async function formatCategory(
   ctx: Pick<CustomerDatabaseCtx, "db">,
-  mention: GenericRow,
+  mention: Doc<"mentions">,
 ): Promise<{
   colorToken?: string
   id: CategoryId
@@ -570,18 +566,14 @@ async function formatCategory(
 
 async function formatMatchedKeywords(
   ctx: Pick<CustomerDatabaseCtx, "db">,
-  mention: GenericRow,
+  mention: Doc<"mentions">,
 ): Promise<Array<{ id: KeywordId; phrase: string }>> {
-  const matches = (await ctx.db
+  const matches = await ctx.db
     .query("mentionKeywordMatches")
     .withIndex("by_workspace_and_mention", (q) =>
-      indexEquals(
-        q,
-        ["workspaceId", mention.workspaceId],
-        ["mentionId", mention._id],
-      ),
+      q.eq("workspaceId", mention.workspaceId).eq("mentionId", mention._id),
     )
-    .collect()) as GenericRow[]
+    .collect()
   const keywords = new Map<string, { id: KeywordId; phrase: string }>()
 
   for (const match of matches) {
@@ -601,7 +593,7 @@ async function formatMatchedKeywords(
 
 async function formatMention(
   ctx: Pick<CustomerDatabaseCtx, "db">,
-  mention: GenericRow,
+  mention: Doc<"mentions">,
 ) {
   let canonicalUrl: string
   try {
@@ -662,12 +654,12 @@ async function readMentionMonitoringState(
     await Promise.all(
       (["active", "paused"] as const).map(
         async (status) =>
-          (await ctx.db
+          await ctx.db
             .query("keywords")
             .withIndex("by_workspace_status_and_created_at", (q) =>
-              indexEquals(q, ["workspaceId", workspaceId], ["status", status]),
+              q.eq("workspaceId", workspaceId).eq("status", status),
             )
-            .collect()) as GenericRow[],
+            .collect(),
       ),
     )
   ).flat()
@@ -675,10 +667,10 @@ async function readMentionMonitoringState(
     return "setup_required"
   }
 
-  const subscriptions = (await ctx.db
+  const subscriptions = await ctx.db
     .query("subscriptions")
     .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-    .collect()) as GenericRow[]
+    .collect()
   const activeSubscription = subscriptions
     .sort(
       (left, right) =>
@@ -700,12 +692,12 @@ async function readMentionMonitoringState(
     return "paused"
   }
 
-  const cycles = (await ctx.db
+  const cycles = await ctx.db
     .query("usageCycles")
     .withIndex("by_workspace_status_and_period_end", (q) =>
-      indexEquals(q, ["workspaceId", workspaceId], ["status", "open"]),
+      q.eq("workspaceId", workspaceId).eq("status", "open"),
     )
-    .collect()) as GenericRow[]
+    .collect()
   const usageCycle = cycles
     .filter(
       (cycle) =>
@@ -735,12 +727,12 @@ async function readMentionMonitoringState(
   if (activeKeywordIds.size === 0) {
     return "paused"
   }
-  const activeSources = (await ctx.db
+  const activeSources = await ctx.db
     .query("trackingSources")
     .withIndex("by_workspace_status_and_created_at", (q) =>
-      indexEquals(q, ["workspaceId", workspaceId], ["status", "active"]),
+      q.eq("workspaceId", workspaceId).eq("status", "active"),
     )
-    .collect()) as GenericRow[]
+    .collect()
   return activeSources.some(
     (source) =>
       source.deletedAt === undefined &&
@@ -755,11 +747,15 @@ export const listMentions = authenticatedQuery({
     cursor: v.optional(v.string()),
     filters: v.optional(mentionFiltersValidator),
     limit: v.optional(v.number()),
+    now: v.number(),
     query: v.optional(v.string()),
     sort: v.optional(mentionSortValidator),
   },
   returns: mentionPageResultValidator,
   handler: async (ctx, args) => {
+    if (!Number.isSafeInteger(args.now) || args.now < 0) {
+      mentionError("INVALID_MENTION_INPUT", "Current time is invalid")
+    }
     const customer = await requireCurrentCustomer(ctx)
     const filters = normalizeMentionFilters(args.filters)
     const query = normalizeMentionSearchQuery(args.query)
@@ -815,12 +811,11 @@ export const listMentions = authenticatedQuery({
       continueCursor = scanned.continueCursor
       databaseDone = scanned.isDone
       candidates.push(
-        ...(await filterMentionRows(
-          ctx,
-          customer.workspaceId,
-          scanned.page as GenericRow[],
-          { filters, keywordIds, query },
-        )),
+        ...(await filterMentionRows(ctx, customer.workspaceId, scanned.page, {
+          filters,
+          keywordIds,
+          query,
+        })),
       )
     }
 
@@ -845,7 +840,7 @@ export const listMentions = authenticatedQuery({
       Promise.all(
         pageRows.map(async (mention) => await formatMention(ctx, mention)),
       ),
-      readMentionMonitoringState(ctx, customer.workspaceId, Date.now()),
+      readMentionMonitoringState(ctx, customer.workspaceId, args.now),
     ])
 
     return {

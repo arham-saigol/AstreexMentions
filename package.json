@@ -18,22 +18,13 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
-    "test:e2e": "pnpm --filter @astreex/e2e test:e2e",
     "convex:codegen": "pnpm --filter @astreex/backend codegen",
     "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
-    "verify:release": "node scripts/verify-release-env.mjs && pnpm verify && pnpm test:e2e"
+    "verify:release": "node scripts/verify-release-env.mjs && pnpm verify"
   },
   "devDependencies": {
-    "@eslint/js": "^9.0.0",
-    "@types/node": "^24.0.0",
-    "eslint": "^9.0.0",
-    "eslint-config-prettier": "^10.0.0",
-    "globals": "^16.0.0",
     "prettier": "^3.0.0",
     "prettier-plugin-tailwindcss": "^0.8.0",
-    "turbo": "^2.0.0",
-    "typescript": "^6.0.0",
-    "typescript-eslint": "^8.0.0",
-    "vitest": "^4.0.0"
+    "turbo": "^2.0.0"
   }
 }

@@ -162,3 +162,14 @@ export function normalizeKeywordPhrase(value: string): string {
 export function draftStorageKey(workspaceId: string): string {
   return `astreex:onboarding:${workspaceId}:v1`
 }
+
+export function clearOnboardingDraftStorage(
+  storage: Pick<Storage, "removeItem">,
+  workspaceId: string,
+): void {
+  try {
+    storage.removeItem(draftStorageKey(workspaceId))
+  } catch {
+    // Storage cleanup must not block navigation or account deletion.
+  }
+}

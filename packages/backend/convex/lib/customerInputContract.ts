@@ -1,32 +1,3 @@
-export const KEYWORD_PLATFORMS = ["x", "reddit", "hacker_news"] as const
-export type KeywordPlatform = (typeof KEYWORD_PLATFORMS)[number]
-
-export function validateKeywordPlatforms(
-  values: readonly unknown[],
-): KeywordPlatform[] {
-  if (!Array.isArray(values) || values.length === 0) {
-    throw new TypeError("Select at least one keyword platform")
-  }
-
-  const seen = new Set<KeywordPlatform>()
-  const platforms: KeywordPlatform[] = []
-  for (const value of values) {
-    if (
-      typeof value !== "string" ||
-      !(KEYWORD_PLATFORMS as readonly string[]).includes(value)
-    ) {
-      throw new TypeError("Keyword platform is not supported")
-    }
-    const platform = value as KeywordPlatform
-    if (seen.has(platform)) {
-      throw new TypeError("Keyword platforms cannot contain duplicates")
-    }
-    seen.add(platform)
-    platforms.push(platform)
-  }
-  return platforms
-}
-
 export const SYNTHETIC_ALL_MENTIONS_VIEW_NAME = "All Mentions"
 
 export function normalizeSavedViewName(name: string): string {

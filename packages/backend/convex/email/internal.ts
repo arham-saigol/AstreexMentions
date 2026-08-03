@@ -1,4 +1,5 @@
-import { type GenericId, v } from "convex/values"
+import { internal } from "../_generated/api"
+import { v } from "convex/values"
 
 import {
   claimEmail,
@@ -8,24 +9,19 @@ import {
   type EmailOutbox,
   type LeasedEmailOutbox,
 } from "../lib/emailOutbox"
-import {
-  internalActionReference,
-  internalMutationReference,
-} from "../lib/functionReferences"
-import { createJobLeaseToken, indexAtMost } from "../lib/jobRuntime"
-import { env, indexEquals, internalMutation, type MutationCtx } from "../server"
+import { createJobLeaseToken } from "../lib/jobRuntime"
+import { recordProviderMetricBuckets } from "../lib/providerMetricBuckets"
+import { env, internalMutation, type MutationCtx } from "../_generated/server"
+import type { Doc, Id } from "../_generated/dataModel"
 import { readResendDeliveryConfiguration } from "./config"
 
 const MAX_EMAIL_CLAIMS = 32
 const BLOCKED_CONFIG_RETRY_MS = 5 * 60_000
-const HOUR_MS = 3_600_000
 
-type GenericRow = Record<string, unknown> & { _id: GenericId<string> }
-type EmailOutboxId = GenericId<"emailOutbox">
-type DigestRunId = GenericId<"digestRuns">
-type ProviderMetricBucketId = GenericId<"providerMetricBuckets">
+type EmailOutboxId = Id<"emailOutbox">
+type DigestRunId = Id<"digestRuns">
 
-export function outboxFromRow(row: GenericRow): EmailOutbox {
+export function outboxFromRow(row: Doc<"emailOutbox">): EmailOutbox {
   const payload = {
     from: row.from as string,
     html: row.html as string,
@@ -124,12 +120,12 @@ async function patchOutboxState(
 
 async function emailOwnerIsUnavailable(
   ctx: MutationCtx,
-  row: GenericRow,
+  row: Doc<"emailOutbox">,
 ): Promise<boolean> {
-  const [workspace, user] = (await Promise.all([
-    ctx.db.get("workspaces", row.workspaceId as GenericId<"workspaces">),
-    ctx.db.get("users", row.userId as GenericId<"users">),
-  ])) as [GenericRow | null, GenericRow | null]
+  const [workspace, user] = await Promise.all([
+    ctx.db.get("workspaces", row.workspaceId),
+    ctx.db.get("users", row.userId),
+  ])
   return (
     !workspace ||
     workspace.deletedAt !== undefined ||
@@ -142,7 +138,7 @@ async function emailOwnerIsUnavailable(
 
 async function deadLetterUnavailableEmail(
   ctx: MutationCtx,
-  row: GenericRow,
+  row: Doc<"emailOutbox">,
   now: number,
 ): Promise<void> {
   await ctx.db.patch("emailOutbox", row._id as EmailOutboxId, {
@@ -165,7 +161,7 @@ async function recordSendAttempt(
     errorMessage?: string | undefined
     outboxId: EmailOutboxId
     status: "failed" | "succeeded"
-    workspaceId: GenericId<"workspaces">
+    workspaceId: Id<"workspaces">
   },
   now: number,
 ): Promise<void> {
@@ -206,57 +202,21 @@ async function recordSendAttempt(
       : { errorMessage: input.errorMessage }),
   })
 
-  const bucketStartAt = Math.floor(now / HOUR_MS) * HOUR_MS
-  const bucket = (await ctx.db
-    .query("providerMetricBuckets")
-    .withIndex("by_provider_operation_granularity_and_bucket", (q) =>
-      indexEquals(
-        q,
-        ["provider", "resend"],
-        ["operation", "emails.send"],
-        ["granularity", "hour"],
-        ["bucketStartAt", bucketStartAt],
-      ),
-    )
-    .unique()) as GenericRow | null
-
-  if (bucket) {
-    await ctx.db.patch(
-      "providerMetricBuckets",
-      bucket._id as ProviderMetricBucketId,
-      {
-        failureCount: (bucket.failureCount as number) + failed,
-        inputItemCount: (bucket.inputItemCount as number) + 1,
-        latencyMaxMs: Math.max(bucket.latencyMaxMs as number, durationMs),
-        latencyTotalMs: (bucket.latencyTotalMs as number) + durationMs,
-        outputItemCount: (bucket.outputItemCount as number) + succeeded,
-        rateLimitedCount: (bucket.rateLimitedCount as number) + rateLimited,
-        requestCount: (bucket.requestCount as number) + 1,
-        retryCount: (bucket.retryCount as number) + retry,
-        successCount: (bucket.successCount as number) + succeeded,
-        updatedAt: now,
-      },
-    )
-    return
-  }
-
-  await ctx.db.insert("providerMetricBuckets", {
-    bucketEndAt: bucketStartAt + HOUR_MS,
-    bucketStartAt,
-    failureCount: failed,
-    granularity: "hour",
-    inputItemCount: 1,
-    latencyMaxMs: durationMs,
-    latencyTotalMs: durationMs,
-    operation: "emails.send",
-    outputItemCount: succeeded,
-    provider: "resend",
-    rateLimitedCount: rateLimited,
-    requestCount: 1,
-    retryCount: retry,
-    successCount: succeeded,
-    updatedAt: now,
-  })
+  await recordProviderMetricBuckets(
+    ctx,
+    {
+      durationMs,
+      failureCount: failed,
+      inputItemCount: 1,
+      operation: "emails.send",
+      outputItemCount: succeeded,
+      provider: "resend",
+      rateLimitedCount: rateLimited,
+      retryCount: retry,
+      successCount: succeeded,
+    },
+    now,
+  )
 }
 
 export const dispatchPendingEmails = internalMutation({
@@ -271,28 +231,20 @@ export const dispatchPendingEmails = internalMutation({
       }
     }
 
-    const [pending, expired] = (await Promise.all([
+    const [pending, expired] = await Promise.all([
       ctx.db
         .query("emailOutbox")
         .withIndex("by_status_and_next_attempt_at", (q) =>
-          indexAtMost(
-            indexEquals(q, ["status", "pending"]),
-            "nextAttemptAt",
-            now,
-          ),
+          q.eq("status", "pending").lte("nextAttemptAt", now),
         )
         .take(MAX_EMAIL_CLAIMS),
       ctx.db
         .query("emailOutbox")
         .withIndex("by_status_and_lease_expires_at", (q) =>
-          indexAtMost(
-            indexEquals(q, ["status", "leased"]),
-            "leaseExpiresAt",
-            now,
-          ),
+          q.eq("status", "leased").lte("leaseExpiresAt", now),
         )
         .take(MAX_EMAIL_CLAIMS),
-    ])) as [GenericRow[], GenericRow[]]
+    ])
     const claimable = [...pending, ...expired]
       .sort(
         (left, right) =>
@@ -323,7 +275,7 @@ export const dispatchPendingEmails = internalMutation({
         outbox: outboxFromRow(row),
       })
       await patchOutboxState(ctx, outboxId, leased)
-      await ctx.scheduler.runAfter(0, deliverEmailReference, {
+      await ctx.scheduler.runAfter(0, internal.email.actions.deliverEmail, {
         leaseToken,
         outboxId,
       })
@@ -340,10 +292,7 @@ export const loadLeasedEmail = internalMutation({
     outboxId: v.id("emailOutbox"),
   },
   handler: async (ctx, args) => {
-    const row = (await ctx.db.get(
-      "emailOutbox",
-      args.outboxId,
-    )) as GenericRow | null
+    const row = await ctx.db.get("emailOutbox", args.outboxId)
     if (
       !row ||
       row.status !== "leased" ||
@@ -352,10 +301,10 @@ export const loadLeasedEmail = internalMutation({
     ) {
       return { state: "stale_lease" as const }
     }
-    const [workspace, user] = (await Promise.all([
-      ctx.db.get("workspaces", row.workspaceId as GenericId<"workspaces">),
-      ctx.db.get("users", row.userId as GenericId<"users">),
-    ])) as [GenericRow | null, GenericRow | null]
+    const [workspace, user] = await Promise.all([
+      ctx.db.get("workspaces", row.workspaceId),
+      ctx.db.get("users", row.userId),
+    ])
     if (
       !workspace ||
       workspace.deletedAt !== undefined ||
@@ -392,10 +341,7 @@ export const releaseEmailBlockedConfig = internalMutation({
     outboxId: v.id("emailOutbox"),
   },
   handler: async (ctx, args) => {
-    const row = (await ctx.db.get(
-      "emailOutbox",
-      args.outboxId,
-    )) as GenericRow | null
+    const row = await ctx.db.get("emailOutbox", args.outboxId)
     if (!row || row.status !== "leased" || row.leaseToken !== args.leaseToken) {
       return { state: "stale_lease" as const }
     }
@@ -421,10 +367,7 @@ export const completeEmailDelivery = internalMutation({
     providerMessageId: v.string(),
   },
   handler: async (ctx, args) => {
-    const row = (await ctx.db.get(
-      "emailOutbox",
-      args.outboxId,
-    )) as GenericRow | null
+    const row = await ctx.db.get("emailOutbox", args.outboxId)
     if (!row) {
       return { state: "stale_lease" as const }
     }
@@ -458,7 +401,7 @@ export const completeEmailDelivery = internalMutation({
         durationMs: args.durationMs,
         outboxId: args.outboxId,
         status: "succeeded",
-        workspaceId: row.workspaceId as GenericId<"workspaces">,
+        workspaceId: row.workspaceId,
       },
       now,
     )
@@ -476,10 +419,7 @@ export const failEmailDelivery = internalMutation({
     retryable: v.boolean(),
   },
   handler: async (ctx, args) => {
-    const row = (await ctx.db.get(
-      "emailOutbox",
-      args.outboxId,
-    )) as GenericRow | null
+    const row = await ctx.db.get("emailOutbox", args.outboxId)
     if (!row || row.status !== "leased") {
       return { state: "stale_lease" as const }
     }
@@ -515,7 +455,7 @@ export const failEmailDelivery = internalMutation({
         errorMessage: args.errorMessage,
         outboxId: args.outboxId,
         status: "failed",
-        workspaceId: row.workspaceId as GenericId<"workspaces">,
+        workspaceId: row.workspaceId,
       },
       now,
     )
@@ -528,41 +468,3 @@ export const failEmailDelivery = internalMutation({
     }
   },
 })
-
-type EmailLeaseArguments = {
-  leaseToken: string
-  outboxId: EmailOutboxId
-}
-
-export const dispatchPendingEmailsReference = internalMutationReference<{
-  now?: number
-}>("email/internal:dispatchPendingEmails")
-
-export const deliverEmailReference =
-  internalActionReference<EmailLeaseArguments>("email/actions:deliverEmail")
-
-export const loadLeasedEmailReference =
-  internalMutationReference<EmailLeaseArguments>(
-    "email/internal:loadLeasedEmail",
-  )
-
-export const releaseEmailBlockedConfigReference =
-  internalMutationReference<EmailLeaseArguments>(
-    "email/internal:releaseEmailBlockedConfig",
-  )
-
-export const completeEmailDeliveryReference = internalMutationReference<
-  EmailLeaseArguments & {
-    durationMs: number
-    providerMessageId: string
-  }
->("email/internal:completeEmailDelivery")
-
-export const failEmailDeliveryReference = internalMutationReference<
-  EmailLeaseArguments & {
-    durationMs: number
-    errorCode: string
-    errorMessage: string
-    retryable: boolean
-  }
->("email/internal:failEmailDelivery")

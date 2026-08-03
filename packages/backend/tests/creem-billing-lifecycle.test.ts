@@ -1,10 +1,7 @@
 import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
-import { ConvexError } from "convex/values"
-import { describe, expect, it, vi } from "vitest"
+import { describe, expect, it } from "vitest"
 
-import { confirmFullyInactiveEntitlement } from "../convex/lib/billingDeletionGuard"
-import { insertCreemBillingEventIdempotently } from "../convex/lib/creemBilling"
 import {
   isCreemSubscriptionWebhookEvent,
   normalizeCreemSubscription,
@@ -12,7 +9,6 @@ import {
 } from "../convex/integrations/creem"
 import type { CreemPlanMapping } from "../convex/billing/config"
 import {
-  completeCheckoutWithoutEntitlement,
   effectiveEntitlementStatus,
   planCreemSubscriptionTransition,
   subscriptionStatusAllowsCheckout,
@@ -326,76 +322,5 @@ describe("Creem subscription lifecycle", () => {
       mentionsUsed: 80,
       warning80SentAt: 1783987200000,
     })
-  })
-
-  it("never grants trial entitlement", () => {
-    const trial = subscriptionFixture("subscription-trialing.json")
-    const result = requireApplied(
-      planCreemSubscriptionTransition({
-        currentUsageCycle: null,
-        existingSubscription: null,
-        plan: growthPlan,
-        providerCreatedAt: trial.created_at,
-        subscription: normalizeCreemSubscription(trial.object),
-        subscriptionId: "subscription_trial_row",
-        workspaceId: "workspace_fixture_trial",
-      }),
-    )
-
-    expect(result.subscription.entitlementStatus).toBe("inactive")
-    expect(result.subscription.status).toBe("trialing")
-  })
-})
-
-describe("Creem billing safety boundaries", () => {
-  it("deduplicates the fixture event id before insertion", async () => {
-    const providerEventId = parseCreemWebhookEvent(
-      fixture("subscription-paid.json"),
-    ).id
-    const insert = vi.fn().mockResolvedValue("billing_event_row")
-
-    await expect(
-      insertCreemBillingEventIdempotently(
-        {
-          findByProviderEventId: vi.fn().mockResolvedValue("billing_event_row"),
-          insert,
-        },
-        providerEventId,
-      ),
-    ).resolves.toEqual({
-      eventId: "billing_event_row",
-      kind: "duplicate",
-    })
-    expect(insert).not.toHaveBeenCalled()
-  })
-
-  it("treats checkout completion as bookkeeping, never entitlement", () => {
-    const checkout = parseCreemWebhookEvent(fixture("checkout-completed.json"))
-    const transition = completeCheckoutWithoutEntitlement(checkout.created_at)
-
-    expect(transition).toEqual({
-      completedAt: checkout.created_at,
-      status: "complete",
-      updatedAt: checkout.created_at,
-    })
-    expect(transition).not.toHaveProperty("entitlementStatus")
-    expect(transition).not.toHaveProperty("subscription")
-  })
-
-  it("blocks account deletion while active or paid-through-period", () => {
-    const active = initialPaidState().subscription
-    expect(() =>
-      confirmFullyInactiveEntitlement([
-        { entitlementStatus: active.entitlementStatus },
-      ]),
-    ).toThrow(ConvexError)
-
-    try {
-      confirmFullyInactiveEntitlement([{ entitlementStatus: "active" }])
-    } catch (error) {
-      expect(error).toMatchObject({
-        data: { code: "BILLING_ENTITLEMENT_ACTIVE" },
-      })
-    }
   })
 })

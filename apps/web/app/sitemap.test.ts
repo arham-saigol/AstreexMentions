@@ -52,6 +52,7 @@ describe("sitemap", () => {
             slug: "old-entry",
             summary: "Older release",
             title: "Old entry",
+            updatedAt: 600,
           },
         ],
         isDone: true,

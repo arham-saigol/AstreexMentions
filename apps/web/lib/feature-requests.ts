@@ -34,35 +34,4 @@ export const featureRequestInputSchema = z.object({
   title: normalizedTitleSchema,
 })
 
-const idSchema = z.string().trim().min(1)
-
-const featureRequestIdObjectSchema = z
-  .object({
-    _id: idSchema.optional(),
-    featureRequestId: idSchema.optional(),
-    id: idSchema.optional(),
-  })
-  .passthrough()
-  .transform((value, context) => {
-    const id = value.featureRequestId ?? value.id ?? value._id
-
-    if (!id) {
-      context.addIssue({
-        code: "custom",
-        message: "Feature request confirmation is missing an id.",
-      })
-      return z.NEVER
-    }
-
-    return { id }
-  })
-
-export const featureRequestCreateResultSchema = z.union([
-  idSchema.transform((id) => ({ id })),
-  featureRequestIdObjectSchema,
-])
-
 export type FeatureRequestInput = z.infer<typeof featureRequestInputSchema>
-export type FeatureRequestCreateResult = z.infer<
-  typeof featureRequestCreateResultSchema
->

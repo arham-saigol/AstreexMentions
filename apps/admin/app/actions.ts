@@ -1,12 +1,14 @@
 "use server"
 
+import { api } from "@astreex/backend/api"
+import type { Id } from "@astreex/backend/data-model"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 
 import { AdminAccessError, requireAdminAccess } from "@/lib/admin-auth"
 import { runAdminMutation } from "@/lib/admin-convex"
+import type { FeatureRequestStatus } from "@/lib/admin-data"
 import { isPublicationDate, publicationDateToTimestamp } from "@/lib/changelog"
-import { adminConvex, type FeatureRequestStatus } from "@/lib/convex-references"
 
 export type AdminActionState = Readonly<{
   status: "idle" | "success" | "error"
@@ -123,9 +125,9 @@ export async function updateFeatureRequestAction(
   }
 
   const result = await runAdminMutation(
-    adminConvex.updateFeatureRequest,
+    api.admin.updateFeatureRequest,
     {
-      requestId: parsed.data.requestId,
+      requestId: parsed.data.requestId as Id<"featureRequests">,
       status: parsed.data.status as FeatureRequestStatus,
       adminNote: parsed.data.adminNote,
     },
@@ -171,7 +173,7 @@ export async function createChangelogEntryAction(
   }
 
   const result = await runAdminMutation(
-    adminConvex.createChangelogEntry,
+    api.admin.createChangelogEntry,
     {
       body: parsed.data.body,
       publishedAt: publicationDateToTimestamp(parsed.data.publicationDate),
@@ -223,10 +225,10 @@ export async function updateChangelogEntryAction(
   }
 
   const result = await runAdminMutation(
-    adminConvex.updateChangelogEntry,
+    api.admin.updateChangelogEntry,
     {
       body: parsed.data.body,
-      entryId: parsed.data.entryId,
+      entryId: parsed.data.entryId as Id<"changelogEntries">,
       label: parsed.data.label,
       publishedAt: publicationDateToTimestamp(parsed.data.publicationDate),
       slug: parsed.data.slug,
@@ -270,8 +272,8 @@ export async function publishChangelogEntryAction(
   }
 
   const result = await runAdminMutation(
-    adminConvex.publishChangelogEntry,
-    { entryId: parsed.data.entryId },
+    api.admin.publishChangelogEntry,
+    { entryId: parsed.data.entryId as Id<"changelogEntries"> },
     access,
   )
 
@@ -309,8 +311,8 @@ export async function unpublishChangelogEntryAction(
   }
 
   const result = await runAdminMutation(
-    adminConvex.unpublishChangelogEntry,
-    { entryId: parsed.data.entryId },
+    api.admin.unpublishChangelogEntry,
+    { entryId: parsed.data.entryId as Id<"changelogEntries"> },
     access,
   )
 
@@ -348,8 +350,8 @@ export async function deleteChangelogEntryAction(
   }
 
   const result = await runAdminMutation(
-    adminConvex.deleteChangelogEntry,
-    { entryId: parsed.data.entryId },
+    api.admin.deleteChangelogEntry,
+    { entryId: parsed.data.entryId as Id<"changelogEntries"> },
     access,
   )
 
@@ -379,12 +381,10 @@ async function runDeletionControl(
   }
 
   const result = await runAdminMutation(
-    kind === "retry"
-      ? adminConvex.retryDeletionJob
-      : adminConvex.cancelDeletionJob,
+    kind === "retry" ? api.admin.retryDeletionJob : api.admin.cancelDeletionJob,
     {
       confirmation: expected,
-      deletionJobId: parsed.data.deletionJobId,
+      deletionJobId: parsed.data.deletionJobId as Id<"deletionJobs">,
     },
     access,
   )

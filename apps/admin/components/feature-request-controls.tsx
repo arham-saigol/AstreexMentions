@@ -1,6 +1,7 @@
 "use client"
 
-import { Label, Textarea } from "@astreex/ui"
+import { Label } from "@astreex/ui/components/label"
+import { Textarea } from "@astreex/ui/components/textarea"
 import { useActionState } from "react"
 import { useFormStatus } from "react-dom"
 
@@ -10,9 +11,11 @@ import {
   type AdminActionState,
 } from "@/app/actions"
 import { ActionSubmit } from "@/components/action-submit"
-import { featureRequestStatuses } from "@/lib/admin-data"
-import { featureRequestStatusLabels } from "@/lib/feature-requests"
-import type { FeatureRequestStatus } from "@/lib/convex-references"
+import {
+  featureRequestStatuses,
+  featureRequestStatusLabels,
+  type FeatureRequestStatus,
+} from "@/lib/admin-data"
 
 function ActionFeedback({ state }: { state: AdminActionState }) {
   const { pending } = useFormStatus()

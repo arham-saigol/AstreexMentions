@@ -1,5 +1,5 @@
 import type { UserIdentity } from "convex/server"
-import type { GenericId } from "convex/values"
+import type { Doc, Id } from "./_generated/dataModel"
 import { ConvexError, v } from "convex/values"
 
 import { effectiveEntitlementStatus } from "./billing/lifecycle"
@@ -11,7 +11,7 @@ import {
   type TrackingSourceType,
 } from "./scheduling/model"
 import { finalizeInvalidatedTrackingProviderRun } from "./scheduling/providerRuns"
-import { indexEquals, type MutationCtx, type QueryCtx } from "./server"
+import { type MutationCtx, type QueryCtx } from "./_generated/server"
 import { resolveCurrentCustomer } from "./users"
 
 export const MAX_DRAFT_KEYWORDS = 10
@@ -93,17 +93,16 @@ const deletedKeywordResultValidator = v.object({
   status: v.literal("deleted"),
 })
 
-type UserId = GenericId<"users">
-type WorkspaceId = GenericId<"workspaces">
-type KeywordId = GenericId<"keywords">
-type TrackingSourceId = GenericId<"trackingSources">
+type UserId = Id<"users">
+type WorkspaceId = Id<"workspaces">
+type KeywordId = Id<"keywords">
+type TrackingSourceId = Id<"trackingSources">
 type Platform = "x" | "reddit" | "hacker_news"
 type KeywordStatus = "active" | "paused" | "deleted"
 type TrackingPauseReason = "paid" | "user" | "usage" | "config"
 type TrackingSourceStatus = "active" | "paused" | "error" | "deleted"
-type GenericRow = Record<string, unknown> & { _id: GenericId<string> }
 type SavedViewFilters = {
-  categoryIds?: GenericId<"categories">[]
+  categoryIds?: Id<"categories">[]
   keywordIds?: KeywordId[]
   mentionStatuses?: Array<"new" | "saved" | "dismissed">
   platforms?: Platform[]
@@ -177,7 +176,7 @@ async function removeKeywordFromActiveSavedViews(
   const savedViews = await ctx.db
     .query("savedViews")
     .withIndex("by_workspace_deleted_and_updated_at", (q) =>
-      indexEquals(q, ["workspaceId", workspaceId], ["deletedAt", undefined]),
+      q.eq("workspaceId", workspaceId).eq("deletedAt", undefined),
     )
     .take(MAX_ACTIVE_SAVED_VIEWS + 1)
   if (savedViews.length > MAX_ACTIVE_SAVED_VIEWS) {
@@ -188,7 +187,7 @@ async function removeKeywordFromActiveSavedViews(
     if (!filters.keywordIds?.includes(keywordId)) {
       continue
     }
-    await ctx.db.patch("savedViews", savedView._id as GenericId<"savedViews">, {
+    await ctx.db.patch("savedViews", savedView._id, {
       filters: removeKeywordFromSavedViewFilters(filters, keywordId),
       updatedAt: now,
     })
@@ -318,10 +317,10 @@ async function readBillingKeywordState(
   workspaceId: WorkspaceId,
   now: number,
 ): Promise<BillingKeywordState> {
-  const subscriptions = (await ctx.db
+  const subscriptions = await ctx.db
     .query("subscriptions")
     .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-    .collect()) as GenericRow[]
+    .collect()
   const activeSubscription = subscriptions
     .sort(
       (left, right) =>
@@ -351,12 +350,12 @@ async function readBillingKeywordState(
   }
 
   const planId = planIdFrom(activeSubscription.planId)
-  const cycles = (await ctx.db
+  const cycles = await ctx.db
     .query("usageCycles")
     .withIndex("by_workspace_status_and_period_end", (q) =>
-      indexEquals(q, ["workspaceId", workspaceId], ["status", "open"]),
+      q.eq("workspaceId", workspaceId).eq("status", "open"),
     )
-    .collect()) as GenericRow[]
+    .collect()
   const currentCycles = cycles
     .filter(
       (cycle) =>
@@ -415,17 +414,17 @@ async function readBillingKeywordState(
 async function configuredKeywords(
   ctx: Pick<CustomerDatabaseCtx, "db">,
   workspaceId: WorkspaceId,
-): Promise<GenericRow[]> {
+): Promise<Doc<"keywords">[]> {
   const rows = (
     await Promise.all(
       (["active", "paused"] as const).map(
         async (status) =>
-          (await ctx.db
+          await ctx.db
             .query("keywords")
             .withIndex("by_workspace_status_and_created_at", (q) =>
-              indexEquals(q, ["workspaceId", workspaceId], ["status", status]),
+              q.eq("workspaceId", workspaceId).eq("status", status),
             )
-            .collect()) as GenericRow[],
+            .collect(),
       ),
     )
   ).flat()
@@ -444,17 +443,15 @@ async function assertUniquePhrase(
   normalizedPhrase: string,
   exceptKeywordId?: KeywordId,
 ): Promise<void> {
-  const matches = (await ctx.db
+  const matches = await ctx.db
     .query("keywords")
     .withIndex("by_workspace_phrase_and_deleted_at", (q) =>
-      indexEquals(
-        q,
-        ["workspaceId", workspaceId],
-        ["normalizedPhrase", normalizedPhrase],
-        ["deletedAt", undefined],
-      ),
+      q
+        .eq("workspaceId", workspaceId)
+        .eq("normalizedPhrase", normalizedPhrase)
+        .eq("deletedAt", undefined),
     )
-    .take(2)) as GenericRow[]
+    .take(2)
 
   if (
     matches.some(
@@ -472,8 +469,8 @@ async function keywordForWorkspace(
   ctx: Pick<CustomerDatabaseCtx, "db">,
   workspaceId: WorkspaceId,
   keywordId: KeywordId,
-): Promise<GenericRow> {
-  const keyword = (await ctx.db.get("keywords", keywordId)) as GenericRow | null
+): Promise<Doc<"keywords">> {
+  const keyword = await ctx.db.get("keywords", keywordId)
   if (
     !keyword ||
     keyword.workspaceId !== workspaceId ||
@@ -535,13 +532,13 @@ async function insertTrackingSource(
 async function sourcesForKeyword(
   ctx: Pick<CustomerDatabaseCtx, "db">,
   keywordId: KeywordId,
-): Promise<GenericRow[]> {
-  return (await ctx.db
+): Promise<Doc<"trackingSources">[]> {
+  return await ctx.db
     .query("trackingSources")
     .withIndex("by_keyword_and_source_type", (q) =>
       q.eq("keywordId", keywordId),
     )
-    .collect()) as GenericRow[]
+    .collect()
 }
 
 function sourceTypeOrder(value: unknown): number {
@@ -561,7 +558,7 @@ function sourceTypeOrder(value: unknown): number {
 
 async function formatKeyword(
   ctx: Pick<CustomerDatabaseCtx, "db">,
-  keyword: GenericRow,
+  keyword: Doc<"keywords">,
 ) {
   const sources = (await sourcesForKeyword(ctx, keyword._id as KeywordId))
     .filter(
@@ -889,14 +886,16 @@ export const listKeywords = authenticatedQuery({
 })
 
 export const getKeywordSummary = authenticatedQuery({
-  args: {},
+  args: { now: v.number() },
   returns: keywordSummaryValidator,
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
+    if (!Number.isSafeInteger(args.now) || args.now < 0) {
+      keywordError("INVALID_KEYWORD_INPUT", "Current time is invalid")
+    }
     const customer = await requireCurrentCustomer(ctx)
-    const now = Date.now()
     const [keywords, billing] = await Promise.all([
       configuredKeywords(ctx, customer.workspaceId),
-      readBillingKeywordState(ctx, customer.workspaceId, now),
+      readBillingKeywordState(ctx, customer.workspaceId, args.now),
     ])
     const activeCount = keywords.filter(
       (keyword) => keyword.status === "active",
@@ -1137,11 +1136,7 @@ export const resumeKeyword = authenticatedMutation({
       const activeKeywords = await ctx.db
         .query("keywords")
         .withIndex("by_workspace_status_and_created_at", (q) =>
-          indexEquals(
-            q,
-            ["workspaceId", customer.workspaceId],
-            ["status", "active"],
-          ),
+          q.eq("workspaceId", customer.workspaceId).eq("status", "active"),
         )
         .take(billing.keywordLimit)
       if (activeKeywords.length >= billing.keywordLimit) {

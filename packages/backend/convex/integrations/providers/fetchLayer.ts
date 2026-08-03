@@ -1,6 +1,6 @@
 import { z } from "zod"
 
-import { engagementScore } from "../../lib/engagementRanking"
+import { engagementScore } from "@astreex/domain"
 import {
   malformedProviderResponse,
   parseProviderInput,

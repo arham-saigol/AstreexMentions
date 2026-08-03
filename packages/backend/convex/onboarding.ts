@@ -1,4 +1,4 @@
-import type { GenericId } from "convex/values"
+import type { Id } from "./_generated/dataModel"
 import { v } from "convex/values"
 
 import { applyOnboardingCategoryConfiguration } from "./categories"
@@ -50,7 +50,7 @@ export const saveOnboardingConfiguration = authenticatedMutation({
     await applyOnboardingCategoryConfiguration(ctx, {
       categories: args.categories.map((category) => ({
         ...category,
-        categoryId: category.categoryId as GenericId<"categories">,
+        categoryId: category.categoryId as Id<"categories">,
       })),
       workspaceId,
     })

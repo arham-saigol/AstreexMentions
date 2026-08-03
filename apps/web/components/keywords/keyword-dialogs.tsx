@@ -34,7 +34,7 @@ import { Label } from "@astreex/ui/components/label"
 import { cn } from "@astreex/ui/lib/utils"
 import { useId, useState, type FormEvent } from "react"
 
-import type { Platform } from "@/lib/customer-convex"
+import type { Platform } from "@/lib/keywords"
 import {
   backendErrorMessage,
   PLATFORM_OPTIONS,

@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import {
-  featureRequestCreateResultSchema,
-  featureRequestInputSchema,
-} from "./feature-requests"
+import { featureRequestInputSchema } from "./feature-requests"
 
 describe("feature request contracts", () => {
   it("normalizes customer input before submission", () => {
@@ -29,24 +26,5 @@ describe("feature request contracts", () => {
       expect(result.error.flatten().fieldErrors.title?.[0]).toBeTruthy()
       expect(result.error.flatten().fieldErrors.description?.[0]).toBeTruthy()
     }
-  })
-
-  it("accepts supported mutation confirmations and strips other fields", () => {
-    expect(featureRequestCreateResultSchema.parse("request_1")).toEqual({
-      id: "request_1",
-    })
-    expect(
-      featureRequestCreateResultSchema.parse({
-        featureRequestId: "request_2",
-        status: "new",
-        adminNote: "internal-only",
-      }),
-    ).toEqual({ id: "request_2" })
-  })
-
-  it("rejects mutation results without a request id", () => {
-    expect(
-      featureRequestCreateResultSchema.safeParse({ status: "new" }).success,
-    ).toBe(false)
   })
 })

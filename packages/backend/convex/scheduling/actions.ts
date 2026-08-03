@@ -1,14 +1,15 @@
+import { internal } from "../_generated/api"
 import { v } from "convex/values"
 
 import { MAX_INGESTION_CHUNK_SIZE } from "../ingestion/contracts"
+import { createAlgoliaHackerNewsAdapter } from "../integrations/providers/algoliaHackerNews"
+import { createFetchLayerRedditAdapter } from "../integrations/providers/fetchLayer"
+import { createXquikAdapter } from "../integrations/providers/xquik"
 import {
-  createAlgoliaHackerNewsAdapter,
-  createFetchLayerRedditAdapter,
-  createXquikAdapter,
   ProviderAdapterError,
   type ProviderSearchResult,
-} from "../integrations/providers"
-import { env, internalAction } from "../server"
+} from "../integrations/providers/types"
+import { env, internalAction } from "../_generated/server"
 import { readProviderRuntimeConfiguration } from "./config"
 import { ProviderResultContractError } from "./contracts"
 import {
@@ -17,16 +18,7 @@ import {
   createProviderApplyBatches,
 } from "./ingestion"
 import { MAX_FETCHLAYER_CUMULATIVE_PAGES } from "./model"
-import {
-  applyNextTrackingProviderPageReference,
-  commitTrackingProviderPagesReference,
-  failTrackingProviderRunReference,
-  loadTrackingExecutionContextReference,
-  releaseIneligibleTrackingLeaseReference,
-  stageTrackingProviderPageReference,
-  startTrackingProviderRunReference,
-  type TrackingExecutionContext,
-} from "./internal"
+import { type TrackingExecutionContext } from "./internal"
 
 function safeFailure(error: unknown): {
   code: string
@@ -133,20 +125,23 @@ export const executeTrackingSource = internalAction({
   },
   handler: async (ctx, args) => {
     const context = await ctx.runQuery(
-      loadTrackingExecutionContextReference,
+      internal.scheduling.internal.loadTrackingExecutionContext,
       args,
     )
     if (context.state === "stale_lease") {
       return { state: "stale_lease" as const }
     }
     if (context.state !== "ready") {
-      await ctx.runMutation(releaseIneligibleTrackingLeaseReference, {
-        ...args,
-        reason: context.state,
-        ...(context.state === "workspace_deleting"
-          ? { deletionPausedAt: context.deletionPausedAt }
-          : {}),
-      })
+      await ctx.runMutation(
+        internal.scheduling.internal.releaseIneligibleTrackingLease,
+        {
+          ...args,
+          reason: context.state,
+          ...(context.state === "workspace_deleting"
+            ? { deletionPausedAt: context.deletionPausedAt }
+            : {}),
+        },
+      )
       return { state: context.state }
     }
 
@@ -162,17 +157,20 @@ export const executeTrackingSource = internalAction({
         context.sourceType,
       )
       if (providerConfiguration.state === "provider_unconfigured") {
-        await ctx.runMutation(releaseIneligibleTrackingLeaseReference, {
-          ...args,
-          reason: "provider_unconfigured",
-        })
+        await ctx.runMutation(
+          internal.scheduling.internal.releaseIneligibleTrackingLease,
+          {
+            ...args,
+            reason: "provider_unconfigured",
+          },
+        )
         return providerConfiguration
       }
       configuration = providerConfiguration
     }
 
     const start = (await ctx.runMutation(
-      startTrackingProviderRunReference,
+      internal.scheduling.internal.startTrackingProviderRun,
       args,
     )) as { state: "duplicate" | "stale_lease" | "started" }
     if (start.state !== "started") {
@@ -192,7 +190,7 @@ export const executeTrackingSource = internalAction({
         const batches = createProviderApplyBatches(result)
         for (const [batchIndex, batch] of batches.entries()) {
           const staged = await ctx.runMutation(
-            stageTrackingProviderPageReference,
+            internal.scheduling.internal.stageTrackingProviderPage,
             {
               ...args,
               batchIndex,
@@ -207,7 +205,7 @@ export const executeTrackingSource = internalAction({
           }
         }
         const committed = await ctx.runMutation(
-          commitTrackingProviderPagesReference,
+          internal.scheduling.internal.commitTrackingProviderPages,
           {
             ...args,
             batchCount: batches.length,
@@ -225,7 +223,7 @@ export const executeTrackingSource = internalAction({
         batchIndex += 1
       ) {
         outcome = await ctx.runMutation(
-          applyNextTrackingProviderPageReference,
+          internal.scheduling.internal.applyNextTrackingProviderPage,
           args,
         )
         if (outcome.state !== "batch_applied") {
@@ -236,16 +234,19 @@ export const executeTrackingSource = internalAction({
     } catch (error) {
       providerDurationMs = Math.max(0, Date.now() - startedAt)
       const failure = safeFailure(error)
-      return await ctx.runMutation(failTrackingProviderRunReference, {
-        ...args,
-        durationMs: providerDurationMs,
-        errorCode: failure.code,
-        errorMessage: failure.message,
-        retryable: failure.retryable,
-        ...(failure.retryAfterMs === undefined
-          ? {}
-          : { retryAfterMs: failure.retryAfterMs }),
-      })
+      return await ctx.runMutation(
+        internal.scheduling.internal.failTrackingProviderRun,
+        {
+          ...args,
+          durationMs: providerDurationMs,
+          errorCode: failure.code,
+          errorMessage: failure.message,
+          retryable: failure.retryable,
+          ...(failure.retryAfterMs === undefined
+            ? {}
+            : { retryAfterMs: failure.retryAfterMs }),
+        },
+      )
     }
   },
 })

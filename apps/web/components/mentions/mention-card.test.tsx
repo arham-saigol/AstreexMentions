@@ -7,15 +7,21 @@ import { MentionCard } from "./mention-card"
 import type { MentionItem } from "@/lib/mentions"
 
 const mention: MentionItem = {
-  id: "mention_1",
+  id: "mention_1" as MentionItem["id"],
   body: "A customer asked whether Astreex supports saved views.",
   canonicalUrl: "https://example.com/mention/1",
+  engagementScore: 0,
   platform: "reddit",
   publishedAt: 1_700_000_000_000,
   status: "new",
-  matchedKeywords: [{ phrase: "Astreex" }],
+  matchedKeywords: [
+    {
+      id: "keyword_1" as MentionItem["matchedKeywords"][number]["id"],
+      phrase: "Astreex",
+    },
+  ],
   category: {
-    id: "category_question",
+    id: "category_question" as NonNullable<MentionItem["category"]>["id"],
     name: "Question",
     systemKey: "question",
   },

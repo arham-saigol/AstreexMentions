@@ -1,6 +1,7 @@
 "use client"
 
-import { Button, StatusState } from "@astreex/ui"
+import { Button } from "@astreex/ui/components/button"
+import { StatusState } from "@astreex/ui/components/status-state"
 import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/ssr"
 
 export default function ChangelogError({

@@ -1,3 +1,4 @@
+import { api } from "@astreex/backend/api"
 import { Badge } from "@astreex/ui/components/badge"
 import { Button } from "@astreex/ui/components/button"
 import { Input } from "@astreex/ui/components/input"
@@ -11,13 +12,10 @@ import { FeatureRequestControls } from "@/components/feature-request-controls"
 import { runAdminQuery } from "@/lib/admin-convex"
 import {
   featureRequestStatuses,
-  parseFeatureRequestPage,
-} from "@/lib/admin-data"
-import { adminConvex, type FeatureRequestStatus } from "@/lib/convex-references"
-import {
   featureRequestStatusLabels,
   type FeatureRequestSort,
-} from "@/lib/feature-requests"
+  type FeatureRequestStatus,
+} from "@/lib/admin-data"
 
 export const metadata: Metadata = {
   title: "Feature Requests",
@@ -119,7 +117,7 @@ export default async function FeatureRequestsPage({
   const query = parseSearch(params.q)
   const sort = parseSort(params.sort)
   const status = parseStatus(params.status)
-  const result = await runAdminQuery(adminConvex.listFeatureRequests, {
+  const result = await runAdminQuery(api.admin.listFeatureRequests, {
     ...(cursor === undefined ? {} : { cursor }),
     limit: 25,
     ...(query ? { query } : {}),
@@ -139,12 +137,7 @@ export default async function FeatureRequestsPage({
     return <AccessState kind="unavailable" />
   }
 
-  const page = parseFeatureRequestPage(result.data)
-
-  if (!page) {
-    return <AccessState kind="unavailable" />
-  }
-
+  const page = result.data
   const visibleRequests = page.items
   const hasFilters = Boolean(query || status || sort === "oldest" || cursor)
 
@@ -250,13 +243,13 @@ export default async function FeatureRequestsPage({
                       </div>
                       <p className="text-muted-foreground mt-1 text-xs">
                         Submitted {formatDate(request.createdAt)} by{" "}
-                        {request.user.email ??
-                          request.user.name ??
+                        {request.user?.email ??
+                          request.user?.name ??
                           "an unavailable user"}
                       </p>
                     </div>
                     <p className="text-muted-foreground text-xs">
-                      {request.workspace.name ?? "Workspace unavailable"}
+                      {request.workspace?.name ?? "Workspace unavailable"}
                     </p>
                   </div>
                   <p className="text-foreground/90 mt-4 line-clamp-2 text-sm leading-6 break-words whitespace-pre-wrap">
@@ -300,11 +293,6 @@ export default async function FeatureRequestsPage({
                           <MetadataItem label="Last updated">
                             {formatDate(request.updatedAt)}
                           </MetadataItem>
-                          {request.submission.source ? (
-                            <MetadataItem label="Source">
-                              {request.submission.source}
-                            </MetadataItem>
-                          ) : null}
                         </dl>
                       </section>
 
@@ -317,13 +305,13 @@ export default async function FeatureRequestsPage({
                         </h4>
                         <dl className="mt-3 space-y-3">
                           <MetadataItem label="Name">
-                            {request.user.name ?? "Unavailable"}
+                            {request.user?.name ?? "Unavailable"}
                           </MetadataItem>
                           <MetadataItem label="Email">
-                            {request.user.email ?? "Unavailable"}
+                            {request.user?.email ?? "Unavailable"}
                           </MetadataItem>
                           <MetadataItem label="User ID" mono>
-                            {request.user.id ?? "Unavailable"}
+                            {request.user?.id ?? "Unavailable"}
                           </MetadataItem>
                         </dl>
                       </section>
@@ -337,13 +325,10 @@ export default async function FeatureRequestsPage({
                         </h4>
                         <dl className="mt-3 space-y-3">
                           <MetadataItem label="Name">
-                            {request.workspace.name ?? "Unavailable"}
-                          </MetadataItem>
-                          <MetadataItem label="Slug">
-                            {request.workspace.slug ?? "Unavailable"}
+                            {request.workspace?.name ?? "Unavailable"}
                           </MetadataItem>
                           <MetadataItem label="Workspace ID" mono>
-                            {request.workspace.id ?? "Unavailable"}
+                            {request.workspace?.id ?? "Unavailable"}
                           </MetadataItem>
                         </dl>
                       </section>

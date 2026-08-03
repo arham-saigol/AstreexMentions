@@ -26,6 +26,9 @@ import type { DataModel } from "./dataModel.js";
  */
 type Env = {
   readonly ADMIN_CLERK_USER_ID: string | undefined;
+  readonly CLERK_SECRET_KEY: string | undefined;
+  readonly CLERK_TIMEOUT_MS: string | undefined;
+  readonly DELETION_IDENTITY_FENCE_MS: string | undefined;
 };
 
 /**

@@ -1,7 +1,6 @@
 import { v } from "convex/values"
 
 import { publicQuery } from "./lib/authorization"
-import { indexEquals, indexGreaterThanOrEqual } from "./server"
 
 const PUBLIC_CHANGELOG_PAGE_SIZE = 24
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
@@ -50,11 +49,7 @@ export const listPublishedEntries = publicQuery({
     const page = await ctx.db
       .query("changelogEntries")
       .withIndex("by_status_and_published_at", (q) =>
-        indexGreaterThanOrEqual(
-          indexEquals(q, ["status", "published"]),
-          "publishedAt",
-          0,
-        ),
+        q.eq("status", "published").gte("publishedAt", 0),
       )
       .order("desc")
       .paginate({

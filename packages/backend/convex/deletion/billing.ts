@@ -1,4 +1,4 @@
-import type { GenericId } from "convex/values"
+import type { Id } from "../_generated/dataModel"
 
 import { readCreemApiConfiguration } from "../billing/config"
 import {
@@ -7,14 +7,9 @@ import {
   type CompositeDeletionBillingGuardResult,
   type SubscriptionEntitlementForDeletion,
 } from "../lib/billingDeletionGuard"
-import {
-  env,
-  indexEquals,
-  indexGreaterThanOrEqual,
-  type DatabaseReader,
-} from "../server"
+import { env, type DatabaseReader } from "../_generated/server"
 
-type WorkspaceId = GenericId<"workspaces">
+type WorkspaceId = Id<"workspaces">
 
 export type DeletionBillingSnapshot = {
   guard: CompositeDeletionBillingGuardResult
@@ -46,53 +41,49 @@ export async function readDeletionBillingSnapshot(
     db
       .query("billingCheckouts")
       .withIndex("by_workspace_status_and_expires_at", (q) =>
-        indexGreaterThanOrEqual(
-          indexEquals(q, ["workspaceId", workspaceId], ["status", "open"]),
-          "expiresAt",
-          checkedAt + 1,
-        ),
+        q
+          .eq("workspaceId", workspaceId)
+          .eq("status", "open")
+          .gte("expiresAt", checkedAt + 1),
       )
       .take(1),
     db
       .query("billingCheckouts")
       .withIndex("by_workspace_status_and_expires_at", (q) =>
-        indexGreaterThanOrEqual(
-          indexEquals(q, ["workspaceId", workspaceId], ["status", "complete"]),
-          "expiresAt",
-          checkedAt + 1,
-        ),
+        q
+          .eq("workspaceId", workspaceId)
+          .eq("status", "complete")
+          .gte("expiresAt", checkedAt + 1),
       )
       .take(1),
     db
       .query("providerRuns")
       .withIndex("by_workspace_status_and_started_at", (q) =>
-        indexGreaterThanOrEqual(
-          indexEquals(q, ["workspaceId", workspaceId], ["status", "running"]),
-          "startedAt",
-          checkedAt - PROVIDER_OPERATION_STALE_MS + 1,
-        ),
+        q
+          .eq("workspaceId", workspaceId)
+          .eq("status", "running")
+          .gte("startedAt", checkedAt - PROVIDER_OPERATION_STALE_MS + 1),
       )
       .take(1),
     db
       .query("billingEvents")
       .withIndex("by_workspace_status_and_received_at", (q) =>
-        indexEquals(q, ["workspaceId", workspaceId], ["status", "pending"]),
+        q.eq("workspaceId", workspaceId).eq("status", "pending"),
       )
       .take(1),
     db
       .query("billingEvents")
       .withIndex("by_workspace_status_and_received_at", (q) =>
-        indexEquals(q, ["workspaceId", workspaceId], ["status", "leased"]),
+        q.eq("workspaceId", workspaceId).eq("status", "leased"),
       )
       .take(1),
     db
       .query("emailOutbox")
       .withIndex("by_workspace_status_and_lease_expires_at", (q) =>
-        indexGreaterThanOrEqual(
-          indexEquals(q, ["workspaceId", workspaceId], ["status", "leased"]),
-          "leaseExpiresAt",
-          checkedAt + 1,
-        ),
+        q
+          .eq("workspaceId", workspaceId)
+          .eq("status", "leased")
+          .gte("leaseExpiresAt", checkedAt + 1),
       )
       .take(1),
   ])

@@ -1,27 +1,18 @@
-import { type GenericId, v } from "convex/values"
-
-import {
-  internalActionReference,
-  internalMutationReference,
-  internalQueryReference,
-} from "../lib/functionReferences"
-import { indexAtMost } from "../lib/jobRuntime"
+import { internal } from "../_generated/api"
+import { v } from "convex/values"
 import {
   adjustWorkspaceCountMetric,
   syncUsagePausedWorkspaceMetric,
   transitionSubscriptionMetrics,
 } from "../lib/operationalMetrics"
+import { transitionCategorizationStatusMetric } from "../categorization/metrics"
 import {
-  type CategorizationJobStatus,
-  transitionCategorizationStatusMetric,
-} from "../categorization/metrics"
-import {
-  indexEquals,
   internalMutation,
   internalQuery,
   type DatabaseReader,
   type MutationCtx,
-} from "../server"
+} from "../_generated/server"
+import type { Doc, Id } from "../_generated/dataModel"
 import { readDeletionBillingSnapshot } from "./billing"
 import {
   ACCOUNT_DELETION_BATCH_SIZE,
@@ -43,11 +34,9 @@ import { restoreDeletionFenceState } from "./recovery"
 const MAX_DELETION_CLAIMS = 8
 const MAX_DUE_SCAN_PER_STATUS = 32
 
-type GenericRow = Record<string, unknown> & { _id: GenericId<string> }
-type DeletionJobId = GenericId<"deletionJobs">
-type UserId = GenericId<"users">
-type WorkspaceId = GenericId<"workspaces">
-type MembershipId = GenericId<"workspaceMembers">
+type DeletionJobId = Id<"deletionJobs">
+type UserId = Id<"users">
+type WorkspaceId = Id<"workspaces">
 
 export type AccountDeletionLeaseArguments = {
   deletionJobId: DeletionJobId
@@ -77,38 +66,33 @@ export type AccountDeletionExecutionContext =
       workspaceId: WorkspaceId
     }
 
-const workspaceIndexedStages = {
-  audit_events: ["auditEvents", "by_workspace_and_created_at"],
-  billing_checkouts: ["billingCheckouts", "by_workspace_and_created_at"],
-  categorization_jobs: ["categorizationJobs", "by_workspace_and_created_at"],
-  categories: ["categories", "by_workspace_and_sort_order"],
-  digest_preferences: ["digestPreferences", "by_workspace_and_updated_at"],
-  digest_runs: ["digestRuns", "by_workspace_and_scheduled_for"],
-  email_outbox: ["emailOutbox", "by_workspace_and_created_at"],
-  email_webhook_events: ["emailWebhookEvents", "by_workspace_and_received_at"],
-  feature_requests: ["featureRequests", "by_workspace_and_created_at"],
-  keywords: ["keywords", "by_workspace_and_updated_at"],
-  mention_keyword_matches: [
-    "mentionKeywordMatches",
-    "by_workspace_and_mention",
-  ],
-  mentions: ["mentions", "by_workspace_and_published_at"],
-  provider_runs: ["providerRuns", "by_workspace_and_started_at"],
-  saved_views: ["savedViews", "by_workspace_and_updated_at"],
-  subscriptions: ["subscriptions", "by_workspace"],
-  system_metric_buckets: ["systemMetricBuckets", "by_workspace_and_bucket"],
-  tracking_provider_pages: [
-    "trackingProviderPages",
-    "by_workspace_and_created_at",
-  ],
-  tracking_sources: ["trackingSources", "by_workspace_and_created_at"],
-  usage_cycles: ["usageCycles", "by_workspace_and_period_start"],
-  workspace_members: ["workspaceMembers", "by_workspace"],
-} as const
+const WORKSPACE_INDEXED_PURGE_STAGES = [
+  "audit_events",
+  "billing_checkouts",
+  "categorization_jobs",
+  "categories",
+  "digest_preferences",
+  "digest_runs",
+  "email_outbox",
+  "email_webhook_events",
+  "feature_requests",
+  "keywords",
+  "mention_keyword_matches",
+  "mentions",
+  "provider_runs",
+  "saved_views",
+  "subscriptions",
+  "system_metric_buckets",
+  "tracking_provider_pages",
+  "tracking_sources",
+  "usage_cycles",
+  "workspace_members",
+] as const
 
-type WorkspaceIndexedPurgeStage = keyof typeof workspaceIndexedStages
+type WorkspaceIndexedPurgeStage =
+  (typeof WORKSPACE_INDEXED_PURGE_STAGES)[number]
 
-function deletionStatus(row: GenericRow): AccountDeletionJobStatus {
+function deletionStatus(row: Doc<"deletionJobs">): AccountDeletionJobStatus {
   const status = row.status
   if (
     status !== "billing_check" &&
@@ -126,7 +110,7 @@ function deletionStatus(row: GenericRow): AccountDeletionJobStatus {
   return status
 }
 
-function deletionPhase(row: GenericRow): AccountDeletionPhase {
+function deletionPhase(row: Doc<"deletionJobs">): AccountDeletionPhase {
   const phase = row.phase
   if (
     phase !== "billing_check" &&
@@ -141,7 +125,7 @@ function deletionPhase(row: GenericRow): AccountDeletionPhase {
   return phase
 }
 
-function purgeStage(row: GenericRow): AccountDeletionPurgeStage {
+function purgeStage(row: Doc<"deletionJobs">): AccountDeletionPurgeStage {
   const stage = row.purgeStage
   if (
     !ACCOUNT_DELETION_PURGE_STAGES.includes(stage as AccountDeletionPurgeStage)
@@ -152,10 +136,10 @@ function purgeStage(row: GenericRow): AccountDeletionPurgeStage {
 }
 
 function currentLeaseMatches(
-  row: GenericRow | null,
+  row: Doc<"deletionJobs"> | null,
   args: AccountDeletionLeaseArguments,
   now: number,
-): row is GenericRow {
+): row is Doc<"deletionJobs"> {
   return Boolean(
     row &&
     row.workflowVersion === ACCOUNT_DELETION_WORKFLOW_VERSION &&
@@ -172,17 +156,14 @@ async function currentDeletionJob(
   db: DatabaseReader,
   args: AccountDeletionLeaseArguments,
   now: number,
-): Promise<GenericRow | null> {
-  const row = (await db.get(
-    "deletionJobs",
-    args.deletionJobId,
-  )) as GenericRow | null
+): Promise<Doc<"deletionJobs"> | null> {
+  const row = await db.get("deletionJobs", args.deletionJobId)
   return currentLeaseMatches(row, args, now) ? row : null
 }
 
 async function recordDeletionAudit(
   ctx: MutationCtx,
-  job: GenericRow,
+  job: Doc<"deletionJobs">,
   action: string,
   outcome: "denied" | "failure" | "success",
   now: number,
@@ -209,27 +190,27 @@ async function dueJobsForStatus(
   ctx: MutationCtx,
   status: "failed" | "leased" | "pending" | "running",
   now: number,
-): Promise<GenericRow[]> {
+): Promise<Doc<"deletionJobs">[]> {
   if (status === "pending" || status === "failed") {
-    return (await ctx.db
+    return await ctx.db
       .query("deletionJobs")
       .withIndex("by_status_and_next_attempt_at", (q) =>
-        indexAtMost(indexEquals(q, ["status", status]), "nextAttemptAt", now),
+        q.eq("status", status).lte("nextAttemptAt", now),
       )
-      .take(MAX_DUE_SCAN_PER_STATUS)) as GenericRow[]
+      .take(MAX_DUE_SCAN_PER_STATUS)
   }
-  return (await ctx.db
+  return await ctx.db
     .query("deletionJobs")
     .withIndex("by_status_and_lease_expires_at", (q) =>
-      indexAtMost(indexEquals(q, ["status", status]), "leaseExpiresAt", now),
+      q.eq("status", status).lte("leaseExpiresAt", now),
     )
-    .take(MAX_DUE_SCAN_PER_STATUS)) as GenericRow[]
+    .take(MAX_DUE_SCAN_PER_STATUS)
 }
 
 async function dueAccountDeletionJobs(
   ctx: MutationCtx,
   now: number,
-): Promise<GenericRow[]> {
+): Promise<Doc<"deletionJobs">[]> {
   const rows = (
     await Promise.all(
       (["pending", "failed", "leased", "running"] as const).map(
@@ -237,7 +218,7 @@ async function dueAccountDeletionJobs(
       ),
     )
   ).flat()
-  const unique = new Map<string, GenericRow>()
+  const unique = new Map<string, Doc<"deletionJobs">>()
   for (const row of rows) {
     unique.set(String(row._id), row)
   }
@@ -321,11 +302,15 @@ export const dispatchDueAccountDeletions = internalMutation({
         "success",
         now,
       )
-      await ctx.scheduler.runAfter(0, runAccountDeletionReference, {
-        deletionJobId: row._id as DeletionJobId,
-        leaseToken: lease.token,
-        leaseVersion: lease.version,
-      })
+      await ctx.scheduler.runAfter(
+        0,
+        internal.deletion.actions.runAccountDeletion,
+        {
+          deletionJobId: row._id as DeletionJobId,
+          leaseToken: lease.token,
+          leaseVersion: lease.version,
+        },
+      )
       claimed += 1
     }
 
@@ -343,7 +328,7 @@ export const startAccountDeletionAttempt = internalMutation({
   handler: async (ctx, args): Promise<AccountDeletionExecutionContext> => {
     const now = args.now ?? Date.now()
     const job = await currentDeletionJob(ctx.db, args, now)
-    if (!job) {
+    if (!job || job.identityClerkUserId === undefined) {
       return { state: "stale_lease" }
     }
     const phase = deletionPhase(job)
@@ -358,10 +343,10 @@ export const startAccountDeletionAttempt = internalMutation({
     })
 
     return {
-      accountUserId: job.accountUserId as UserId,
+      accountUserId: job.accountUserId,
       attempts: job.attempts as number,
       billingGuard: snapshot.guard,
-      clerkUserId: job.identityClerkUserId as string,
+      clerkUserId: job.identityClerkUserId,
       maxAttempts: job.maxAttempts as number,
       phase,
       securityFenceExpiresAt: job.securityFenceExpiresAt as number | undefined,
@@ -387,20 +372,17 @@ export const blockAccountDeletionForBilling = internalMutation({
       return { state: "stale_lease" as const }
     }
     const errorCode = safeDeletionErrorCode(args.code)
-    const user = (await ctx.db.get(
-      "users",
-      job.accountUserId as UserId,
-    )) as GenericRow | null
-    const workspace = (await ctx.db.get(
+    const user = await ctx.db.get("users", job.accountUserId)
+    const workspace = await ctx.db.get(
       "workspaces",
       job.workspaceId as WorkspaceId,
-    )) as GenericRow | null
+    )
     if (
       user &&
       user.deletedAt === undefined &&
       user.disabledAt === job.accessFencedAt
     ) {
-      await ctx.db.patch("users", user._id as UserId, {
+      await ctx.db.patch("users", user._id, {
         disabledAt: undefined,
         updatedAt: now,
       })
@@ -480,14 +462,11 @@ export const beginAccountDeletionPurge = internalMutation({
       }
     }
 
-    const user = (await ctx.db.get(
-      "users",
-      job.accountUserId as UserId,
-    )) as GenericRow | null
-    const workspace = (await ctx.db.get(
+    const user = await ctx.db.get("users", job.accountUserId)
+    const workspace = await ctx.db.get(
       "workspaces",
       job.workspaceId as WorkspaceId,
-    )) as GenericRow | null
+    )
     if (
       !user ||
       !workspace ||
@@ -498,17 +477,17 @@ export const beginAccountDeletionPurge = internalMutation({
     ) {
       return { state: "account_state_invalid" as const }
     }
-    const membership = (await ctx.db
+    const membership = await ctx.db
       .query("workspaceMembers")
       .withIndex("by_workspace_and_user", (q) =>
-        indexEquals(q, ["workspaceId", workspace._id], ["userId", user._id]),
+        q.eq("workspaceId", workspace._id).eq("userId", user._id),
       )
-      .unique()) as GenericRow | null
+      .unique()
     if (!membership || membership.role !== "owner") {
       return { state: "account_state_invalid" as const }
     }
 
-    await ctx.db.patch("users", user._id as UserId, {
+    await ctx.db.patch("users", user._id, {
       deletedAt: now,
       disabledAt: job.accessFencedAt,
       updatedAt: now,
@@ -518,7 +497,7 @@ export const beginAccountDeletionPurge = internalMutation({
       deletionPendingAt: job.accessFencedAt,
       updatedAt: now,
     })
-    await ctx.db.patch("workspaceMembers", membership._id as MembershipId, {
+    await ctx.db.patch("workspaceMembers", membership._id, {
       revokedAt: now,
       updatedAt: now,
     })
@@ -549,12 +528,145 @@ async function workspaceRows(
   stage: WorkspaceIndexedPurgeStage,
   workspaceId: WorkspaceId,
   limit: number,
-): Promise<GenericRow[]> {
-  const [table, index] = workspaceIndexedStages[stage]
-  return (await db
-    .query(table)
-    .withIndex(index, (q) => q.eq("workspaceId", workspaceId))
-    .take(limit)) as GenericRow[]
+) {
+  switch (stage) {
+    case "audit_events":
+      return await db
+        .query("auditEvents")
+        .withIndex("by_workspace_and_created_at", (q) =>
+          q.eq("workspaceId", workspaceId),
+        )
+        .take(limit)
+    case "billing_checkouts":
+      return await db
+        .query("billingCheckouts")
+        .withIndex("by_workspace_and_created_at", (q) =>
+          q.eq("workspaceId", workspaceId),
+        )
+        .take(limit)
+    case "categorization_jobs":
+      return await db
+        .query("categorizationJobs")
+        .withIndex("by_workspace_and_created_at", (q) =>
+          q.eq("workspaceId", workspaceId),
+        )
+        .take(limit)
+    case "categories":
+      return await db
+        .query("categories")
+        .withIndex("by_workspace_and_sort_order", (q) =>
+          q.eq("workspaceId", workspaceId),
+        )
+        .take(limit)
+    case "digest_preferences":
+      return await db
+        .query("digestPreferences")
+        .withIndex("by_workspace_and_updated_at", (q) =>
+          q.eq("workspaceId", workspaceId),
+        )
+        .take(limit)
+    case "digest_runs":
+      return await db
+        .query("digestRuns")
+        .withIndex("by_workspace_and_scheduled_for", (q) =>
+          q.eq("workspaceId", workspaceId),
+        )
+        .take(limit)
+    case "email_outbox":
+      return await db
+        .query("emailOutbox")
+        .withIndex("by_workspace_and_created_at", (q) =>
+          q.eq("workspaceId", workspaceId),
+        )
+        .take(limit)
+    case "email_webhook_events":
+      return await db
+        .query("emailWebhookEvents")
+        .withIndex("by_workspace_and_received_at", (q) =>
+          q.eq("workspaceId", workspaceId),
+        )
+        .take(limit)
+    case "feature_requests":
+      return await db
+        .query("featureRequests")
+        .withIndex("by_workspace_and_created_at", (q) =>
+          q.eq("workspaceId", workspaceId),
+        )
+        .take(limit)
+    case "keywords":
+      return await db
+        .query("keywords")
+        .withIndex("by_workspace_and_updated_at", (q) =>
+          q.eq("workspaceId", workspaceId),
+        )
+        .take(limit)
+    case "mention_keyword_matches":
+      return await db
+        .query("mentionKeywordMatches")
+        .withIndex("by_workspace_and_mention", (q) =>
+          q.eq("workspaceId", workspaceId),
+        )
+        .take(limit)
+    case "mentions":
+      return await db
+        .query("mentions")
+        .withIndex("by_workspace_and_published_at", (q) =>
+          q.eq("workspaceId", workspaceId),
+        )
+        .take(limit)
+    case "provider_runs":
+      return await db
+        .query("providerRuns")
+        .withIndex("by_workspace_and_started_at", (q) =>
+          q.eq("workspaceId", workspaceId),
+        )
+        .take(limit)
+    case "saved_views":
+      return await db
+        .query("savedViews")
+        .withIndex("by_workspace_and_updated_at", (q) =>
+          q.eq("workspaceId", workspaceId),
+        )
+        .take(limit)
+    case "subscriptions":
+      return await db
+        .query("subscriptions")
+        .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+        .take(limit)
+    case "system_metric_buckets":
+      return await db
+        .query("systemMetricBuckets")
+        .withIndex("by_workspace_and_bucket", (q) =>
+          q.eq("workspaceId", workspaceId),
+        )
+        .take(limit)
+    case "tracking_provider_pages":
+      return await db
+        .query("trackingProviderPages")
+        .withIndex("by_workspace_and_created_at", (q) =>
+          q.eq("workspaceId", workspaceId),
+        )
+        .take(limit)
+    case "tracking_sources":
+      return await db
+        .query("trackingSources")
+        .withIndex("by_workspace_and_created_at", (q) =>
+          q.eq("workspaceId", workspaceId),
+        )
+        .take(limit)
+    case "usage_cycles":
+      return await db
+        .query("usageCycles")
+        .withIndex("by_workspace_and_period_start", (q) =>
+          q.eq("workspaceId", workspaceId),
+        )
+        .take(limit)
+    case "workspace_members":
+      return await db
+        .query("workspaceMembers")
+        .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+        .take(limit)
+  }
 }
 
 async function purgeWorkspaceIndexedStage(
@@ -563,7 +675,38 @@ async function purgeWorkspaceIndexedStage(
   workspaceId: WorkspaceId,
   now: number,
 ): Promise<number> {
-  const [table] = workspaceIndexedStages[stage]
+  if (stage === "categorization_jobs") {
+    const rows = await ctx.db
+      .query("categorizationJobs")
+      .withIndex("by_workspace_and_created_at", (q) =>
+        q.eq("workspaceId", workspaceId),
+      )
+      .take(ACCOUNT_DELETION_BATCH_SIZE)
+    for (const row of rows) {
+      await transitionCategorizationStatusMetric(ctx, {
+        from: row.status,
+        updatedAt: now,
+        workspaceId,
+      })
+      await ctx.db.delete(row._id)
+    }
+    return rows.length
+  }
+  if (stage === "subscriptions") {
+    const rows = await ctx.db
+      .query("subscriptions")
+      .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+      .take(ACCOUNT_DELETION_BATCH_SIZE)
+    for (const row of rows) {
+      await transitionSubscriptionMetrics(ctx, {
+        from: row,
+        updatedAt: now,
+        workspaceId,
+      })
+      await ctx.db.delete(row._id)
+    }
+    return rows.length
+  }
   const rows = await workspaceRows(
     ctx.db,
     stage,
@@ -571,20 +714,7 @@ async function purgeWorkspaceIndexedStage(
     ACCOUNT_DELETION_BATCH_SIZE,
   )
   for (const row of rows) {
-    if (stage === "categorization_jobs") {
-      await transitionCategorizationStatusMetric(ctx, {
-        from: row.status as CategorizationJobStatus,
-        updatedAt: now,
-        workspaceId,
-      })
-    } else if (stage === "subscriptions") {
-      await transitionSubscriptionMetrics(ctx, {
-        from: row,
-        updatedAt: now,
-        workspaceId,
-      })
-    }
-    await ctx.db.delete(table, row._id as never)
+    await ctx.db.delete(row._id)
   }
   if (stage === "tracking_sources") {
     await syncUsagePausedWorkspaceMetric(ctx, workspaceId, now)
@@ -597,14 +727,14 @@ async function redactBillingEvents(
   workspaceId: WorkspaceId,
   now: number,
 ): Promise<number> {
-  const rows = (await ctx.db
+  const rows = await ctx.db
     .query("billingEvents")
     .withIndex("by_workspace_redacted_and_received_at", (q) =>
-      indexEquals(q, ["workspaceId", workspaceId], ["redactedAt", undefined]),
+      q.eq("workspaceId", workspaceId).eq("redactedAt", undefined),
     )
-    .take(ACCOUNT_DELETION_BATCH_SIZE)) as GenericRow[]
+    .take(ACCOUNT_DELETION_BATCH_SIZE)
   for (const row of rows) {
-    await ctx.db.patch("billingEvents", row._id as GenericId<"billingEvents">, {
+    await ctx.db.patch("billingEvents", row._id, {
       lastError: undefined,
       leaseExpiresAt: undefined,
       leaseToken: undefined,
@@ -620,7 +750,7 @@ async function redactBillingEvents(
 
 async function purgeSpecialStage(
   ctx: MutationCtx,
-  job: GenericRow,
+  job: Doc<"deletionJobs">,
   stage: "user_tombstone" | "workspace",
   now: number,
 ): Promise<number> {
@@ -641,10 +771,7 @@ async function purgeSpecialStage(
     return 1
   }
 
-  const user = (await ctx.db.get(
-    "users",
-    job.accountUserId as UserId,
-  )) as GenericRow | null
+  const user = await ctx.db.get("users", job.accountUserId)
   if (!user) {
     return 0
   }
@@ -656,7 +783,7 @@ async function purgeSpecialStage(
   if (alreadyScrubbed) {
     return 0
   }
-  await ctx.db.patch("users", user._id as UserId, {
+  await ctx.db.patch("users", user._id, {
     email: undefined,
     imageUrl: undefined,
     name: undefined,
@@ -730,9 +857,7 @@ async function hasWorkspaceRows(
   db: DatabaseReader,
   workspaceId: WorkspaceId,
 ): Promise<boolean> {
-  for (const stage of Object.keys(
-    workspaceIndexedStages,
-  ) as WorkspaceIndexedPurgeStage[]) {
+  for (const stage of WORKSPACE_INDEXED_PURGE_STAGES) {
     if ((await workspaceRows(db, stage, workspaceId, 1)).length > 0) {
       return true
     }
@@ -740,7 +865,7 @@ async function hasWorkspaceRows(
   const unredactedBillingEvent = await db
     .query("billingEvents")
     .withIndex("by_workspace_redacted_and_received_at", (q) =>
-      indexEquals(q, ["workspaceId", workspaceId], ["redactedAt", undefined]),
+      q.eq("workspaceId", workspaceId).eq("redactedAt", undefined),
     )
     .first()
   return unredactedBillingEvent !== null
@@ -766,10 +891,7 @@ export const verifyAccountDeletionData = internalMutation({
       "workspaces",
       job.workspaceId as WorkspaceId,
     )
-    const user = (await ctx.db.get(
-      "users",
-      job.accountUserId as UserId,
-    )) as GenericRow | null
+    const user = await ctx.db.get("users", job.accountUserId)
     if (
       workspace ||
       !user ||
@@ -891,9 +1013,9 @@ export const finalizeSecurityTombstone = internalMutation({
       return { state: "waiting" as const }
     }
 
-    const user = await ctx.db.get("users", job.accountUserId as UserId)
+    const user = await ctx.db.get("users", job.accountUserId)
     if (user) {
-      await ctx.db.delete("users", job.accountUserId as UserId)
+      await ctx.db.delete("users", job.accountUserId)
     }
     await ctx.db.patch("deletionJobs", args.deletionJobId, {
       completedAt: now,
@@ -946,11 +1068,15 @@ export const continueAccountDeletion = internalMutation({
       status: "leased",
       updatedAt: now,
     })
-    await ctx.scheduler.runAfter(0, runAccountDeletionReference, {
-      deletionJobId: args.deletionJobId,
-      leaseToken: lease.token,
-      leaseVersion: lease.version,
-    })
+    await ctx.scheduler.runAfter(
+      0,
+      internal.deletion.actions.runAccountDeletion,
+      {
+        deletionJobId: args.deletionJobId,
+        leaseToken: lease.token,
+        leaseVersion: lease.version,
+      },
+    )
     return { state: "continued" as const }
   },
 })
@@ -1004,65 +1130,3 @@ export const failAccountDeletionAttempt = internalMutation({
     }
   },
 })
-
-export const dispatchDueAccountDeletionsReference = internalMutationReference<{
-  now?: number
-}>("deletion/internal:dispatchDueAccountDeletions")
-
-export const runAccountDeletionReference =
-  internalActionReference<AccountDeletionLeaseArguments>(
-    "deletion/actions:runAccountDeletion",
-  )
-
-export const startAccountDeletionAttemptReference = internalMutationReference<
-  AccountDeletionLeaseArguments & { now?: number },
-  AccountDeletionExecutionContext
->("deletion/internal:startAccountDeletionAttempt")
-
-export const blockAccountDeletionForBillingReference =
-  internalMutationReference<
-    AccountDeletionLeaseArguments & { code: string; now?: number }
-  >("deletion/internal:blockAccountDeletionForBilling")
-
-export const beginAccountDeletionPurgeReference = internalMutationReference<
-  AccountDeletionLeaseArguments & {
-    now?: number
-    providerVerifiedAt: number
-  }
->("deletion/internal:beginAccountDeletionPurge")
-
-export const purgeAccountDeletionBatchReference = internalMutationReference<
-  AccountDeletionLeaseArguments & { now?: number }
->("deletion/internal:purgeAccountDeletionBatch")
-
-export const verifyAccountDeletionDataReference = internalMutationReference<
-  AccountDeletionLeaseArguments & { now?: number }
->("deletion/internal:verifyAccountDeletionData")
-
-export const loadIdentityDeletionContextReference = internalQueryReference<
-  AccountDeletionLeaseArguments,
-  { state: "not_ready" } | { clerkUserId: string; state: "ready" }
->("deletion/internal:loadIdentityDeletionContext")
-
-export const completeIdentityDeletionReference = internalMutationReference<
-  AccountDeletionLeaseArguments & {
-    fenceExpiresAt: number
-    now?: number
-  }
->("deletion/internal:completeIdentityDeletion")
-
-export const finalizeSecurityTombstoneReference = internalMutationReference<
-  AccountDeletionLeaseArguments & { now?: number }
->("deletion/internal:finalizeSecurityTombstone")
-
-export const continueAccountDeletionReference = internalMutationReference<
-  AccountDeletionLeaseArguments & { now?: number }
->("deletion/internal:continueAccountDeletion")
-
-export const failAccountDeletionAttemptReference = internalMutationReference<
-  AccountDeletionLeaseArguments & {
-    code: string
-    now?: number
-    retryable: boolean
-  }
->("deletion/internal:failAccountDeletionAttempt")

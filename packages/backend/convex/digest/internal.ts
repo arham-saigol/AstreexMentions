@@ -1,4 +1,5 @@
-import { type GenericId, v } from "convex/values"
+import { internal } from "../_generated/api"
+import { v } from "convex/values"
 
 import { readEmailCompositionConfiguration } from "../email/config"
 import {
@@ -8,23 +9,14 @@ import {
 } from "../lib/emailOutbox"
 import { planDailyDigest } from "../lib/dailyDigest"
 import { isCategorySystemKey } from "../lib/categories"
-import {
-  internalActionReference,
-  internalMutationReference,
-  internalQueryReference,
-} from "../lib/functionReferences"
-import {
-  indexAtMost,
-  indexWindow,
-  withoutUndefinedValues,
-} from "../lib/jobRuntime"
+import { withoutUndefinedValues } from "../lib/jobRuntime"
 import {
   env,
-  indexEquals,
   internalMutation,
   internalQuery,
   type MutationCtx,
-} from "../server"
+} from "../_generated/server"
+import type { Doc, Id } from "../_generated/dataModel"
 import {
   digestCategory,
   rankDigestMentions,
@@ -34,13 +26,8 @@ import {
 const MAX_DUE_DIGESTS = 64
 const DIGEST_AGGREGATION_PAGE_SIZE = 200
 
-type GenericRow = Record<string, unknown> & { _id: GenericId<string> }
-type DigestPreferenceId = GenericId<"digestPreferences">
-type DigestRunId = GenericId<"digestRuns">
-type EmailOutboxId = GenericId<"emailOutbox">
-type MentionId = GenericId<"mentions">
-type UserId = GenericId<"users">
-type WorkspaceId = GenericId<"workspaces">
+type EmailOutboxId = Id<"emailOutbox">
+type MentionId = Id<"mentions">
 
 type DigestAggregationCounts = {
   categories: Record<string, number>
@@ -72,18 +59,11 @@ function parseDigestAggregationCounts(value: unknown): DigestAggregationCounts {
   return parsed
 }
 
-function platformFromRow(row: GenericRow): "hacker_news" | "reddit" | "x" {
-  if (
-    row.platform !== "hacker_news" &&
-    row.platform !== "reddit" &&
-    row.platform !== "x"
-  ) {
-    throw new TypeError("Mention has an invalid platform")
-  }
+function platformFromRow(row: Doc<"mentions">) {
   return row.platform
 }
 
-function candidateFromRow(row: GenericRow): DigestMentionCandidate {
+function candidateFromRow(row: Doc<"mentions">): DigestMentionCandidate {
   return {
     body: row.body as string,
     canonicalUrl: row.canonicalUrl as string,
@@ -121,16 +101,16 @@ function candidateFromRow(row: GenericRow): DigestMentionCandidate {
 
 async function schedulePreference(
   ctx: MutationCtx,
-  preference: GenericRow,
+  preference: Doc<"digestPreferences">,
   now: number,
 ): Promise<"duplicate" | "enqueued" | "skipped_empty" | "skipped_recipient"> {
-  const preferenceId = preference._id as DigestPreferenceId
-  const workspaceId = preference.workspaceId as WorkspaceId
-  const userId = preference.userId as UserId
-  const [workspace, user] = (await Promise.all([
+  const preferenceId = preference._id
+  const workspaceId = preference.workspaceId
+  const userId = preference.userId
+  const [workspace, user] = await Promise.all([
     ctx.db.get("workspaces", workspaceId),
     ctx.db.get("users", userId),
-  ])) as [GenericRow | null, GenericRow | null]
+  ])
 
   if (workspace && typeof workspace.deletionPendingAt === "number") {
     await ctx.db.patch("digestPreferences", preferenceId, {
@@ -172,12 +152,12 @@ async function schedulePreference(
     scheduledFor,
     workspaceId: String(workspaceId),
   })
-  const existing = (await ctx.db
+  const existing = await ctx.db
     .query("digestRuns")
     .withIndex("by_idempotency_key", (q) =>
       q.eq("idempotencyKey", plan.idempotencyKey),
     )
-    .unique()) as GenericRow | null
+    .unique()
 
   await ctx.db.patch("digestPreferences", preferenceId, {
     nextRunAt: plan.nextRunAt,
@@ -187,7 +167,7 @@ async function schedulePreference(
     return "duplicate"
   }
 
-  const digestRunId = (await ctx.db.insert("digestRuns", {
+  const digestRunId = await ctx.db.insert("digestRuns", {
     createdAt: now,
     digestCountsJson: JSON.stringify(emptyDigestAggregationCounts()),
     digestPreferenceId: preferenceId,
@@ -203,10 +183,14 @@ async function schedulePreference(
     windowEndAt: plan.window.endAt,
     windowStartAt: plan.window.startAt,
     workspaceId,
-  })) as DigestRunId
-  await ctx.scheduler.runAfter(0, aggregateDailyDigestPageReference, {
-    digestRunId,
   })
+  await ctx.scheduler.runAfter(
+    0,
+    internal.digest.internal.aggregateDailyDigestPage,
+    {
+      digestRunId,
+    },
+  )
   return "enqueued"
 }
 
@@ -222,12 +206,12 @@ export const dispatchDueDailyDigests = internalMutation({
       }
     }
 
-    const due = (await ctx.db
+    const due = await ctx.db
       .query("digestPreferences")
       .withIndex("by_enabled_and_next_run_at", (q) =>
-        indexAtMost(indexEquals(q, ["enabled", true]), "nextRunAt", now),
+        q.eq("enabled", true).lte("nextRunAt", now),
       )
-      .take(MAX_DUE_DIGESTS)) as GenericRow[]
+      .take(MAX_DUE_DIGESTS)
     const outcomes = {
       duplicate: 0,
       enqueued: 0,
@@ -250,10 +234,7 @@ export const dispatchDueDailyDigests = internalMutation({
 export const aggregateDailyDigestPage = internalMutation({
   args: { digestRunId: v.id("digestRuns") },
   handler: async (ctx, args) => {
-    const run = (await ctx.db.get(
-      "digestRuns",
-      args.digestRunId,
-    )) as GenericRow | null
+    const run = await ctx.db.get("digestRuns", args.digestRunId)
     if (
       !run ||
       run.status !== "processing" ||
@@ -262,16 +243,14 @@ export const aggregateDailyDigestPage = internalMutation({
       return { state: "not_pending" as const }
     }
 
-    const workspaceId = run.workspaceId as WorkspaceId
+    const workspaceId = run.workspaceId
     const page = await ctx.db
       .query("mentions")
       .withIndex("by_workspace_and_published_at", (q) =>
-        indexWindow(
-          indexEquals(q, ["workspaceId", workspaceId]),
-          "publishedAt",
-          run.windowStartAt as number,
-          run.windowEndAt as number,
-        ),
+        q
+          .eq("workspaceId", workspaceId)
+          .gte("publishedAt", run.windowStartAt)
+          .lt("publishedAt", run.windowEndAt),
       )
       .order("desc")
       .paginate({
@@ -281,7 +260,7 @@ export const aggregateDailyDigestPage = internalMutation({
             : null,
         numItems: DIGEST_AGGREGATION_PAGE_SIZE,
       })
-    const snapshotRows = (page.page as GenericRow[]).filter(
+    const snapshotRows = page.page.filter(
       (mention) => (mention.firstSeenAt as number) <= (run.createdAt as number),
     )
     const previousTopRows = (
@@ -291,7 +270,7 @@ export const aggregateDailyDigestPage = internalMutation({
         ),
       )
     ).filter(
-      (mention): mention is GenericRow =>
+      (mention): mention is Doc<"mentions"> =>
         mention !== null && mention.workspaceId === workspaceId,
     )
     const mentionLimit =
@@ -324,7 +303,11 @@ export const aggregateDailyDigestPage = internalMutation({
         mentionIds,
         updatedAt: now,
       })
-      await ctx.scheduler.runAfter(0, aggregateDailyDigestPageReference, args)
+      await ctx.scheduler.runAfter(
+        0,
+        internal.digest.internal.aggregateDailyDigestPage,
+        args,
+      )
       return { mentionCount: counts.total, state: "continued" as const }
     }
 
@@ -350,7 +333,11 @@ export const aggregateDailyDigestPage = internalMutation({
       mentionIds,
       updatedAt: now,
     })
-    await ctx.scheduler.runAfter(0, renderDailyDigestReference, args)
+    await ctx.scheduler.runAfter(
+      0,
+      internal.digest.actions.renderDailyDigest,
+      args,
+    )
     return { mentionCount: counts.total, state: "ready" as const }
   },
 })
@@ -358,10 +345,7 @@ export const aggregateDailyDigestPage = internalMutation({
 export const loadDailyDigestRenderContext = internalQuery({
   args: { digestRunId: v.id("digestRuns") },
   handler: async (ctx, args) => {
-    const run = (await ctx.db.get(
-      "digestRuns",
-      args.digestRunId,
-    )) as GenericRow | null
+    const run = await ctx.db.get("digestRuns", args.digestRunId)
     if (
       !run ||
       run.status !== "processing" ||
@@ -370,22 +354,18 @@ export const loadDailyDigestRenderContext = internalQuery({
       return { state: "not_pending" as const }
     }
 
-    const workspaceId = run.workspaceId as WorkspaceId
-    const userId = run.userId as UserId
-    const [workspace, user, categoryRows] = (await Promise.all([
+    const workspaceId = run.workspaceId
+    const userId = run.userId
+    const [workspace, user, categoryRows] = await Promise.all([
       ctx.db.get("workspaces", workspaceId),
       ctx.db.get("users", userId),
       ctx.db
         .query("categories")
         .withIndex("by_workspace_deleted_enabled_and_sort_order", (q) =>
-          indexEquals(
-            q,
-            ["workspaceId", workspaceId],
-            ["deletedAt", undefined],
-          ),
+          q.eq("workspaceId", workspaceId).eq("deletedAt", undefined),
         )
         .collect(),
-    ])) as [GenericRow | null, GenericRow | null, GenericRow[]]
+    ])
     if (
       !workspace ||
       workspace.deletedAt !== undefined ||
@@ -409,7 +389,7 @@ export const loadDailyDigestRenderContext = internalQuery({
         ),
       )
     ).filter(
-      (mention): mention is GenericRow =>
+      (mention): mention is Doc<"mentions"> =>
         mention !== null &&
         mention.workspaceId === workspaceId &&
         (mention.firstSeenAt as number) <= (run.createdAt as number),
@@ -488,10 +468,7 @@ export const enqueueRenderedDailyDigest = internalMutation({
     to: v.string(),
   },
   handler: async (ctx, args) => {
-    const run = (await ctx.db.get(
-      "digestRuns",
-      args.digestRunId,
-    )) as GenericRow | null
+    const run = await ctx.db.get("digestRuns", args.digestRunId)
     if (!run) {
       throw new TypeError("Digest run does not exist")
     }
@@ -505,12 +482,12 @@ export const enqueueRenderedDailyDigest = internalMutation({
     }
     const idempotencyKey = `email:${run.idempotencyKey as string}`
     const fingerprint = emailPayloadFingerprint(payload)
-    const existing = (await ctx.db
+    const existing = await ctx.db
       .query("emailOutbox")
       .withIndex("by_idempotency_key", (q) =>
         q.eq("idempotencyKey", idempotencyKey),
       )
-      .unique()) as GenericRow | null
+      .unique()
 
     let outboxId: EmailOutboxId
     if (existing) {
@@ -583,39 +560,3 @@ export const markDailyDigestFailed = internalMutation({
     return { state: "failed" as const }
   },
 })
-
-type DigestRunArguments = { digestRunId: DigestRunId }
-
-export const renderDailyDigestReference =
-  internalActionReference<DigestRunArguments>(
-    "digest/actions:renderDailyDigest",
-  )
-
-export const aggregateDailyDigestPageReference =
-  internalMutationReference<DigestRunArguments>(
-    "digest/internal:aggregateDailyDigestPage",
-  )
-
-export const dispatchDueDailyDigestsReference = internalMutationReference<{
-  now?: number
-}>("digest/internal:dispatchDueDailyDigests")
-
-export const loadDailyDigestRenderContextReference =
-  internalQueryReference<DigestRunArguments>(
-    "digest/internal:loadDailyDigestRenderContext",
-  )
-
-export const enqueueRenderedDailyDigestReference = internalMutationReference<
-  DigestRunArguments & {
-    from: string
-    html: string
-    replyTo?: string
-    subject: string
-    text: string
-    to: string
-  }
->("digest/internal:enqueueRenderedDailyDigest")
-
-export const markDailyDigestFailedReference = internalMutationReference<
-  DigestRunArguments & { error: string }
->("digest/internal:markDailyDigestFailed")

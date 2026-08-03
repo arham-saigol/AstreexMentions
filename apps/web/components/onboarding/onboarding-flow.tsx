@@ -1,6 +1,8 @@
 "use client"
 
+import { api } from "@astreex/backend/api"
 import { PLAN_DEFINITIONS, type PlanId } from "@astreex/domain"
+import type { FunctionArgs, FunctionReturnType } from "convex/server"
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
@@ -40,7 +42,6 @@ import { useRouter } from "next/navigation"
 import {
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
   type FormEvent,
@@ -48,9 +49,9 @@ import {
 } from "react"
 
 import { useProductContext } from "@/components/product/product-context"
-import { billingOverviewResultSchema } from "@/lib/customer-convex"
 import {
   canReuseOnboardingCheckout,
+  clearOnboardingDraftStorage,
   createOnboardingDraft,
   draftStorageKey,
   isCompletedOnboardingCheckout,
@@ -64,17 +65,16 @@ import {
   type OnboardingKeywordDraft,
   type OnboardingStep,
 } from "@/lib/onboarding-draft"
-import {
-  categoryListResultSchema,
-  checkoutResultSchema,
-  keywordListResultSchema,
-  onboardingConfigurationResultSchema,
-  onboardingConvex,
-  type CategoryColorToken,
-  type CategoryResult,
-  type KeywordResult,
-  type OnboardingPlatform,
-} from "@/lib/onboarding-convex"
+type OnboardingPlatform = FunctionArgs<
+  typeof api.keywords.createKeyword
+>["platforms"][number]
+type CategoryResult = FunctionReturnType<
+  typeof api.categories.listCategories
+>[number]
+type KeywordResult = FunctionReturnType<
+  typeof api.keywords.listKeywords
+>[number]
+type CategoryColorToken = CategoryResult["colorToken"]
 
 const steps = [
   { label: "Outcome", title: "Welcome" },
@@ -196,11 +196,10 @@ function readDraftFromStorage(key: string): OnboardingDraft | null {
       return null
     }
     const checkout = parsed.data.checkout
-    if (
-      checkout &&
-      !isCompletedOnboardingCheckout(checkout) &&
-      !canReuseOnboardingCheckout(checkout, Date.now())
-    ) {
+    if (checkout && isCompletedOnboardingCheckout(checkout)) {
+      return { ...parsed.data, checkout: undefined }
+    }
+    if (checkout && !canReuseOnboardingCheckout(checkout, Date.now())) {
       return { ...parsed.data, checkout: undefined }
     }
     return parsed.data
@@ -1085,25 +1084,12 @@ export function OnboardingFlow() {
   const [pollMessage, setPollMessage] = useState<string | null>(null)
   const serverHydrated = useRef(false)
 
-  const keywordValue = useQuery(onboardingConvex.keywords.list, {})
-  const categoryValue = useQuery(onboardingConvex.categories.list, {})
-  const saveConfiguration = useMutation(onboardingConvex.configuration.save)
-  const createCheckout = useAction(onboardingConvex.billing.createCheckout)
-
-  const parsedKeywords = useMemo(
-    () =>
-      keywordValue === undefined
-        ? null
-        : keywordListResultSchema.safeParse(keywordValue),
-    [keywordValue],
+  const keywordValue = useQuery(api.keywords.listKeywords, {})
+  const categoryValue = useQuery(api.categories.listCategories, {})
+  const saveConfiguration = useMutation(
+    api.onboarding.saveOnboardingConfiguration,
   )
-  const parsedCategories = useMemo(
-    () =>
-      categoryValue === undefined
-        ? null
-        : categoryListResultSchema.safeParse(categoryValue),
-    [categoryValue],
-  )
+  const createCheckout = useAction(api.billing.customer.createCheckout)
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -1132,16 +1118,16 @@ export function OnboardingFlow() {
     if (
       serverHydrated.current ||
       draftOrigin === "loading" ||
-      !parsedKeywords?.success ||
-      !parsedCategories?.success
+      keywordValue === undefined ||
+      categoryValue === undefined
     ) {
       return
     }
 
-    const currentKeywords = parsedKeywords.data.filter(
+    const currentKeywords = keywordValue.filter(
       (keyword) => keyword.status !== "deleted",
     )
-    const categoryDrafts = parsedCategories.data.map(categoryDraftFromResult)
+    const categoryDrafts = categoryValue.map(categoryDraftFromResult)
     const timeout = window.setTimeout(() => {
       serverHydrated.current = true
       setDraft((current) => {
@@ -1178,13 +1164,14 @@ export function OnboardingFlow() {
     }, 0)
 
     return () => window.clearTimeout(timeout)
-  }, [draftOrigin, parsedCategories, parsedKeywords])
+  }, [categoryValue, draftOrigin, keywordValue])
 
   useEffect(() => {
     if (billing.subscription?.entitlementStatus === "active") {
+      clearOnboardingDraftStorage(window.localStorage, workspace.workspace.id)
       router.replace("/app/mentions")
     }
-  }, [billing.subscription?.entitlementStatus, router])
+  }, [billing.subscription?.entitlementStatus, router, workspace.workspace.id])
 
   useEffect(() => {
     if (
@@ -1204,20 +1191,13 @@ export function OnboardingFlow() {
       checking = true
       try {
         const value = await convex.query(
-          onboardingConvex.billing.getOverview,
+          api.billing.customer.getBillingOverview,
           {},
         )
-        const parsed = billingOverviewResultSchema.safeParse(value)
         if (!mounted) {
           return
         }
-        if (!parsed.success) {
-          setPollMessage(
-            "The latest billing response could not be verified safely.",
-          )
-          return
-        }
-        if (parsed.data.subscription?.entitlementStatus === "active") {
+        if (value.subscription?.entitlementStatus === "active") {
           router.replace("/app/mentions")
           return
         }
@@ -1373,7 +1353,7 @@ export function OnboardingFlow() {
       setStepError(validation)
       return false
     }
-    if (!parsedKeywords?.success || !parsedCategories?.success) {
+    if (keywordValue === undefined || categoryValue === undefined) {
       setSaveError(
         "The current keyword or category data could not be verified. Reload the account before saving.",
       )
@@ -1384,25 +1364,22 @@ export function OnboardingFlow() {
     setSaveError(null)
 
     try {
-      const result = onboardingConfigurationResultSchema.safeParse(
-        await saveConfiguration({
-          categories: draft.categories.map((category) => ({
-            categoryId: category.serverId,
-            colorToken: category.colorToken,
-            description: category.description.trim(),
-            enabled: category.enabled,
-          })),
-          keywords: draft.keywords.map((keyword) => ({
-            phrase: keyword.phrase.trim(),
-            platforms: keyword.platforms,
-          })),
-          workspaceName: draft.workspaceName.trim(),
-        }),
-      )
-      if (
-        !result.success ||
-        result.data.keywordCount !== draft.keywords.length
-      ) {
+      const result = await saveConfiguration({
+        categories: draft.categories.map((category) => ({
+          categoryId: category.serverId as FunctionArgs<
+            typeof api.onboarding.saveOnboardingConfiguration
+          >["categories"][number]["categoryId"],
+          colorToken: category.colorToken,
+          description: category.description.trim(),
+          enabled: category.enabled,
+        })),
+        keywords: draft.keywords.map((keyword) => ({
+          phrase: keyword.phrase.trim(),
+          platforms: keyword.platforms,
+        })),
+        workspaceName: draft.workspaceName.trim(),
+      })
+      if (result.keywordCount !== draft.keywords.length) {
         throw new Error("Onboarding configuration result is invalid")
       }
 
@@ -1427,7 +1404,7 @@ export function OnboardingFlow() {
     } finally {
       setSavingConfiguration(false)
     }
-  }, [draft, parsedCategories, parsedKeywords, saveConfiguration])
+  }, [categoryValue, draft, keywordValue, saveConfiguration])
 
   const goForward = useCallback(async () => {
     const validation = validateStep(draft, draft.step)
@@ -1523,11 +1500,7 @@ export function OnboardingFlow() {
         idempotencyKey: pending.idempotencyKey,
         planId: pending.planId,
       })
-      const result = checkoutResultSchema.safeParse(value)
-      if (!result.success) {
-        throw new Error("Unexpected checkout result")
-      }
-      if (result.data.state === "provider_unconfigured") {
+      if (value.state === "provider_unconfigured") {
         const providerDraft: OnboardingDraft = {
           ...pendingDraft,
           checkout: { ...pending, status: "provider_unconfigured" },
@@ -1544,14 +1517,14 @@ export function OnboardingFlow() {
         ...pendingDraft,
         checkout: {
           ...pending,
-          checkoutId: result.data.checkoutId,
-          status: result.data.status,
-          url: result.data.url,
+          checkoutId: value.checkoutId,
+          status: value.status,
+          url: value.url,
         },
       }
       setDraft(redirectDraft)
       writeDraftToStorage(storageKey, redirectDraft)
-      window.location.assign(result.data.url)
+      window.location.assign(value.url)
     } catch {
       setCheckoutError(
         "Checkout could not be created. The saved configuration and checkout intent remain available so you can retry without assuming access is active.",
@@ -1693,18 +1666,13 @@ export function OnboardingFlow() {
 
       {stepContent}
 
-      {(stepError ||
-        saveError ||
-        parsedKeywords?.success === false ||
-        parsedCategories?.success === false) && (
+      {(stepError || saveError) && (
         <StatusState
           className="mt-6"
           variant="error"
           title="This step needs attention"
           description={
-            stepError ??
-            saveError ??
-            "The connected account returned configuration data this version of Astreex cannot safely edit. Reload before continuing."
+            stepError ?? saveError ?? "Review this step before continuing."
           }
         />
       )}

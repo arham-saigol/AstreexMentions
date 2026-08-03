@@ -1,3 +1,4 @@
+import { internal } from "../_generated/api"
 import { ConvexError, v } from "convex/values"
 import { z } from "zod"
 
@@ -7,24 +8,13 @@ import {
   normalizeCreemSubscription,
 } from "../integrations/creem"
 import { customerAction, customerQuery } from "../lib/authorization"
-import { env, indexEquals } from "../server"
+import { env } from "../_generated/server"
 import {
   readCreemApiConfiguration,
   readCreemCheckoutConfiguration,
   readCreemUpgradeConfiguration,
 } from "./config"
-import {
-  applyUpgradeResponseReference,
-  beginCreemProviderOperationReference,
-  getCustomerBillingActionContextReference,
-  markCreemProviderOperationUnresolvedReference,
-  recordCheckoutReference,
-  recordCreemProviderOperationReference,
-} from "./internal"
-import {
-  effectiveEntitlementStatus,
-  subscriptionStatusAllowsCheckout,
-} from "./lifecycle"
+import { subscriptionStatusAllowsCheckout } from "./lifecycle"
 
 const planIdValidator = v.union(
   v.literal("starter"),
@@ -163,7 +153,7 @@ export const getBillingOverview = customerQuery({
     const cycles = await ctx.db
       .query("usageCycles")
       .withIndex("by_workspace_status_and_period_end", (q) =>
-        indexEquals(q, ["workspaceId", ctx.workspace.id], ["status", "open"]),
+        q.eq("workspaceId", ctx.workspace.id).eq("status", "open"),
       )
       .collect()
     const usageCycle =
@@ -172,7 +162,6 @@ export const getBillingOverview = customerQuery({
           (right.periodStartAt as number) - (left.periodStartAt as number),
       )[0] ?? null
     const providerConfiguration = readCreemApiConfiguration(env)
-    const now = Date.now()
 
     return {
       providerState: providerConfiguration.state,
@@ -181,15 +170,8 @@ export const getBillingOverview = customerQuery({
             cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
             currentPeriodEnd: subscription.currentPeriodEnd,
             currentPeriodStart: subscription.currentPeriodStart,
-            entitlementStatus: effectiveEntitlementStatus(
-              {
-                currentPeriodEnd: subscription.currentPeriodEnd as number,
-                entitlementStatus: subscription.entitlementStatus as
-                  "active" | "inactive",
-                status: subscription.status as string,
-              },
-              now,
-            ),
+            entitlementStatus: subscription.entitlementStatus as
+              "active" | "inactive",
             planId: subscription.planId,
             status: subscription.status,
           }
@@ -231,7 +213,7 @@ export const createCheckout = customerAction({
     }
 
     const existing = await ctx.runQuery(
-      getCustomerBillingActionContextReference,
+      internal.billing.internal.getCustomerBillingActionContext,
       {
         idempotencyKey: idempotencyResult.data,
         workspaceId: ctx.workspace.id,
@@ -289,7 +271,7 @@ export const createCheckout = customerAction({
 
     const operationId = `checkout:${idempotencyResult.data}`
     const operation = await ctx.runMutation(
-      beginCreemProviderOperationReference,
+      internal.billing.internal.beginCreemProviderOperation,
       {
         idempotencyKey: operationId,
         operation: "checkout",
@@ -315,7 +297,7 @@ export const createCheckout = customerAction({
         requestId: idempotencyResult.data,
         successUrl: configuration.successUrl,
       })
-      await ctx.runMutation(recordCheckoutReference, {
+      await ctx.runMutation(internal.billing.internal.recordCheckout, {
         createdAt: Date.now(),
         idempotencyKey: idempotencyResult.data,
         planId: planResult.data,
@@ -325,16 +307,19 @@ export const createCheckout = customerAction({
         url: checkout.url,
         workspaceId: ctx.workspace.id,
       })
-      await ctx.runMutation(recordCreemProviderOperationReference, {
-        actorClerkUserId: ctx.identity.subject,
-        actorUserId: ctx.viewer.id,
-        durationMs: Date.now() - startedAt,
-        idempotencyKey: operationId,
-        operation: "checkout",
-        status: "succeeded",
-        targetId: checkout.checkoutId,
-        workspaceId: ctx.workspace.id,
-      })
+      await ctx.runMutation(
+        internal.billing.internal.recordCreemProviderOperation,
+        {
+          actorClerkUserId: ctx.identity.subject,
+          actorUserId: ctx.viewer.id,
+          durationMs: Date.now() - startedAt,
+          idempotencyKey: operationId,
+          operation: "checkout",
+          status: "succeeded",
+          targetId: checkout.checkoutId,
+          workspaceId: ctx.workspace.id,
+        },
+      )
 
       return {
         checkoutId: checkout.checkoutId,
@@ -346,24 +331,30 @@ export const createCheckout = customerAction({
     } catch (error) {
       try {
         if (providerErrorRetryable(error)) {
-          await ctx.runMutation(markCreemProviderOperationUnresolvedReference, {
-            errorCode: providerErrorCode(error),
-            errorMessage: providerErrorMessage(error),
-            idempotencyKey: operationId,
-            workspaceId: ctx.workspace.id,
-          })
+          await ctx.runMutation(
+            internal.billing.internal.markCreemProviderOperationUnresolved,
+            {
+              errorCode: providerErrorCode(error),
+              errorMessage: providerErrorMessage(error),
+              idempotencyKey: operationId,
+              workspaceId: ctx.workspace.id,
+            },
+          )
         } else {
-          await ctx.runMutation(recordCreemProviderOperationReference, {
-            actorClerkUserId: ctx.identity.subject,
-            actorUserId: ctx.viewer.id,
-            durationMs: Date.now() - startedAt,
-            errorCode: providerErrorCode(error),
-            errorMessage: providerErrorMessage(error),
-            idempotencyKey: operationId,
-            operation: "checkout",
-            status: "failed",
-            workspaceId: ctx.workspace.id,
-          })
+          await ctx.runMutation(
+            internal.billing.internal.recordCreemProviderOperation,
+            {
+              actorClerkUserId: ctx.identity.subject,
+              actorUserId: ctx.viewer.id,
+              durationMs: Date.now() - startedAt,
+              errorCode: providerErrorCode(error),
+              errorMessage: providerErrorMessage(error),
+              idempotencyKey: operationId,
+              operation: "checkout",
+              status: "failed",
+              workspaceId: ctx.workspace.id,
+            },
+          )
         }
       } catch {
         // Preserve the typed provider failure rather than masking it with metrics.
@@ -383,7 +374,7 @@ export const createBillingPortal = customerAction({
     }
 
     const billingContext = await ctx.runQuery(
-      getCustomerBillingActionContextReference,
+      internal.billing.internal.getCustomerBillingActionContext,
       { workspaceId: ctx.workspace.id },
     )
     const customerId = billingContext.subscription?.providerCustomerId
@@ -396,7 +387,7 @@ export const createBillingPortal = customerAction({
 
     const operationId = `portal:${String(ctx.workspace.id)}:${Date.now()}`
     const operation = await ctx.runMutation(
-      beginCreemProviderOperationReference,
+      internal.billing.internal.beginCreemProviderOperation,
       {
         idempotencyKey: operationId,
         operation: "portal",
@@ -416,38 +407,47 @@ export const createBillingPortal = customerAction({
           customerId,
         },
       )
-      await ctx.runMutation(recordCreemProviderOperationReference, {
-        actorClerkUserId: ctx.identity.subject,
-        actorUserId: ctx.viewer.id,
-        durationMs: Date.now() - startedAt,
-        idempotencyKey: operationId,
-        operation: "portal",
-        status: "succeeded",
-        targetId: customerId,
-        workspaceId: ctx.workspace.id,
-      })
+      await ctx.runMutation(
+        internal.billing.internal.recordCreemProviderOperation,
+        {
+          actorClerkUserId: ctx.identity.subject,
+          actorUserId: ctx.viewer.id,
+          durationMs: Date.now() - startedAt,
+          idempotencyKey: operationId,
+          operation: "portal",
+          status: "succeeded",
+          targetId: customerId,
+          workspaceId: ctx.workspace.id,
+        },
+      )
       return { state: "configured" as const, url: portal.url }
     } catch (error) {
       try {
         if (providerErrorRetryable(error)) {
-          await ctx.runMutation(markCreemProviderOperationUnresolvedReference, {
-            errorCode: providerErrorCode(error),
-            errorMessage: providerErrorMessage(error),
-            idempotencyKey: operationId,
-            workspaceId: ctx.workspace.id,
-          })
+          await ctx.runMutation(
+            internal.billing.internal.markCreemProviderOperationUnresolved,
+            {
+              errorCode: providerErrorCode(error),
+              errorMessage: providerErrorMessage(error),
+              idempotencyKey: operationId,
+              workspaceId: ctx.workspace.id,
+            },
+          )
         } else {
-          await ctx.runMutation(recordCreemProviderOperationReference, {
-            actorClerkUserId: ctx.identity.subject,
-            actorUserId: ctx.viewer.id,
-            durationMs: Date.now() - startedAt,
-            errorCode: providerErrorCode(error),
-            errorMessage: providerErrorMessage(error),
-            idempotencyKey: operationId,
-            operation: "portal",
-            status: "failed",
-            workspaceId: ctx.workspace.id,
-          })
+          await ctx.runMutation(
+            internal.billing.internal.recordCreemProviderOperation,
+            {
+              actorClerkUserId: ctx.identity.subject,
+              actorUserId: ctx.viewer.id,
+              durationMs: Date.now() - startedAt,
+              errorCode: providerErrorCode(error),
+              errorMessage: providerErrorMessage(error),
+              idempotencyKey: operationId,
+              operation: "portal",
+              status: "failed",
+              workspaceId: ctx.workspace.id,
+            },
+          )
         }
       } catch {
         // Preserve the typed provider failure rather than masking it with metrics.
@@ -472,7 +472,7 @@ export const upgradeSubscription = customerAction({
     }
 
     const billingContext = await ctx.runQuery(
-      getCustomerBillingActionContextReference,
+      internal.billing.internal.getCustomerBillingActionContext,
       { workspaceId: ctx.workspace.id },
     )
     const subscription = billingContext.subscription
@@ -519,7 +519,7 @@ export const upgradeSubscription = customerAction({
       `upgrade:${providerSubscriptionId}:${currentPlan.data}:` +
       `${planResult.data}:${subscriptionVersion}`
     const operation = await ctx.runMutation(
-      beginCreemProviderOperationReference,
+      internal.billing.internal.beginCreemProviderOperation,
       {
         idempotencyKey: operationId,
         operation: "upgrade",
@@ -541,26 +541,32 @@ export const upgradeSubscription = customerAction({
         subscriptionId: providerSubscriptionId,
       })
       const normalized = normalizeCreemSubscription(upgraded)
-      const applied = await ctx.runMutation(applyUpgradeResponseReference, {
-        incompleteReconciliation: {
-          actorClerkUserId: ctx.identity.subject,
-          actorUserId: ctx.viewer.id,
-          attempt: 1,
-          delayMs: 0,
-          idempotencyKey: operationId,
-        },
-        providerCreatedAt: normalized.updatedAt,
-        rawSubscriptionJson: JSON.stringify(upgraded),
-        workspaceId: ctx.workspace.id,
-      })
-      if (applied.state === "provider_unconfigured") {
-        await ctx.runMutation(markCreemProviderOperationUnresolvedReference, {
-          errorCode: "PROVIDER_UNCONFIGURED",
-          errorMessage:
-            "Creem product configuration changed during upgrade completion",
-          idempotencyKey: operationId,
+      const applied = await ctx.runMutation(
+        internal.billing.internal.applyUpgradeResponse,
+        {
+          incompleteReconciliation: {
+            actorClerkUserId: ctx.identity.subject,
+            actorUserId: ctx.viewer.id,
+            attempt: 1,
+            delayMs: 0,
+            idempotencyKey: operationId,
+          },
+          providerCreatedAt: normalized.updatedAt,
+          rawSubscriptionJson: JSON.stringify(upgraded),
           workspaceId: ctx.workspace.id,
-        })
+        },
+      )
+      if (applied.state === "provider_unconfigured") {
+        await ctx.runMutation(
+          internal.billing.internal.markCreemProviderOperationUnresolved,
+          {
+            errorCode: "PROVIDER_UNCONFIGURED",
+            errorMessage:
+              "Creem product configuration changed during upgrade completion",
+            idempotencyKey: operationId,
+            workspaceId: ctx.workspace.id,
+          },
+        )
         return {
           missing: [
             "CREEM_PRODUCT_ID_GROWTH",
@@ -577,16 +583,19 @@ export const upgradeSubscription = customerAction({
           state: "configured" as const,
         }
       }
-      await ctx.runMutation(recordCreemProviderOperationReference, {
-        actorClerkUserId: ctx.identity.subject,
-        actorUserId: ctx.viewer.id,
-        durationMs: Date.now() - startedAt,
-        idempotencyKey: operationId,
-        operation: "upgrade",
-        status: "succeeded",
-        targetId: providerSubscriptionId,
-        workspaceId: ctx.workspace.id,
-      })
+      await ctx.runMutation(
+        internal.billing.internal.recordCreemProviderOperation,
+        {
+          actorClerkUserId: ctx.identity.subject,
+          actorUserId: ctx.viewer.id,
+          durationMs: Date.now() - startedAt,
+          idempotencyKey: operationId,
+          operation: "upgrade",
+          status: "succeeded",
+          targetId: providerSubscriptionId,
+          workspaceId: ctx.workspace.id,
+        },
+      )
       return {
         kind: applied.kind ?? "applied",
         planId: planResult.data,
@@ -595,25 +604,31 @@ export const upgradeSubscription = customerAction({
     } catch (error) {
       try {
         if (providerErrorRetryable(error)) {
-          await ctx.runMutation(markCreemProviderOperationUnresolvedReference, {
-            errorCode: providerErrorCode(error),
-            errorMessage: providerErrorMessage(error),
-            idempotencyKey: operationId,
-            workspaceId: ctx.workspace.id,
-          })
+          await ctx.runMutation(
+            internal.billing.internal.markCreemProviderOperationUnresolved,
+            {
+              errorCode: providerErrorCode(error),
+              errorMessage: providerErrorMessage(error),
+              idempotencyKey: operationId,
+              workspaceId: ctx.workspace.id,
+            },
+          )
         } else {
-          await ctx.runMutation(recordCreemProviderOperationReference, {
-            actorClerkUserId: ctx.identity.subject,
-            actorUserId: ctx.viewer.id,
-            durationMs: Date.now() - startedAt,
-            errorCode: providerErrorCode(error),
-            errorMessage: providerErrorMessage(error),
-            idempotencyKey: operationId,
-            operation: "upgrade",
-            status: "failed",
-            targetId: providerSubscriptionId,
-            workspaceId: ctx.workspace.id,
-          })
+          await ctx.runMutation(
+            internal.billing.internal.recordCreemProviderOperation,
+            {
+              actorClerkUserId: ctx.identity.subject,
+              actorUserId: ctx.viewer.id,
+              durationMs: Date.now() - startedAt,
+              errorCode: providerErrorCode(error),
+              errorMessage: providerErrorMessage(error),
+              idempotencyKey: operationId,
+              operation: "upgrade",
+              status: "failed",
+              targetId: providerSubscriptionId,
+              workspaceId: ctx.workspace.id,
+            },
+          )
         }
       } catch {
         // Preserve the typed provider failure rather than masking it with metrics.

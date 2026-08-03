@@ -1,4 +1,4 @@
-import { engagementScore } from "../../lib/engagementRanking"
+import { engagementScore } from "@astreex/domain"
 import { z } from "zod"
 
 import {

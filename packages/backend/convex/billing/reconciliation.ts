@@ -1,21 +1,15 @@
 "use node"
 
+import { internal } from "../_generated/api"
+
 import { v } from "convex/values"
 
 import {
   createCreemClient,
   normalizeCreemSubscription,
 } from "../integrations/creem"
-import { env, internalAction } from "../server"
+import { env, internalAction } from "../_generated/server"
 import { readCreemApiConfiguration } from "./config"
-import {
-  applyIncompleteCreemBillingEventReference,
-  applyUpgradeResponseReference,
-  loadIncompleteCreemBillingEventReference,
-  markCreemProviderOperationUnresolvedReference,
-  reconcileIncompleteCreemUpgradeReference,
-  recordCreemProviderOperationReference,
-} from "./internal"
 
 const INCOMPLETE_UPGRADE_RETRY_DELAY_MS = 30_000
 const MAX_INCOMPLETE_UPGRADE_ATTEMPTS = 5
@@ -24,7 +18,7 @@ export const reconcileIncompleteCreemBillingEvent = internalAction({
   args: { billingEventId: v.id("billingEvents") },
   handler: async (ctx, args) => {
     const context = await ctx.runQuery(
-      loadIncompleteCreemBillingEventReference,
+      internal.billing.internal.loadIncompleteCreemBillingEvent,
       args,
     )
     if (context.state !== "ready") {
@@ -40,11 +34,14 @@ export const reconcileIncompleteCreemBillingEvent = internalAction({
       const subscription = await createCreemClient(
         configuration,
       ).getSubscription(context.providerSubscriptionId)
-      return await ctx.runMutation(applyIncompleteCreemBillingEventReference, {
-        ...args,
-        authoritativeSubscriptionJson: JSON.stringify(subscription),
-        receivedAt: Date.now(),
-      })
+      return await ctx.runMutation(
+        internal.billing.internal.applyIncompleteCreemBillingEvent,
+        {
+          ...args,
+          authoritativeSubscriptionJson: JSON.stringify(subscription),
+          receivedAt: Date.now(),
+        },
+      )
     } catch {
       return { state: "retry" as const }
     }
@@ -66,12 +63,15 @@ export const reconcileIncompleteCreemUpgrade = internalAction({
       args.attempt < 1 ||
       args.attempt > MAX_INCOMPLETE_UPGRADE_ATTEMPTS
     ) {
-      await ctx.runMutation(markCreemProviderOperationUnresolvedReference, {
-        errorCode: "INVALID_RECONCILIATION_ATTEMPT",
-        errorMessage: "Creem upgrade reconciliation attempt is invalid",
-        idempotencyKey: args.idempotencyKey,
-        workspaceId: args.workspaceId,
-      })
+      await ctx.runMutation(
+        internal.billing.internal.markCreemProviderOperationUnresolved,
+        {
+          errorCode: "INVALID_RECONCILIATION_ATTEMPT",
+          errorMessage: "Creem upgrade reconciliation attempt is invalid",
+          idempotencyKey: args.idempotencyKey,
+          workspaceId: args.workspaceId,
+        },
+      )
       return { state: "invalid_attempt" as const }
     }
 
@@ -79,17 +79,20 @@ export const reconcileIncompleteCreemUpgrade = internalAction({
       if (args.attempt < MAX_INCOMPLETE_UPGRADE_ATTEMPTS) {
         await ctx.scheduler.runAfter(
           INCOMPLETE_UPGRADE_RETRY_DELAY_MS,
-          reconcileIncompleteCreemUpgradeReference,
+          internal.billing.reconciliation.reconcileIncompleteCreemUpgrade,
           { ...args, attempt: args.attempt + 1 },
         )
         return { state: "retry_scheduled" as const }
       }
-      await ctx.runMutation(markCreemProviderOperationUnresolvedReference, {
-        errorCode,
-        errorMessage,
-        idempotencyKey: args.idempotencyKey,
-        workspaceId: args.workspaceId,
-      })
+      await ctx.runMutation(
+        internal.billing.internal.markCreemProviderOperationUnresolved,
+        {
+          errorCode,
+          errorMessage,
+          idempotencyKey: args.idempotencyKey,
+          workspaceId: args.workspaceId,
+        },
+      )
       return { state: "unresolved" as const }
     }
 
@@ -106,22 +109,25 @@ export const reconcileIncompleteCreemUpgrade = internalAction({
       const subscription = await createCreemClient(
         configuration,
       ).getSubscription(args.providerSubscriptionId)
-      const applied = await ctx.runMutation(applyUpgradeResponseReference, {
-        ...(args.attempt < MAX_INCOMPLETE_UPGRADE_ATTEMPTS
-          ? {
-              incompleteReconciliation: {
-                actorClerkUserId: args.actorClerkUserId,
-                actorUserId: args.actorUserId,
-                attempt: args.attempt + 1,
-                delayMs: INCOMPLETE_UPGRADE_RETRY_DELAY_MS,
-                idempotencyKey: args.idempotencyKey,
-              },
-            }
-          : {}),
-        providerCreatedAt: normalizeCreemSubscription(subscription).updatedAt,
-        rawSubscriptionJson: JSON.stringify(subscription),
-        workspaceId: args.workspaceId,
-      })
+      const applied = await ctx.runMutation(
+        internal.billing.internal.applyUpgradeResponse,
+        {
+          ...(args.attempt < MAX_INCOMPLETE_UPGRADE_ATTEMPTS
+            ? {
+                incompleteReconciliation: {
+                  actorClerkUserId: args.actorClerkUserId,
+                  actorUserId: args.actorUserId,
+                  attempt: args.attempt + 1,
+                  delayMs: INCOMPLETE_UPGRADE_RETRY_DELAY_MS,
+                  idempotencyKey: args.idempotencyKey,
+                },
+              }
+            : {}),
+          providerCreatedAt: normalizeCreemSubscription(subscription).updatedAt,
+          rawSubscriptionJson: JSON.stringify(subscription),
+          workspaceId: args.workspaceId,
+        },
+      )
       if (applied.state === "provider_unconfigured") {
         return await retryOrRelease(
           "INCOMPLETE_SUBSCRIPTION_PERIOD",
@@ -137,16 +143,19 @@ export const reconcileIncompleteCreemUpgrade = internalAction({
             )
       }
 
-      await ctx.runMutation(recordCreemProviderOperationReference, {
-        actorClerkUserId: args.actorClerkUserId,
-        actorUserId: args.actorUserId,
-        durationMs: Date.now() - startedAt,
-        idempotencyKey: args.idempotencyKey,
-        operation: "upgrade",
-        status: "succeeded",
-        targetId: args.providerSubscriptionId,
-        workspaceId: args.workspaceId,
-      })
+      await ctx.runMutation(
+        internal.billing.internal.recordCreemProviderOperation,
+        {
+          actorClerkUserId: args.actorClerkUserId,
+          actorUserId: args.actorUserId,
+          durationMs: Date.now() - startedAt,
+          idempotencyKey: args.idempotencyKey,
+          operation: "upgrade",
+          status: "succeeded",
+          targetId: args.providerSubscriptionId,
+          workspaceId: args.workspaceId,
+        },
+      )
       return { kind: applied.kind, state: "applied" as const }
     } catch {
       return await retryOrRelease(

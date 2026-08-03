@@ -1,6 +1,6 @@
 import { z } from "zod"
 
-import { DEFAULT_PROVIDER_TIMEOUT_MS } from "../integrations/providers"
+import { DEFAULT_PROVIDER_TIMEOUT_MS } from "../integrations/providers/http"
 import {
   HOUR_MS,
   MINUTE_MS,

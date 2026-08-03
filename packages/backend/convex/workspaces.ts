@@ -1,5 +1,5 @@
 import type { UserIdentity } from "convex/server"
-import { ConvexError, type GenericId, v } from "convex/values"
+import { ConvexError, v } from "convex/values"
 
 import { readDeletionBillingSnapshot } from "./deletion/billing"
 import {
@@ -11,17 +11,17 @@ import {
 import { authenticatedMutation, authenticatedQuery } from "./lib/authorization"
 import { assertAccountDeletionAllowed } from "./lib/workspaceDeletion"
 import { withoutUndefinedValues } from "./lib/jobRuntime"
-import { indexEquals, type MutationCtx, type QueryCtx } from "./server"
+import { type MutationCtx, type QueryCtx } from "./_generated/server"
+import type { Doc, Id } from "./_generated/dataModel"
 import {
   currentUserResult,
   resolveCurrentCustomer,
   type CurrentCustomer,
 } from "./users"
 
-type DeletionJobId = GenericId<"deletionJobs">
-type UserId = GenericId<"users">
-type WorkspaceId = GenericId<"workspaces">
-type GenericRow = Record<string, unknown> & { _id: GenericId<string> }
+type DeletionJobId = Id<"deletionJobs">
+type UserId = Id<"users">
+type WorkspaceId = Id<"workspaces">
 type DatabaseCtx = Pick<QueryCtx | MutationCtx, "db">
 
 const currentWorkspaceResultValidator = v.object({
@@ -148,7 +148,7 @@ function supportRequiredResult(
   }
 }
 
-function inProgressResult(job: GenericRow): DeletionRequestResult {
+function inProgressResult(job: Doc<"deletionJobs">): DeletionRequestResult {
   return {
     code: "ACCOUNT_DELETION_IN_PROGRESS",
     deletionJobId: job._id as DeletionJobId,
@@ -159,7 +159,7 @@ function inProgressResult(job: GenericRow): DeletionRequestResult {
   }
 }
 
-function resultForExistingJob(job: GenericRow): DeletionRequestResult {
+function resultForExistingJob(job: Doc<"deletionJobs">): DeletionRequestResult {
   if (job.workflowVersion !== ACCOUNT_DELETION_WORKFLOW_VERSION) {
     return supportRequiredResult(
       "DELETION_REVIEW_REQUIRED",
@@ -197,17 +197,17 @@ function resultForExistingJob(job: GenericRow): DeletionRequestResult {
 async function latestAccountDeletionJob(
   ctx: DatabaseCtx,
   userId: UserId,
-): Promise<GenericRow | null> {
-  return (await ctx.db
+): Promise<Doc<"deletionJobs"> | null> {
+  return await ctx.db
     .query("deletionJobs")
     .withIndex("by_account_user_kind_and_created_at", (q) =>
-      indexEquals(q, ["accountUserId", userId], ["kind", "account"]),
+      q.eq("accountUserId", userId).eq("kind", "account"),
     )
     .order("desc")
-    .first()) as GenericRow | null
+    .first()
 }
 
-function nextDeletionGeneration(existing: GenericRow | null): number {
+function nextDeletionGeneration(existing: Doc<"deletionJobs"> | null): number {
   if (!existing) {
     return 1
   }
@@ -222,13 +222,13 @@ function nextDeletionGeneration(existing: GenericRow | null): number {
 async function legacyWorkspaceDeletionJob(
   ctx: DatabaseCtx,
   workspaceId: WorkspaceId,
-): Promise<GenericRow | null> {
-  const rows = (await ctx.db
+): Promise<Doc<"deletionJobs"> | null> {
+  const rows = await ctx.db
     .query("deletionJobs")
     .withIndex("by_workspace_and_created_at", (q) =>
       q.eq("workspaceId", workspaceId),
     )
-    .collect()) as GenericRow[]
+    .collect()
   return (
     rows.find(
       (row) =>
@@ -241,18 +241,18 @@ async function legacyWorkspaceDeletionJob(
 
 type DeletionRequester =
   | { customer: CurrentCustomer; state: "active" }
-  | { job: GenericRow; state: "fenced" }
+  | { job: Doc<"deletionJobs">; state: "fenced" }
 
 async function resolveDeletionRequester(
   ctx: DatabaseCtx,
   identity: Pick<UserIdentity, "subject" | "tokenIdentifier">,
 ): Promise<DeletionRequester> {
-  const user = (await ctx.db
+  const user = await ctx.db
     .query("users")
     .withIndex("by_token_identifier", (q) =>
       q.eq("tokenIdentifier", identity.tokenIdentifier),
     )
-    .unique()) as GenericRow | null
+    .unique()
   if (!user) {
     workspaceError(
       "BOOTSTRAP_REQUIRED",
@@ -443,7 +443,7 @@ async function activeKeywordCount(
       const keywords = await ctx.db
         .query("keywords")
         .withIndex("by_workspace_status_and_created_at", (q) =>
-          indexEquals(q, ["workspaceId", workspaceId], ["status", status]),
+          q.eq("workspaceId", workspaceId).eq("status", status),
         )
         .collect()
       return keywords.filter((keyword) => keyword.deletedAt === undefined)

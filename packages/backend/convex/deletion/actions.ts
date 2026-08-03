@@ -1,5 +1,7 @@
 "use node"
 
+import { internal } from "../_generated/api"
+
 import { v } from "convex/values"
 
 import { readCreemApiConfiguration } from "../billing/config"
@@ -14,18 +16,9 @@ import {
   normalizeCreemSubscription,
 } from "../integrations/creem"
 import { evaluateDeletionBillingGuard } from "../lib/billingDeletionGuard"
-import { env, internalAction, type ActionCtx } from "../server"
+import { env, internalAction, type ActionCtx } from "../_generated/server"
 import {
-  beginAccountDeletionPurgeReference,
-  blockAccountDeletionForBillingReference,
-  completeIdentityDeletionReference,
-  continueAccountDeletionReference,
-  failAccountDeletionAttemptReference,
-  finalizeSecurityTombstoneReference,
-  loadIdentityDeletionContextReference,
-  purgeAccountDeletionBatchReference,
-  startAccountDeletionAttemptReference,
-  verifyAccountDeletionDataReference,
+  type AccountDeletionExecutionContext,
   type AccountDeletionLeaseArguments,
 } from "./internal"
 import { type AccountDeletionPhase } from "./model"
@@ -37,6 +30,11 @@ const TERMINAL_CREEM_SUBSCRIPTION_STATUSES = new Set([
   "expired",
   "inactive",
 ])
+
+type DeletionSubscription = Extract<
+  AccountDeletionExecutionContext,
+  { state: "ready" }
+>["subscriptions"][number]
 
 type SafeDeletionFailure = {
   code: string
@@ -69,11 +67,14 @@ async function fail(
   args: AccountDeletionLeaseArguments,
   failure: SafeDeletionFailure,
 ) {
-  return await ctx.runMutation(failAccountDeletionAttemptReference, {
-    ...args,
-    code: failure.code,
-    retryable: failure.retryable,
-  })
+  return await ctx.runMutation(
+    internal.deletion.internal.failAccountDeletionAttempt,
+    {
+      ...args,
+      code: failure.code,
+      retryable: failure.retryable,
+    },
+  )
 }
 
 export const runAccountDeletion = internalAction({
@@ -84,7 +85,7 @@ export const runAccountDeletion = internalAction({
   },
   handler: async (ctx, args) => {
     const context = await ctx.runMutation(
-      startAccountDeletionAttemptReference,
+      internal.deletion.internal.startAccountDeletionAttempt,
       args,
     )
     if (context.state === "stale_lease") {
@@ -103,7 +104,7 @@ export const runAccountDeletion = internalAction({
       if (context.billingGuard.status === "blocked_active") {
         if (context.billingGuard.code === "BILLING_PORTAL_REQUIRED") {
           return await ctx.runMutation(
-            blockAccountDeletionForBillingReference,
+            internal.deletion.internal.blockAccountDeletionForBilling,
             { ...args, code: context.billingGuard.code },
           )
         }
@@ -124,10 +125,13 @@ export const runAccountDeletion = internalAction({
       try {
         const client = createCreemClient(configuration)
         const providerSubscriptions = await Promise.all(
-          context.subscriptions.map(async (subscription) =>
-            normalizeCreemSubscription(
-              await client.getSubscription(subscription.providerSubscriptionId),
-            ),
+          context.subscriptions.map(
+            async (subscription: DeletionSubscription) =>
+              normalizeCreemSubscription(
+                await client.getSubscription(
+                  subscription.providerSubscriptionId,
+                ),
+              ),
           ),
         )
         const authoritativeGuard = evaluateDeletionBillingGuard(
@@ -143,7 +147,7 @@ export const runAccountDeletion = internalAction({
         )
         if (authoritativeGuard.status !== "confirmed_inactive") {
           return await ctx.runMutation(
-            blockAccountDeletionForBillingReference,
+            internal.deletion.internal.blockAccountDeletionForBilling,
             { ...args, code: "BILLING_PORTAL_REQUIRED" },
           )
         }
@@ -153,7 +157,7 @@ export const runAccountDeletion = internalAction({
 
       const providerVerifiedAt = Date.now()
       const started = (await ctx.runMutation(
-        beginAccountDeletionPurgeReference,
+        internal.deletion.internal.beginAccountDeletionPurge,
         { ...args, providerVerifiedAt },
       )) as {
         code?: string
@@ -167,7 +171,7 @@ export const runAccountDeletion = internalAction({
       if (started.state === "billing_blocked") {
         if (started.code === "BILLING_PORTAL_REQUIRED") {
           return await ctx.runMutation(
-            blockAccountDeletionForBillingReference,
+            internal.deletion.internal.blockAccountDeletionForBilling,
             { ...args, code: started.code },
           )
         }
@@ -191,7 +195,7 @@ export const runAccountDeletion = internalAction({
     if (phase === "purge") {
       for (let batch = 0; batch < MAX_PURGE_BATCHES_PER_ACTION; batch += 1) {
         const result = (await ctx.runMutation(
-          purgeAccountDeletionBatchReference,
+          internal.deletion.internal.purgeAccountDeletionBatch,
           args,
         )) as {
           phase?: "purge" | "verify_data"
@@ -206,13 +210,16 @@ export const runAccountDeletion = internalAction({
         }
       }
       if (phase === "purge") {
-        return await ctx.runMutation(continueAccountDeletionReference, args)
+        return await ctx.runMutation(
+          internal.deletion.internal.continueAccountDeletion,
+          args,
+        )
       }
     }
 
     if (phase === "verify_data") {
       const verified = (await ctx.runMutation(
-        verifyAccountDeletionDataReference,
+        internal.deletion.internal.verifyAccountDeletionData,
         args,
       )) as {
         state: "data_remaining" | "stale_lease" | "verified"
@@ -231,7 +238,7 @@ export const runAccountDeletion = internalAction({
 
     if (phase === "identity_delete") {
       const identityContext = await ctx.runQuery(
-        loadIdentityDeletionContextReference,
+        internal.deletion.internal.loadIdentityDeletionContext,
         args,
       )
       if (identityContext.state !== "ready") {
@@ -270,18 +277,24 @@ export const runAccountDeletion = internalAction({
           }
         }
         const now = Date.now()
-        return await ctx.runMutation(completeIdentityDeletionReference, {
-          ...args,
-          fenceExpiresAt: now + fenceMs,
-          now,
-        })
+        return await ctx.runMutation(
+          internal.deletion.internal.completeIdentityDeletion,
+          {
+            ...args,
+            fenceExpiresAt: now + fenceMs,
+            now,
+          },
+        )
       } catch (error) {
         return await fail(ctx, args, safeFailure(error))
       }
     }
 
     if (phase === "security_fence") {
-      return await ctx.runMutation(finalizeSecurityTombstoneReference, args)
+      return await ctx.runMutation(
+        internal.deletion.internal.finalizeSecurityTombstone,
+        args,
+      )
     }
 
     return { state: "completed" as const }

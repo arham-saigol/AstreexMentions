@@ -1,8 +1,7 @@
 import { v } from "convex/values"
 
 import { readEmailSenderConfiguration } from "../email/config"
-import { internalMutationReference } from "../lib/functionReferences"
-import { env, internalMutation } from "../server"
+import { env, internalMutation } from "../_generated/server"
 import { parseIngestionChunkJson } from "./contracts"
 import {
   applyIngestionChunkAtomically,
@@ -33,8 +32,3 @@ export const applyIngestionChunk = internalMutation({
     })
   },
 })
-
-export const applyIngestionChunkReference = internalMutationReference<
-  { inputJson: string },
-  ApplyIngestionChunkResult
->("ingestion/internal:applyIngestionChunk")

@@ -7,7 +7,7 @@ import {
 import {
   observeProviderCheckpoint,
   type ProviderSearchResult,
-} from "../integrations/providers"
+} from "../integrations/providers/types"
 import type { ValidatedProviderSearchResult } from "./contracts"
 
 function candidateFromProviderItem(

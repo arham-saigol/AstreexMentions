@@ -1,6 +1,7 @@
 "use client"
 
-import { Input, Label } from "@astreex/ui"
+import { Input } from "@astreex/ui/components/input"
+import { Label } from "@astreex/ui/components/label"
 import { useActionState } from "react"
 import { useFormStatus } from "react-dom"
 
