@@ -1192,7 +1192,7 @@ export function OnboardingFlow() {
       try {
         const value = await convex.query(
           api.billing.customer.getBillingOverview,
-          { now: Date.now() },
+          {},
         )
         if (!mounted) {
           return

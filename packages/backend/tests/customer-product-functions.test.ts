@@ -289,48 +289,43 @@ describe("customer user and workspace functions", () => {
   it("derives billing context without a client-supplied workspace id", async () => {
     const { customer } = await bootstrappedCustomer()
 
-    await expect(
-      customer.query(getBillingOverview, { now: Date.now() }),
-    ).resolves.toMatchObject({
-      providerState: expect.stringMatching(
-        /^(configured|provider_unconfigured)$/u,
-      ),
-      subscription: null,
-      usage: null,
-    })
+    await expect(customer.query(getBillingOverview, {})).resolves.toMatchObject(
+      {
+        providerState: expect.stringMatching(
+          /^(configured|provider_unconfigured)$/u,
+        ),
+        subscription: null,
+        usage: null,
+      },
+    )
   })
 
-  it("derives entitlement from the caller's refreshable time", async () => {
+  it("uses the server-materialized entitlement status", async () => {
     const { bootstrap, customer, t } = await bootstrappedCustomer()
     const now = Date.now()
     await t.run(async (ctx) => {
       await ctx.db.insert("subscriptions", {
         cancelAtPeriodEnd: false,
         createdAt: now,
-        currentPeriodEnd: now + 1_000,
-        currentPeriodStart: now - 1_000,
-        entitlementStatus: "active",
+        currentPeriodEnd: now - 1_000,
+        currentPeriodStart: now - 2_000,
+        entitlementStatus: "inactive",
         lastSyncedAt: now,
         planId: "starter",
         provider: "creem",
         providerCustomerId: "cust_refreshable_time",
         providerSubscriptionId: "sub_refreshable_time",
-        status: "active",
+        status: "expired",
         updatedAt: now,
         workspaceId: bootstrap.workspaceId as never,
       })
     })
 
-    await expect(
-      customer.query(getBillingOverview, { now }),
-    ).resolves.toMatchObject({
-      subscription: { entitlementStatus: "active" },
-    })
-    await expect(
-      customer.query(getBillingOverview, { now: now + 1_000 }),
-    ).resolves.toMatchObject({
-      subscription: { entitlementStatus: "inactive" },
-    })
+    await expect(customer.query(getBillingOverview, {})).resolves.toMatchObject(
+      {
+        subscription: { entitlementStatus: "inactive" },
+      },
+    )
   })
 
   it("stages portal-blocked deletion before scheduling the inactive job", async () => {

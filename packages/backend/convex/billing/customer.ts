@@ -14,10 +14,7 @@ import {
   readCreemCheckoutConfiguration,
   readCreemUpgradeConfiguration,
 } from "./config"
-import {
-  effectiveEntitlementStatus,
-  subscriptionStatusAllowsCheckout,
-} from "./lifecycle"
+import { subscriptionStatusAllowsCheckout } from "./lifecycle"
 
 const planIdValidator = v.union(
   v.literal("starter"),
@@ -141,12 +138,9 @@ const PLAN_RANK = {
 } as const
 
 export const getBillingOverview = customerQuery({
-  args: { now: v.number() },
+  args: {},
   returns: billingOverviewValidator,
-  handler: async (ctx, args) => {
-    if (!Number.isSafeInteger(args.now) || args.now < 0) {
-      billingError("INVALID_BILLING_INPUT", "Current time is invalid")
-    }
+  handler: async (ctx) => {
     const subscriptions = await ctx.db
       .query("subscriptions")
       .withIndex("by_workspace", (q) => q.eq("workspaceId", ctx.workspace.id))
@@ -176,15 +170,8 @@ export const getBillingOverview = customerQuery({
             cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
             currentPeriodEnd: subscription.currentPeriodEnd,
             currentPeriodStart: subscription.currentPeriodStart,
-            entitlementStatus: effectiveEntitlementStatus(
-              {
-                currentPeriodEnd: subscription.currentPeriodEnd as number,
-                entitlementStatus: subscription.entitlementStatus as
-                  "active" | "inactive",
-                status: subscription.status as string,
-              },
-              args.now,
-            ),
+            entitlementStatus: subscription.entitlementStatus as
+              "active" | "inactive",
             planId: subscription.planId,
             status: subscription.status,
           }

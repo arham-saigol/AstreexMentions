@@ -444,7 +444,7 @@ export declare const api: {
       getBillingOverview: FunctionReference<
         "query",
         "public",
-        { now: number },
+        {},
         {
           missing?: Array<string>;
           providerState: "configured" | "provider_unconfigured";

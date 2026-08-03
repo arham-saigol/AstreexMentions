@@ -10,7 +10,6 @@ import {
   decideProductAccess,
   type ProductAccess,
 } from "@/lib/product-access"
-import { useQueryClock } from "@/lib/use-query-clock"
 
 type ProductBootstrapState =
   | {
@@ -38,7 +37,6 @@ type BootstrapAttempt =
 export function useProductBootstrap(
   convexAuthenticated: boolean,
 ): ProductBootstrapState {
-  const now = useQueryClock()
   const bootstrapCurrentUser = useMutation(api.users.bootstrapCurrentUser)
   const [bootstrap, setBootstrap] = useState<BootstrapAttempt>({
     attempt: 0,
@@ -88,7 +86,7 @@ export function useProductBootstrap(
   )
   const billingOverviewValue = useQuery(
     api.billing.customer.getBillingOverview,
-    queryEnabled ? { now } : "skip",
+    queryEnabled ? {} : "skip",
   )
 
   const retry = useCallback(() => {
