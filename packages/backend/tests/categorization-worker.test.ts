@@ -509,7 +509,7 @@ describe("durable DeepSeek categorization worker", () => {
       ),
     ).toEqual([
       expect.objectContaining({
-        metric: `mentions_categorized:${String(seeded.categories[0]!.id)}`,
+        metric: "mentions_categorized:question",
         scope: "global",
         value: 1,
       }),
@@ -575,7 +575,9 @@ describe("durable DeepSeek categorization worker", () => {
       const state = await t.run(async (ctx) => ({
         jobs: await ctx.db.query("categorizationJobs").collect(),
         mentions: await ctx.db.query("mentions").collect(),
-        metrics: await ctx.db.query("providerMetricBuckets").collect(),
+        metrics: (await ctx.db.query("providerMetricBuckets").collect()).filter(
+          (metric) => metric.granularity === "hour",
+        ),
         runs: await ctx.db.query("providerRuns").collect(),
       }))
       expect(
@@ -631,7 +633,9 @@ describe("durable DeepSeek categorization worker", () => {
     })
     const state = await t.run(async (ctx) => ({
       jobs: await ctx.db.query("categorizationJobs").collect(),
-      metrics: await ctx.db.query("providerMetricBuckets").collect(),
+      metrics: (await ctx.db.query("providerMetricBuckets").collect()).filter(
+        (metric) => metric.granularity === "hour",
+      ),
       runs: await ctx.db.query("providerRuns").collect(),
     }))
     expect(fetchMock).not.toHaveBeenCalled()
@@ -688,7 +692,9 @@ describe("durable DeepSeek categorization worker", () => {
     const state = await t.run(async (ctx) => ({
       job: await ctx.db.get("categorizationJobs", seeded.jobIds[0]!),
       mention: await ctx.db.get("mentions", seeded.mentionIds[0]!),
-      metrics: await ctx.db.query("providerMetricBuckets").collect(),
+      metrics: (await ctx.db.query("providerMetricBuckets").collect()).filter(
+        (metric) => metric.granularity === "hour",
+      ),
       runs: await ctx.db.query("providerRuns").collect(),
     }))
     expect(state.job).toMatchObject({
@@ -755,7 +761,9 @@ describe("durable DeepSeek categorization worker", () => {
     })
     const blocked = await t.run(async (ctx) => ({
       job: await ctx.db.get("categorizationJobs", seeded.jobIds[0]!),
-      metrics: await ctx.db.query("providerMetricBuckets").collect(),
+      metrics: (await ctx.db.query("providerMetricBuckets").collect()).filter(
+        (metric) => metric.granularity === "hour",
+      ),
       runs: await ctx.db.query("providerRuns").collect(),
     }))
     expect(blocked.job).toMatchObject({
@@ -801,7 +809,9 @@ describe("durable DeepSeek categorization worker", () => {
     const state = await t.run(async (ctx) => ({
       jobs: await ctx.db.query("categorizationJobs").collect(),
       mentions: await ctx.db.query("mentions").collect(),
-      metrics: await ctx.db.query("providerMetricBuckets").collect(),
+      metrics: (await ctx.db.query("providerMetricBuckets").collect()).filter(
+        (metric) => metric.granularity === "hour",
+      ),
       runs: await ctx.db.query("providerRuns").collect(),
       usage: await ctx.db.get("usageCycles", seeded.usageCycleId),
     }))

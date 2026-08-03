@@ -200,7 +200,7 @@ export const customerConvex = {
     >("workspaces:getAccountDeletionStatus"),
   },
   billing: {
-    getOverview: convexQueryReference<Record<string, never>, unknown>(
+    getOverview: convexQueryReference<{ now: number }, unknown>(
       "billing/customer:getBillingOverview",
     ),
     createCheckout: convexActionReference<
@@ -245,6 +245,7 @@ export const customerConvex = {
         cursor?: string
         filters?: MentionFilters
         limit?: number
+        now: number
         query?: string
         sort?: MentionSort
       },

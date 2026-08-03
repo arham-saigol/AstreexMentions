@@ -64,6 +64,7 @@ import {
   type MentionStatus,
   type SavedView,
 } from "@/lib/mentions"
+import { useQueryClock } from "@/lib/use-query-clock"
 
 const PAGE_SIZE = 12
 
@@ -299,6 +300,7 @@ export function MentionsScreen() {
     Record<string, boolean>
   >({})
   const [actionErrors, setActionErrors] = useState<Record<string, string>>({})
+  const queryNow = useQueryClock()
 
   const resetPagination = () => {
     setCursor(undefined)
@@ -306,14 +308,16 @@ export function MentionsScreen() {
   }
 
   const queryArguments = useMemo(
-    () =>
-      mentionsQueryArguments({
+    () => ({
+      ...mentionsQueryArguments({
         cursor,
         filters,
         query: deferredSearch,
         sort,
       }),
-    [cursor, deferredSearch, filters, sort],
+      now: queryNow,
+    }),
+    [cursor, deferredSearch, filters, queryNow, sort],
   )
 
   const categoriesValue = useQuery(

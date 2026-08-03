@@ -12,6 +12,7 @@ import {
   type CurrentWorkspaceResult,
 } from "@/lib/customer-convex"
 import { decideProductAccess, type ProductAccess } from "@/lib/product-access"
+import { useQueryClock } from "@/lib/use-query-clock"
 
 type ProductBootstrapState =
   | {
@@ -46,6 +47,7 @@ export function useProductBootstrap(
     attempt: 0,
     state: "loading",
   })
+  const queryNow = useQueryClock()
 
   useEffect(() => {
     if (!convexAuthenticated || bootstrap.state !== "loading") {
@@ -101,7 +103,7 @@ export function useProductBootstrap(
   )
   const billingOverviewValue = useQuery(
     customerConvex.billing.getOverview,
-    queryEnabled ? {} : "skip",
+    queryEnabled ? { now: queryNow } : "skip",
   )
 
   const retry = useCallback(() => {

@@ -7,14 +7,19 @@ import {
   type CategorizationCategory,
   type CategorizationMention,
 } from "../lib/deepseekCategorization"
+import { isCategorySystemKey } from "../lib/categories"
 import {
   internalActionReference,
   internalMutationReference,
   internalQueryReference,
 } from "../lib/functionReferences"
 import { indexAtMost } from "../lib/jobRuntime"
-import { incrementHourlySystemMetric } from "../lib/systemMetricBuckets"
-import { categorizedMentionMetric } from "../ingestion/model"
+import { recordProviderMetricBuckets } from "../lib/providerMetricBuckets"
+import { incrementDailySystemMetric } from "../lib/systemMetricBuckets"
+import {
+  categorizedMentionMetric,
+  type CategorizedMentionGroup,
+} from "../ingestion/model"
 import {
   indexEquals,
   internalMutation,
@@ -40,14 +45,12 @@ const MAX_DUE_SCAN = 256
 const MAX_BATCHES_PER_DISPATCH = 4
 const MAX_WORKSPACES_PER_DISPATCH = 16
 const BLOCKED_CONFIGURATION_RETRY_MS = 5 * 60_000
-const HOUR_MS = 3_600_000
 const DEEPSEEK_CATEGORIZATION_OPERATION = "chat.completions"
 
 type GenericRow = Record<string, unknown> & { _id: GenericId<string> }
 type CategorizationJobId = GenericId<"categorizationJobs">
 type CategoryId = GenericId<"categories">
 type MentionId = GenericId<"mentions">
-type ProviderMetricBucketId = GenericId<"providerMetricBuckets">
 type ProviderRunId = GenericId<"providerRuns">
 type WorkspaceId = GenericId<"workspaces">
 
@@ -65,6 +68,7 @@ type LeasedBatch = {
 type EnabledCategorySnapshot = {
   categories: CategorizationCategory[]
   json: string
+  metricGroupByCategoryId: ReadonlyMap<string, CategorizedMentionGroup>
 }
 
 export type CategorizationBatchExecutionContext =
@@ -141,64 +145,25 @@ async function recordProviderMetric(
   },
   now: number,
 ): Promise<void> {
-  const bucketStartAt = Math.floor(now / HOUR_MS) * HOUR_MS
-  const bucketEndAt = bucketStartAt + HOUR_MS
-  const bucket = (await ctx.db
-    .query("providerMetricBuckets")
-    .withIndex("by_provider_operation_granularity_and_bucket", (q) =>
-      indexEquals(
-        q,
-        ["provider", "deepseek"],
-        ["operation", DEEPSEEK_CATEGORIZATION_OPERATION],
-        ["granularity", "hour"],
-        ["bucketStartAt", bucketStartAt],
-      ),
-    )
-    .unique()) as GenericRow | null
-  const durationMs = Math.max(0, Math.round(input.durationMs))
   const failureIncrement = input.status === "failed" ? 1 : 0
   const successIncrement = input.status === "succeeded" ? 1 : 0
   const retryIncrement = input.retry ? 1 : 0
   const rateLimitedIncrement = rateLimited(input.errorCode)
-
-  if (bucket) {
-    await ctx.db.patch(
-      "providerMetricBuckets",
-      bucket._id as ProviderMetricBucketId,
-      {
-        failureCount: (bucket.failureCount as number) + failureIncrement,
-        inputItemCount: (bucket.inputItemCount as number) + input.inputCount,
-        latencyMaxMs: Math.max(bucket.latencyMaxMs as number, durationMs),
-        latencyTotalMs: (bucket.latencyTotalMs as number) + durationMs,
-        outputItemCount: (bucket.outputItemCount as number) + input.outputCount,
-        rateLimitedCount:
-          (bucket.rateLimitedCount as number) + rateLimitedIncrement,
-        requestCount: (bucket.requestCount as number) + 1,
-        retryCount: (bucket.retryCount as number) + retryIncrement,
-        successCount: (bucket.successCount as number) + successIncrement,
-        updatedAt: now,
-      },
-    )
-    return
-  }
-
-  await ctx.db.insert("providerMetricBuckets", {
-    bucketEndAt,
-    bucketStartAt,
-    failureCount: failureIncrement,
-    granularity: "hour",
-    inputItemCount: input.inputCount,
-    latencyMaxMs: durationMs,
-    latencyTotalMs: durationMs,
-    operation: DEEPSEEK_CATEGORIZATION_OPERATION,
-    outputItemCount: input.outputCount,
-    provider: "deepseek",
-    rateLimitedCount: rateLimitedIncrement,
-    requestCount: 1,
-    retryCount: retryIncrement,
-    successCount: successIncrement,
-    updatedAt: now,
-  })
+  await recordProviderMetricBuckets(
+    ctx,
+    {
+      durationMs: input.durationMs,
+      failureCount: failureIncrement,
+      inputItemCount: input.inputCount,
+      operation: DEEPSEEK_CATEGORIZATION_OPERATION,
+      outputItemCount: input.outputCount,
+      provider: "deepseek",
+      rateLimitedCount: rateLimitedIncrement,
+      retryCount: retryIncrement,
+      successCount: successIncrement,
+    },
+    now,
+  )
 }
 
 async function finishProviderRun(
@@ -434,7 +399,16 @@ async function enabledCategorySnapshot(
   try {
     const json = categorySnapshotJson(categories)
     const parsed = parseCategorySnapshotJson(json)
-    return { categories: parsed.categories, json }
+    return {
+      categories: parsed.categories,
+      json,
+      metricGroupByCategoryId: new Map(
+        rows.map((row) => [
+          String(row._id),
+          isCategorySystemKey(row.systemKey) ? row.systemKey : "custom",
+        ]),
+      ),
+    }
   } catch {
     return null
   }
@@ -941,7 +915,10 @@ export const applyCategorizationBatch = internalMutation({
       const categoryId = result
         ? categoryIdByString.get(result.categoryId)
         : undefined
-      if (!result || !categoryId) {
+      const metricGroup = result
+        ? currentSnapshot.metricGroupByCategoryId.get(result.categoryId)
+        : undefined
+      if (!result || !categoryId || !metricGroup) {
         throw new TypeError("Categorization result cannot be applied")
       }
       const mention = (await ctx.db.get(
@@ -971,9 +948,9 @@ export const applyCategorizationBatch = internalMutation({
         status: "completed",
         updatedAt: now,
       })
-      await incrementHourlySystemMetric(ctx, {
+      await incrementDailySystemMetric(ctx, {
         bucketAt: mention.firstSeenAt as number,
-        metric: categorizedMentionMetric(String(categoryId)),
+        metric: categorizedMentionMetric(metricGroup),
         scope: "global",
         updatedAt: now,
         workspaceId: batch.workspaceId,

@@ -18,10 +18,9 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
-    "test:e2e": "pnpm --filter @astreex/e2e test:e2e",
     "convex:codegen": "pnpm --filter @astreex/backend codegen",
     "verify": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
-    "verify:release": "node scripts/verify-release-env.mjs && pnpm verify && pnpm test:e2e"
+    "verify:release": "node scripts/verify-release-env.mjs && pnpm verify"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",

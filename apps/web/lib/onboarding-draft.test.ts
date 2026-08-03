@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 
 import {
   canReuseOnboardingCheckout,
+  clearOnboardingDraftStorage,
   CHECKOUT_INTENT_TTL_MS,
   createOnboardingDraft,
   isCompletedOnboardingCheckout,
@@ -21,6 +22,22 @@ function keyword(index: number) {
 }
 
 describe("onboarding draft", () => {
+  it("clears the workspace-specific draft without blocking on storage errors", () => {
+    const removeItem = vi.fn()
+    clearOnboardingDraftStorage({ removeItem }, "workspace_1")
+    expect(removeItem).toHaveBeenCalledWith("astreex:onboarding:workspace_1:v1")
+
+    expect(() =>
+      clearOnboardingDraftStorage(
+        {
+          removeItem: () => {
+            throw new Error("storage unavailable")
+          },
+        },
+        "workspace_1",
+      ),
+    ).not.toThrow()
+  })
   it("normalizes phrases for duplicate checks", () => {
     expect(normalizeKeywordPhrase("  Astreex   Monitor ")).toBe(
       "astreex monitor",

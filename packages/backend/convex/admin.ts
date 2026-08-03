@@ -14,7 +14,8 @@ import {
 } from "./deletion/model"
 import { restoreDeletionFenceState } from "./deletion/recovery"
 import {
-  CATEGORIZED_MENTION_METRIC_PREFIX,
+  CATEGORIZED_MENTION_GROUPS,
+  categorizedMentionMetric,
   ingestedMentionPlatformMetric,
 } from "./ingestion/model"
 import { adminMutation, adminQuery } from "./lib/authorization"
@@ -24,10 +25,15 @@ import {
   USAGE_PAUSED_WORKSPACE_METRIC,
   WORKSPACE_COUNT_METRIC,
 } from "./lib/operationalMetrics"
+import {
+  METRIC_PROVIDERS,
+  PROVIDER_DAILY_ROLLUP_OPERATION,
+} from "./lib/providerMetricBuckets"
 import { SYSTEM_METRIC_GAUGE_BUCKET_START_AT } from "./lib/systemMetricBuckets"
 import {
   indexEquals,
   indexGreaterThanOrEqual,
+  indexLessThan,
   type MutationCtx,
   type QueryCtx,
 } from "./server"
@@ -37,6 +43,18 @@ const MAX_TIMESTAMP = 8_640_000_000_000_000
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const MENTION_METRIC = "mentions_ingested"
 const DELIVERY_METRIC_PREFIX = "email_delivery_"
+const DELIVERY_STATUSES = [
+  "scheduled",
+  "sent",
+  "delivery_delayed",
+  "delivered",
+  "opened",
+  "clicked",
+  "complained",
+  "bounced",
+  "failed",
+  "suppressed",
+] as const
 const MAX_ACTIVE_WORKSPACE_COUNT = 10_000
 const MAX_FEATURE_REQUEST_SEARCH_RESULTS = 500
 const FEATURE_REQUEST_SEARCH_CURSOR_PREFIX = "fr2:"
@@ -767,6 +785,7 @@ export const getMetricsOverview = adminQuery({
   handler: async (ctx, args) => {
     const endAt = Date.now()
     const todayStartAt = startOfUtcDay(endAt)
+    const tomorrowStartAt = todayStartAt + DAY_MS
     const startAt = todayStartAt - (args.days - 1) * DAY_MS
     const last30DaysStartAt = todayStartAt - 29 * DAY_MS
     const metricReadStartAt = Math.min(startAt, last30DaysStartAt)
@@ -778,6 +797,18 @@ export const getMetricsOverview = adminQuery({
         subscriptionCountMetric(planId, true),
       ]),
     ]
+    const systemMetricNames = [
+      MENTION_METRIC,
+      ...(["x", "reddit", "hacker_news"] as const).map((platform) =>
+        ingestedMentionPlatformMetric(platform),
+      ),
+      ...DELIVERY_STATUSES.map(
+        (status) => `${DELIVERY_METRIC_PREFIX}${status}`,
+      ),
+      ...CATEGORIZED_MENTION_GROUPS.map(({ key }) =>
+        categorizedMentionMetric(key),
+      ),
+    ]
 
     const [
       providerRows,
@@ -786,26 +817,57 @@ export const getMetricsOverview = adminQuery({
       operationalGaugeRows,
       activeWorkspaceRows,
     ] = (await Promise.all([
-      ctx.db
-        .query("providerMetricBuckets")
-        .withIndex("by_granularity_and_bucket", (q) =>
-          indexGreaterThanOrEqual(
-            q.eq("granularity", "hour"),
-            "bucketStartAt",
-            startAt,
-          ),
-        )
-        .collect(),
-      ctx.db
-        .query("systemMetricBuckets")
-        .withIndex("by_scope_granularity_and_bucket", (q) =>
-          indexGreaterThanOrEqual(
-            indexEquals(q, ["scope", "global"], ["granularity", "hour"]),
-            "bucketStartAt",
-            metricReadStartAt,
-          ),
-        )
-        .collect(),
+      Promise.all(
+        METRIC_PROVIDERS.map(
+          async (provider) =>
+            await ctx.db
+              .query("providerMetricBuckets")
+              .withIndex("by_provider_operation_granularity_and_bucket", (q) =>
+                indexLessThan(
+                  indexGreaterThanOrEqual(
+                    indexEquals(
+                      q,
+                      ["provider", provider],
+                      ["operation", PROVIDER_DAILY_ROLLUP_OPERATION],
+                      ["granularity", "day"],
+                    ),
+                    "bucketStartAt",
+                    startAt,
+                  ),
+                  "bucketStartAt",
+                  tomorrowStartAt,
+                ),
+              )
+              .collect(),
+        ),
+      ).then((rows) => rows.flat()),
+      Promise.all(
+        systemMetricNames.map(
+          async (metric) =>
+            await ctx.db
+              .query("systemMetricBuckets")
+              .withIndex(
+                "by_metric_scope_workspace_granularity_and_bucket",
+                (q) =>
+                  indexLessThan(
+                    indexGreaterThanOrEqual(
+                      indexEquals(
+                        q,
+                        ["metric", metric],
+                        ["scope", "global"],
+                        ["workspaceId", undefined],
+                        ["granularity", "day"],
+                      ),
+                      "bucketStartAt",
+                      metricReadStartAt,
+                    ),
+                    "bucketStartAt",
+                    tomorrowStartAt,
+                  ),
+              )
+              .collect(),
+        ),
+      ).then((rows) => rows.flat()),
       Promise.all(
         CATEGORIZATION_JOB_STATUSES.map(
           async (status) =>
@@ -861,51 +923,18 @@ export const getMetricsOverview = adminQuery({
     const relevantSystemRows = systemRows.filter(
       (row) => (row.bucketStartAt as number) >= metricReadStartAt,
     )
-    const categoryIds = new Set<string>()
-    for (const row of relevantSystemRows) {
-      if (
-        row.scope === "global" &&
-        typeof row.metric === "string" &&
-        row.metric.startsWith(CATEGORIZED_MENTION_METRIC_PREFIX) &&
-        (row.bucketStartAt as number) >= startAt
-      ) {
-        categoryIds.add(
-          row.metric.slice(CATEGORIZED_MENTION_METRIC_PREFIX.length),
-        )
-      }
-    }
-    const categories = await Promise.all(
-      [...categoryIds].map(
-        async (categoryId) =>
-          (await ctx.db.get(
-            "categories",
-            categoryId as GenericId<"categories">,
-          )) as GenericRow | null,
-      ),
-    )
-    const categoryNames = new Map(
-      categories
-        .filter((category): category is GenericRow => category !== null)
-        .map((category) => [String(category._id), category.name as string]),
-    )
     const categoryCounts = new Map<string, number>()
     let categorizedMentions = 0
-    for (const row of relevantSystemRows) {
-      if (
-        row.scope !== "global" ||
-        typeof row.metric !== "string" ||
-        !row.metric.startsWith(CATEGORIZED_MENTION_METRIC_PREFIX) ||
-        (row.bucketStartAt as number) < startAt
-      ) {
-        continue
-      }
-      const categoryId = row.metric.slice(
-        CATEGORIZED_MENTION_METRIC_PREFIX.length,
+    for (const { key, label } of CATEGORIZED_MENTION_GROUPS) {
+      const count = sumMetric(
+        relevantSystemRows,
+        categorizedMentionMetric(key),
+        startAt,
       )
-      const category = categoryNames.get(categoryId) ?? "Unavailable category"
-      const count = metricAmount(row)
       categorizedMentions += count
-      categoryCounts.set(category, (categoryCounts.get(category) ?? 0) + count)
+      if (count > 0) {
+        categoryCounts.set(label, count)
+      }
     }
     const uncategorizedMentions = Math.max(
       0,

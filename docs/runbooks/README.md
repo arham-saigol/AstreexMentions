@@ -9,7 +9,7 @@ These runbooks describe the current implementation. They do not assert that cred
 3. Prefer a reversible configuration or deployment rollback over direct table edits.
 4. Do not clear leases, checkpoints, idempotency keys, warning timestamps, or provider event IDs by hand as a first response.
 5. Record the time window, affected workspace/source IDs, provider request/event/message IDs, actions taken, and verification result.
-6. A successful local build, fixture test, or Playwright run is not evidence that a provider account or credential works.
+6. A successful local build or fixture test is not evidence that a provider account or credential works.
 
 ## What the admin metrics page actually shows
 

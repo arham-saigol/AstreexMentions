@@ -39,6 +39,7 @@ import { useMemo, useState, type FormEvent } from "react"
 import { useProductContext } from "@/components/product/product-context"
 import { useBillingActions } from "@/components/product/settings/use-billing-actions"
 import { customerConvex } from "@/lib/customer-convex"
+import { clearOnboardingDraftStorage } from "@/lib/onboarding-draft"
 import {
   accountDeletionReadinessSchema,
   accountDeletionResponseSchema,
@@ -122,7 +123,7 @@ function FieldStatus({
 
 function AccountDeletion() {
   const { signOut } = useClerk()
-  const { billing } = useProductContext()
+  const { billing, workspace } = useProductContext()
   const { error: portalError, openPortal, pending } = useBillingActions()
   const readinessValue = useQuery(
     customerConvex.workspaces.getAccountDeletionReadiness,
@@ -181,6 +182,7 @@ function AccountDeletion() {
         (parsed.data.state === "accepted" ||
           parsed.data.state === "in_progress")
       ) {
+        clearOnboardingDraftStorage(window.localStorage, workspace.workspace.id)
         await signOut({ redirectUrl: "/" })
         return
       }

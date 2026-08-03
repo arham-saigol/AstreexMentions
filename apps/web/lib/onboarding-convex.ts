@@ -221,7 +221,7 @@ export const onboardingConvex = {
       },
       unknown
     >("billing/customer:createCheckout"),
-    getOverview: convexQueryReference<Record<string, never>, unknown>(
+    getOverview: convexQueryReference<{ now: number }, unknown>(
       "billing/customer:getBillingOverview",
     ),
   },

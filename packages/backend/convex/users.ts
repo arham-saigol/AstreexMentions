@@ -53,7 +53,9 @@ function asBootstrapUser(
     clerkUserId: user.clerkUserId as string,
     deletedAt: user.deletedAt as number | undefined,
     disabledAt: user.disabledAt as number | undefined,
+    email: user.email as string | undefined,
     id: user._id as UserId,
+    imageUrl: user.imageUrl as string | undefined,
     personalWorkspaceId: user.personalWorkspaceId as WorkspaceId | undefined,
     tokenIdentifier: user.tokenIdentifier as string,
   }

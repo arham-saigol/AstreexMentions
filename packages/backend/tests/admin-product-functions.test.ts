@@ -46,10 +46,14 @@ const schema = defineSchema({
     }),
   mentions: defineTable(v.any()),
   keywords: defineTable(v.any()),
-  providerMetricBuckets: defineTable(v.any()).index(
-    "by_granularity_and_bucket",
-    ["granularity", "bucketStartAt"],
-  ),
+  providerMetricBuckets: defineTable(v.any())
+    .index("by_granularity_and_bucket", ["granularity", "bucketStartAt"])
+    .index("by_provider_operation_granularity_and_bucket", [
+      "provider",
+      "operation",
+      "granularity",
+      "bucketStartAt",
+    ]),
   subscriptions: defineTable(v.any()).index("by_workspace_and_last_synced_at", [
     "workspaceId",
     "lastSyncedAt",
@@ -593,7 +597,7 @@ describe("admin metrics", () => {
   it("aggregates provider, product, billing, usage, and delivery metrics", async () => {
     const { admin, bootstrap, t } = await setup()
     const now = Date.now()
-    const hour = Math.floor(now / 3_600_000) * 3_600_000
+    const day = Math.floor(now / 86_400_000) * 86_400_000
     const categories = await t.run(
       async (ctx) => await ctx.db.query("categories").collect(),
     )
@@ -601,14 +605,14 @@ describe("admin metrics", () => {
 
     await t.run(async (ctx) => {
       await ctx.db.insert("providerMetricBuckets", {
-        bucketEndAt: hour + 3_600_000,
-        bucketStartAt: hour,
+        bucketEndAt: day + 86_400_000,
+        bucketStartAt: day,
         failureCount: 1,
-        granularity: "hour",
+        granularity: "day",
         inputItemCount: 4,
         latencyMaxMs: 250,
         latencyTotalMs: 400,
-        operation: "search",
+        operation: "daily_rollup",
         outputItemCount: 3,
         provider: "x",
         rateLimitedCount: 1,
@@ -634,7 +638,7 @@ describe("admin metrics", () => {
           value: 1,
         },
         {
-          metric: `mentions_categorized:${String(categoryId)}`,
+          metric: "mentions_categorized:question",
           scope: "global",
           value: 1,
         },
@@ -645,10 +649,10 @@ describe("admin metrics", () => {
         },
       ]) {
         await ctx.db.insert("systemMetricBuckets", {
-          bucketEndAt: hour + 3_600_000,
-          bucketStartAt: hour,
+          bucketEndAt: day + 86_400_000,
+          bucketStartAt: day,
           count: metric.value,
-          granularity: "hour",
+          granularity: "day",
           maximum: metric.value,
           metric: metric.metric,
           minimum: metric.value,
@@ -761,7 +765,7 @@ describe("admin metrics", () => {
     ])
     expect(result.categoryBreakdown).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ count: 1 }),
+        { category: "Question", count: 1 },
         { category: "Uncategorized", count: 4 },
       ]),
     )

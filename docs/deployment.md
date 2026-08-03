@@ -450,7 +450,7 @@ pnpm verify
 
 ### Release-environment gate
 
-`pnpm verify:release` first runs `scripts/verify-release-env.mjs`, then `pnpm verify`, then Playwright. The script reads the current process environment; it does not automatically load `.env.example`.
+`pnpm verify:release` first runs `scripts/verify-release-env.mjs`, then `pnpm verify`. The script reads the current process environment; it does not automatically load `.env.example`.
 
 The current validator requires these non-blank names:
 
@@ -496,16 +496,6 @@ It does **not** verify:
 - that a webhook can reach Convex or that its signature secret matches;
 - that Resend's domain is verified;
 - that provider quotas or DeepSeek model access are available.
-
-`CLERK_TEST_USER_EMAIL` and `CLERK_TEST_USER_PASSWORD` are consumed by connected Playwright tests when the complete Clerk/Convex environment is present, but setting them does not test payments or providers.
-
-### Playwright
-
-```sh
-pnpm test:e2e
-```
-
-By default Playwright starts both local applications. Customer tests use `PLAYWRIGHT_WEB_URL` or `http://localhost:3000`; admin tests use `PLAYWRIGHT_ADMIN_URL` or `http://localhost:3001`. Set `PLAYWRIGHT_SKIP_WEBSERVER` when deliberately testing already-running/deployed targets. Browser tests only prove the flows they explicitly exercise; they must not be treated as payment/provider verification unless they use approved credentials and assert the resulting server-side state.
 
 ## 11. Required credential-backed smoke tests
 

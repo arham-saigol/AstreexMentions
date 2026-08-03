@@ -16,7 +16,9 @@ export type BootstrapUser<UserId extends string, WorkspaceId extends string> = {
   clerkUserId: string
   deletedAt?: number | undefined
   disabledAt?: number | undefined
+  email?: string | undefined
   id: UserId
+  imageUrl?: string | undefined
   personalWorkspaceId?: WorkspaceId | undefined
   tokenIdentifier: string
 }
@@ -253,13 +255,22 @@ export async function bootstrapPersonalWorkspace<
       now,
     )
 
-    await store.patchUser(existingUser.id, {
-      ...recurringProfilePatch(identity),
-      clerkUserId: identity.subject,
-      personalWorkspaceId: workspaceId,
-      tokenIdentifier: identity.tokenIdentifier,
-      updatedAt: now,
-    })
+    const profilePatch = recurringProfilePatch(identity)
+    if (
+      existingUser.clerkUserId !== identity.subject ||
+      existingUser.email !== profilePatch.email ||
+      existingUser.imageUrl !== profilePatch.imageUrl ||
+      existingUser.personalWorkspaceId !== workspaceId ||
+      existingUser.tokenIdentifier !== identity.tokenIdentifier
+    ) {
+      await store.patchUser(existingUser.id, {
+        ...profilePatch,
+        clerkUserId: identity.subject,
+        personalWorkspaceId: workspaceId,
+        tokenIdentifier: identity.tokenIdentifier,
+        updatedAt: now,
+      })
+    }
 
     return { created: false, userId: existingUser.id, workspaceId }
   }

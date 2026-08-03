@@ -51,6 +51,7 @@ import { useProductContext } from "@/components/product/product-context"
 import { billingOverviewResultSchema } from "@/lib/customer-convex"
 import {
   canReuseOnboardingCheckout,
+  clearOnboardingDraftStorage,
   createOnboardingDraft,
   draftStorageKey,
   isCompletedOnboardingCheckout,
@@ -196,11 +197,10 @@ function readDraftFromStorage(key: string): OnboardingDraft | null {
       return null
     }
     const checkout = parsed.data.checkout
-    if (
-      checkout &&
-      !isCompletedOnboardingCheckout(checkout) &&
-      !canReuseOnboardingCheckout(checkout, Date.now())
-    ) {
+    if (checkout && isCompletedOnboardingCheckout(checkout)) {
+      return { ...parsed.data, checkout: undefined }
+    }
+    if (checkout && !canReuseOnboardingCheckout(checkout, Date.now())) {
       return { ...parsed.data, checkout: undefined }
     }
     return parsed.data
@@ -1182,9 +1182,10 @@ export function OnboardingFlow() {
 
   useEffect(() => {
     if (billing.subscription?.entitlementStatus === "active") {
+      clearOnboardingDraftStorage(window.localStorage, workspace.workspace.id)
       router.replace("/app/mentions")
     }
-  }, [billing.subscription?.entitlementStatus, router])
+  }, [billing.subscription?.entitlementStatus, router, workspace.workspace.id])
 
   useEffect(() => {
     if (
@@ -1203,10 +1204,9 @@ export function OnboardingFlow() {
       }
       checking = true
       try {
-        const value = await convex.query(
-          onboardingConvex.billing.getOverview,
-          {},
-        )
+        const value = await convex.query(onboardingConvex.billing.getOverview, {
+          now: Date.now(),
+        })
         const parsed = billingOverviewResultSchema.safeParse(value)
         if (!mounted) {
           return

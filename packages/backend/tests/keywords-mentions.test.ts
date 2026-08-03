@@ -149,6 +149,7 @@ const listMentionsReference = makeFunctionReference<
       publishedBefore?: number
     }
     limit?: number
+    now: number
     query?: string
     sort?: "newest" | "oldest" | "most_engaged"
   },
@@ -881,6 +882,7 @@ describe("mention Convex functions", () => {
       await customer.client.query(listMentionsReference, {
         filters: { keywordIds: [seeded.keywordId] },
         limit: 1,
+        now: Date.now(),
         query: "astreex",
         sort: "most_engaged",
       }),
@@ -906,6 +908,7 @@ describe("mention Convex functions", () => {
         cursor: firstPage.nextCursor ?? undefined,
         filters: { keywordIds: [seeded.keywordId] },
         limit: 1,
+        now: Date.now(),
         query: "astreex",
         sort: "most_engaged",
       }),
@@ -920,6 +923,7 @@ describe("mention Convex functions", () => {
           mentionStatuses: ["new"],
           platforms: ["x"],
         },
+        now: Date.now(),
         sort: "oldest",
       }),
     )
@@ -959,6 +963,7 @@ describe("mention Convex functions", () => {
     const page = mentionPage(
       await customer.client.query(listMentionsReference, {
         limit: 1,
+        now,
         query: "fresh mention",
         sort: "newest",
       }),
@@ -999,6 +1004,7 @@ describe("mention Convex functions", () => {
     const page = mentionPage(
       await customer.client.query(listMentionsReference, {
         limit: 2,
+        now,
         sort: "most_engaged",
       }),
     )
@@ -1019,6 +1025,7 @@ describe("mention Convex functions", () => {
     const page = mentionPage(
       await firstCustomer.client.query(listMentionsReference, {
         limit: 1,
+        now: Date.now(),
         sort: "newest",
       }),
     )
@@ -1028,6 +1035,7 @@ describe("mention Convex functions", () => {
       secondCustomer.client.query(listMentionsReference, {
         cursor: page.nextCursor ?? undefined,
         limit: 1,
+        now: Date.now(),
         sort: "newest",
       }),
     ).rejects.toMatchObject({ data: { code: "INVALID_CURSOR" } })

@@ -372,6 +372,6 @@ describe("Convex digest and email boundaries", () => {
     expect(httpSource).toContain('request.headers.get("svix-signature")')
     expect(httpSource).toContain("createResendWebhookVerifier")
     expect(internalSource).toContain('"by_provider_event"')
-    expect(internalSource).toContain("incrementDeliveryMetric")
+    expect(internalSource).toContain("incrementDailySystemMetric")
   })
 })

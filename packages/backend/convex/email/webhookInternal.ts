@@ -6,17 +6,16 @@ import {
   type VerifiedResendEmailEvent,
 } from "../lib/resendWebhook"
 import { internalMutationReference } from "../lib/functionReferences"
+import { incrementDailySystemMetric } from "../lib/systemMetricBuckets"
 import { indexEquals, internalMutation, type MutationCtx } from "../server"
 import { outboxFromRow } from "./internal"
 
 const WEBHOOK_RETRY_DELAY_MS = 30_000
 const MAX_WEBHOOK_MATCH_ATTEMPTS = 8
-const HOUR_MS = 3_600_000
 
 type GenericRow = Record<string, unknown> & { _id: GenericId<string> }
 type EmailOutboxId = GenericId<"emailOutbox">
 type EmailWebhookEventId = GenericId<"emailWebhookEvents">
-type SystemMetricBucketId = GenericId<"systemMetricBuckets">
 type WorkspaceId = GenericId<"workspaces">
 
 const resendEmailEventTypeValidator = v.union(
@@ -41,67 +40,6 @@ function eventFromArguments(args: {
   return args
 }
 
-async function incrementDeliveryMetric(
-  ctx: MutationCtx,
-  input: {
-    status: string
-    workspaceId: WorkspaceId
-  },
-  now: number,
-): Promise<void> {
-  const bucketStartAt = Math.floor(now / HOUR_MS) * HOUR_MS
-  const bucketEndAt = bucketStartAt + HOUR_MS
-  const metric = `email_delivery_${input.status}`
-
-  for (const scope of ["global", "workspace"] as const) {
-    const workspaceId = scope === "workspace" ? input.workspaceId : undefined
-    const bucket = (await ctx.db
-      .query("systemMetricBuckets")
-      .withIndex("by_metric_scope_workspace_granularity_and_bucket", (q) =>
-        indexEquals(
-          q,
-          ["metric", metric],
-          ["scope", scope],
-          ["workspaceId", workspaceId],
-          ["granularity", "hour"],
-          ["bucketStartAt", bucketStartAt],
-        ),
-      )
-      .unique()) as GenericRow | null
-
-    if (bucket) {
-      await ctx.db.patch(
-        "systemMetricBuckets",
-        bucket._id as SystemMetricBucketId,
-        {
-          count: (bucket.count as number) + 1,
-          maximum: 1,
-          minimum: 1,
-          sum: (bucket.sum as number) + 1,
-          updatedAt: now,
-          value: (bucket.value as number) + 1,
-        },
-      )
-      continue
-    }
-
-    await ctx.db.insert("systemMetricBuckets", {
-      bucketEndAt,
-      bucketStartAt,
-      count: 1,
-      granularity: "hour",
-      maximum: 1,
-      metric,
-      minimum: 1,
-      scope,
-      sum: 1,
-      updatedAt: now,
-      value: 1,
-      ...(workspaceId === undefined ? {} : { workspaceId }),
-    })
-  }
-}
-
 async function applyEventToOutbox(
   ctx: MutationCtx,
   eventRowId: EmailWebhookEventId,
@@ -122,14 +60,12 @@ async function applyEventToOutbox(
       lastProviderEventId: application.outbox.lastProviderEventId,
       updatedAt: application.outbox.updatedAt,
     })
-    await incrementDeliveryMetric(
-      ctx,
-      {
-        status: application.outbox.deliveryStatus,
-        workspaceId: outboxRow.workspaceId as WorkspaceId,
-      },
-      now,
-    )
+    await incrementDailySystemMetric(ctx, {
+      bucketAt: now,
+      metric: `email_delivery_${application.outbox.deliveryStatus}`,
+      updatedAt: now,
+      workspaceId: outboxRow.workspaceId as WorkspaceId,
+    })
   }
   await ctx.db.patch("emailWebhookEvents", eventRowId, {
     nextAttemptAt: undefined,

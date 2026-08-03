@@ -13,7 +13,7 @@ import { syncUsagePausedWorkspaceMetric } from "../lib/operationalMetrics"
 import { createPendingEmail, emailPayloadFingerprint } from "../lib/emailOutbox"
 import { indexEquals, type MutationCtx } from "../server"
 import { finalizeInvalidatedTrackingProviderRun } from "../scheduling/providerRuns"
-import { incrementHourlySystemMetric } from "../lib/systemMetricBuckets"
+import { incrementDailySystemMetric } from "../lib/systemMetricBuckets"
 import type { IngestionCandidate, IngestionChunk } from "./contracts"
 import {
   buildUsageWarningEmail,
@@ -348,13 +348,13 @@ async function incrementIngestedMentionMetric(
   platform: IngestionCandidate["platform"],
   now: number,
 ): Promise<void> {
-  await incrementHourlySystemMetric(ctx, {
+  await incrementDailySystemMetric(ctx, {
     bucketAt: now,
     metric: INGESTED_MENTION_METRIC,
     updatedAt: now,
     workspaceId,
   })
-  await incrementHourlySystemMetric(ctx, {
+  await incrementDailySystemMetric(ctx, {
     bucketAt: now,
     metric: ingestedMentionPlatformMetric(platform),
     scope: "global",

@@ -7,6 +7,7 @@ type SystemMetricBucketId = GenericId<"systemMetricBuckets">
 type WorkspaceId = GenericId<"workspaces">
 
 const HOUR_MS = 3_600_000
+const DAY_MS = 86_400_000
 export const SYSTEM_METRIC_GAUGE_BUCKET_START_AT = 0
 
 export async function adjustSystemMetricGauge(
@@ -79,7 +80,7 @@ export async function adjustSystemMetricGauge(
   }
 }
 
-export async function incrementHourlySystemMetric(
+export async function incrementDailySystemMetric(
   ctx: MutationCtx,
   input: {
     bucketAt: number
@@ -89,8 +90,8 @@ export async function incrementHourlySystemMetric(
     workspaceId: WorkspaceId
   },
 ): Promise<void> {
-  const bucketStartAt = Math.floor(input.bucketAt / HOUR_MS) * HOUR_MS
-  const bucketEndAt = bucketStartAt + HOUR_MS
+  const bucketStartAt = Math.floor(input.bucketAt / DAY_MS) * DAY_MS
+  const bucketEndAt = bucketStartAt + DAY_MS
 
   const scopes =
     input.scope === "global"
@@ -107,7 +108,7 @@ export async function incrementHourlySystemMetric(
           ["metric", input.metric],
           ["scope", scope],
           ["workspaceId", metricWorkspaceId],
-          ["granularity", "hour"],
+          ["granularity", "day"],
           ["bucketStartAt", bucketStartAt],
         ),
       )
@@ -133,7 +134,7 @@ export async function incrementHourlySystemMetric(
       bucketEndAt,
       bucketStartAt,
       count: 1,
-      granularity: "hour",
+      granularity: "day",
       maximum: 1,
       metric: input.metric,
       minimum: 1,

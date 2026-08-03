@@ -39,6 +39,7 @@ export const env = process.env as Readonly<
 type RuntimeIndexRangeBuilder = IndexRange & {
   eq(fieldName: string, value: unknown): RuntimeIndexRangeBuilder
   gte(fieldName: string, value: unknown): RuntimeIndexRangeBuilder
+  lt(fieldName: string, value: unknown): RuntimeIndexRangeBuilder
 }
 
 /**
@@ -63,6 +64,14 @@ export function indexGreaterThanOrEqual(
   value: unknown,
 ): IndexRange {
   return (builder as RuntimeIndexRangeBuilder).gte(fieldName, value)
+}
+
+export function indexLessThan(
+  builder: IndexRange,
+  fieldName: string,
+  value: unknown,
+): IndexRange {
+  return (builder as RuntimeIndexRangeBuilder).lt(fieldName, value)
 }
 
 export type QueryCtx = GenericQueryCtx<GenericDataModel>

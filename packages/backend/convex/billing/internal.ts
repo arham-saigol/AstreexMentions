@@ -26,6 +26,7 @@ import {
   syncUsagePausedWorkspaceMetric,
   transitionSubscriptionMetrics,
 } from "../lib/operationalMetrics"
+import { recordProviderMetricBuckets } from "../lib/providerMetricBuckets"
 import {
   env,
   indexEquals,
@@ -257,61 +258,24 @@ async function recordProviderRunAndMetric(
     })
   }
 
-  const bucketStartAt = Math.floor(now / 3_600_000) * 3_600_000
-  const bucketEndAt = bucketStartAt + 3_600_000
-  const bucket = await ctx.db
-    .query("providerMetricBuckets")
-    .withIndex("by_provider_operation_granularity_and_bucket", (q) =>
-      indexEquals(
-        q,
-        ["provider", "creem"],
-        ["operation", input.operation],
-        ["granularity", "hour"],
-        ["bucketStartAt", bucketStartAt],
-      ),
-    )
-    .unique()
   const failureIncrement = input.status === "failed" ? 1 : 0
   const successIncrement = input.status === "succeeded" ? 1 : 0
   const rateLimitedIncrement = input.errorCode === "HTTP_429" ? 1 : 0
-
-  if (bucket) {
-    await ctx.db.patch(
-      "providerMetricBuckets",
-      bucket._id as GenericId<"providerMetricBuckets">,
-      {
-        failureCount: (bucket.failureCount as number) + failureIncrement,
-        inputItemCount: (bucket.inputItemCount as number) + 1,
-        latencyMaxMs: Math.max(bucket.latencyMaxMs as number, durationMs),
-        latencyTotalMs: (bucket.latencyTotalMs as number) + durationMs,
-        outputItemCount: (bucket.outputItemCount as number) + successIncrement,
-        rateLimitedCount:
-          (bucket.rateLimitedCount as number) + rateLimitedIncrement,
-        requestCount: (bucket.requestCount as number) + 1,
-        successCount: (bucket.successCount as number) + successIncrement,
-        updatedAt: now,
-      },
-    )
-    return
-  }
-
-  await ctx.db.insert("providerMetricBuckets", {
-    bucketEndAt,
-    bucketStartAt,
-    failureCount: failureIncrement,
-    granularity: "hour",
-    inputItemCount: 1,
-    latencyMaxMs: durationMs,
-    latencyTotalMs: durationMs,
-    operation: input.operation,
-    outputItemCount: successIncrement,
-    provider: "creem",
-    rateLimitedCount: rateLimitedIncrement,
-    requestCount: 1,
-    retryCount: 0,
-    successCount: successIncrement,
-    updatedAt: now,
-  })
+  await recordProviderMetricBuckets(
+    ctx,
+    {
+      durationMs,
+      failureCount: failureIncrement,
+      inputItemCount: 1,
+      operation: input.operation,
+      outputItemCount: successIncrement,
+      provider: "creem",
+      rateLimitedCount: rateLimitedIncrement,
+      retryCount: 0,
+      successCount: successIncrement,
+    },
+    now,
+  )
 }
 
 function subscriptionStateFromRow(

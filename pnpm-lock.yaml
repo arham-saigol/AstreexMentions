@@ -441,30 +441,6 @@ importers:
         specifier: ^4.0.0
         version: 4.1.10(@types/node@24.13.3)(jsdom@27.4.0)(vite@8.1.5(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0))
 
-  tests/e2e:
-    devDependencies:
-      '@astreex/config':
-        specifier: workspace:*
-        version: link:../../packages/config
-      '@axe-core/playwright':
-        specifier: ^4.0.0
-        version: 4.12.1(playwright-core@1.62.0)
-      '@clerk/testing':
-        specifier: ^2.2.0
-        version: 2.2.13(@playwright/test@1.62.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      '@playwright/test':
-        specifier: ^1.62.0
-        version: 1.62.0
-      '@types/node':
-        specifier: ^24.0.0
-        version: 24.13.3
-      eslint:
-        specifier: ^9.0.0
-        version: 9.39.5(jiti@2.7.0)
-      typescript:
-        specifier: ^6.0.0
-        version: 6.0.3
-
   tests/security:
     devDependencies:
       '@astreex/config':
@@ -503,11 +479,6 @@ packages:
 
   '@asamuzakjp/nwsapi@2.3.9':
     resolution: {integrity: sha512-n8GuYSrI9bF7FFZ/SjhwevlHc8xaVlb/7HmHelnc/PZXBD2ZR49NnN9sMMuDdEGPeeRQ5d0hqlSlEpgCX3Wl0Q==}
-
-  '@axe-core/playwright@4.12.1':
-    resolution: {integrity: sha512-rMd7xriptqKpP+w5265i4Hdkv2X5kbu6uiBi/B2I7uf3hieRBM3qDCfaKPtxfiYb2mKXfF+yLODJwIx+Jv1GDw==}
-    peerDependencies:
-      playwright-core: '>= 1.0.0'
 
   '@babel/code-frame@7.29.7':
     resolution: {integrity: sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw==}
@@ -618,18 +589,6 @@ packages:
       react:
         optional: true
       react-dom:
-        optional: true
-
-  '@clerk/testing@2.2.13':
-    resolution: {integrity: sha512-zv5/V1egeIWAtykHkU4zfm7KVznzw4z4zBSIEwBXmOy82MvdUif/DsKhMo2uX/aSIjVqMqs5PLVH+r3icUYN/g==}
-    engines: {node: '>=20.9.0'}
-    peerDependencies:
-      '@playwright/test': ^1
-      cypress: ^13 || ^14 || ^15
-    peerDependenciesMeta:
-      '@playwright/test':
-        optional: true
-      cypress:
         optional: true
 
   '@csstools/color-helpers@6.1.0':
@@ -2895,10 +2854,6 @@ packages:
     resolution: {integrity: sha512-BTJ9aZYL3vCfZlZOBLy9v8TUqWGQ0pzFnygKwFZt5udj6viBoFIBviKPUoZLDCPn1FoXffv6McQFDenrm5Krfw==}
     engines: {node: '>=20'}
 
-  dotenv@17.2.2:
-    resolution: {integrity: sha512-Sf2LSQP+bOlhKWWyhFsn0UsfdK/kCWRv1iuA2gXAwt3dyNabr6QSj00I2V10pidqz69soatm9ZwZvpQMTIOd5Q==}
-    engines: {node: '>=12'}
-
   dunder-proto@1.0.1:
     resolution: {integrity: sha512-KIN/nDJBQRcXw0MLVhZE9iQHmG68qAVIBg9CqmUYjmQIhgij9U5MFvrqkUL5FbtyyzZuOeOt0zdeRe4UY7ct+A==}
     engines: {node: '>= 0.4'}
@@ -5067,11 +5022,6 @@ snapshots:
 
   '@asamuzakjp/nwsapi@2.3.9': {}
 
-  '@axe-core/playwright@4.12.1(playwright-core@1.62.0)':
-    dependencies:
-      axe-core: 4.12.1
-      playwright-core: 1.62.0
-
   '@babel/code-frame@7.29.7':
     dependencies:
       '@babel/helper-validator-identifier': 7.29.7
@@ -5226,17 +5176,6 @@ snapshots:
     optionalDependencies:
       react: 19.2.8
       react-dom: 19.2.8(react@19.2.8)
-
-  '@clerk/testing@2.2.13(@playwright/test@1.62.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
-    dependencies:
-      '@clerk/backend': 3.13.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      '@clerk/shared': 4.25.8(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      dotenv: 17.2.2
-    optionalDependencies:
-      '@playwright/test': 1.62.0
-    transitivePeerDependencies:
-      - react
-      - react-dom
 
   '@csstools/color-helpers@6.1.0': {}
 
@@ -5726,6 +5665,7 @@ snapshots:
   '@playwright/test@1.62.0':
     dependencies:
       playwright: 1.62.0
+    optional: true
 
   '@radix-ui/number@1.1.3': {}
 
@@ -7185,8 +7125,6 @@ snapshots:
   dot-prop@10.2.0:
     dependencies:
       type-fest: 5.8.0
-
-  dotenv@17.2.2: {}
 
   dunder-proto@1.0.1:
     dependencies:
@@ -8830,13 +8768,15 @@ snapshots:
 
   picospinner@3.0.0: {}
 
-  playwright-core@1.62.0: {}
+  playwright-core@1.62.0:
+    optional: true
 
   playwright@1.62.0:
     dependencies:
       playwright-core: 1.62.0
     optionalDependencies:
       fsevents: 2.3.2
+    optional: true
 
   possible-typed-array-names@1.1.0: {}
 

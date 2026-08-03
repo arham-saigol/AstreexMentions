@@ -755,11 +755,15 @@ export const listMentions = authenticatedQuery({
     cursor: v.optional(v.string()),
     filters: v.optional(mentionFiltersValidator),
     limit: v.optional(v.number()),
+    now: v.number(),
     query: v.optional(v.string()),
     sort: v.optional(mentionSortValidator),
   },
   returns: mentionPageResultValidator,
   handler: async (ctx, args) => {
+    if (!Number.isSafeInteger(args.now) || args.now < 0) {
+      mentionError("INVALID_MENTION_INPUT", "Current time is invalid")
+    }
     const customer = await requireCurrentCustomer(ctx)
     const filters = normalizeMentionFilters(args.filters)
     const query = normalizeMentionSearchQuery(args.query)
@@ -845,7 +849,7 @@ export const listMentions = authenticatedQuery({
       Promise.all(
         pageRows.map(async (mention) => await formatMention(ctx, mention)),
       ),
-      readMentionMonitoringState(ctx, customer.workspaceId, Date.now()),
+      readMentionMonitoringState(ctx, customer.workspaceId, args.now),
     ])
 
     return {

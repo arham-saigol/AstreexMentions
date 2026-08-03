@@ -37,7 +37,6 @@ packages/
   ui/        Shared components and styling
   config/    Shared TypeScript and ESLint configuration
 tests/
-  e2e/       Playwright configuration and browser tests
   security/  Authorization inventory and guard tests
 scripts/
   verify-release-env.mjs
@@ -190,12 +189,11 @@ See [docs/deployment.md](docs/deployment.md) for provider variables, Clerk confi
 | `pnpm build`                               | Build all workspaces through Turborepo                                               |
 | `pnpm lint`                                | Lint all workspaces                                                                  |
 | `pnpm typecheck`                           | Typecheck all workspaces                                                             |
-| `pnpm test`                                | Run workspace tests; the E2E package lists tests without launching browsers          |
-| `pnpm test:e2e`                            | Run Playwright; starts web and admin unless `PLAYWRIGHT_SKIP_WEBSERVER` is set       |
+| `pnpm test`                                | Run all deterministic workspace tests through Turborepo                              |
 | `pnpm format`                              | Rewrite files with Prettier                                                          |
 | `pnpm format:check`                        | Check formatting without rewriting                                                   |
 | `pnpm verify`                              | Format check, lint, typecheck, test, and build                                       |
-| `pnpm verify:release`                      | Validate release URLs/mode/product mapping, run `verify`, then Playwright            |
+| `pnpm verify:release`                      | Validate release URLs/mode/product mapping, then run `verify`                        |
 | `pnpm --filter @astreex/backend deploy`    | Deploy Convex to the selected production/preview target                              |
 
 ## Environment reference
@@ -204,7 +202,7 @@ The repository-root `.env.example` is an inventory, not a file automatically loa
 
 ### Variables present in `.env.example`
 
-The example currently contains 36 unique variable names. `ADMIN_CLERK_USER_ID` appears twice because the same exact value must be installed in the admin Next.js environment and the Convex deployment.
+The example currently contains 34 unique variable names. `ADMIN_CLERK_USER_ID` appears twice because the same exact value must be installed in the admin Next.js environment and the Convex deployment.
 
 | Variable                            | Destination and current behavior                                                                                                                                                |
 | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -240,20 +238,15 @@ The example currently contains 36 unique variable names. `ADMIN_CLERK_USER_ID` a
 | `XQUIK_REQUESTS_PER_SECOND`         | Convex; optional positive integer, default `100`. Hourly budget is value × 3,600; minute claims are capped at `min(60, value × 55)`.                                            |
 | `FETCHLAYER_REQUESTS_PER_MINUTE`    | Convex; optional positive integer, default `30`, used as the minute cap and multiplied by 60 for the hourly budget.                                                             |
 | `HN_REQUESTS_PER_HOUR`              | Convex; optional positive integer, default `9000`, used as the Hacker News hourly budget. Minute claims are capped at `min(12, value)`; invalid input blocks tracking dispatch. |
-| `CLERK_TEST_USER_EMAIL`             | Connected Playwright credential used when the complete Clerk and Convex environment is present.                                                                                 |
-| `CLERK_TEST_USER_PASSWORD`          | Password paired with `CLERK_TEST_USER_EMAIL`; use an approved disposable test user.                                                                                             |
 
 ### Additional operational variables
 
 These are used by tooling but are not part of `.env.example`:
 
-| Variable                    | Purpose                                                                                                             |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `CONVEX_DEPLOYMENT`         | Convex CLI selection for the configured development deployment; written to an ignored local environment file.       |
-| `CONVEX_DEPLOY_KEY`         | CI secret selecting a production or preview deployment; keep it only in the single controlled backend release job.  |
-| `PLAYWRIGHT_WEB_URL`        | Customer E2E base URL; defaults to `http://localhost:3000`.                                                         |
-| `PLAYWRIGHT_ADMIN_URL`      | Admin E2E origin; defaults to `http://localhost:3001`.                                                              |
-| `PLAYWRIGHT_SKIP_WEBSERVER` | When set, Playwright tests already-running targets instead of starting the local web and admin development servers. |
+| Variable            | Purpose                                                                                                            |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `CONVEX_DEPLOYMENT` | Convex CLI selection for the configured development deployment; written to an ignored local environment file.      |
+| `CONVEX_DEPLOY_KEY` | CI secret selecting a production or preview deployment; keep it only in the single controlled backend release job. |
 
 ## Runtime verification boundary
 
@@ -280,7 +273,7 @@ configured identity-fence duration in the target environment.
 - [Creem billing, entitlement, usage cycles, warnings, and deletion guards](docs/billing.md)
 - [Tracking schedules, leases, budgets, checkpoints, and durable jobs](docs/jobs.md)
 - [Xquik, FetchLayer, Algolia HN, DeepSeek, and Resend contracts](docs/providers.md)
-- [Deterministic, Convex, adapter, UI, Playwright, and credential-backed testing](docs/testing.md)
+- [Deterministic, Convex, adapter, UI, and credential-backed testing](docs/testing.md)
 - [Deployment runbook](docs/deployment.md)
 - [Incident, queue, rotation, deletion, and recovery runbooks](docs/runbooks/README.md)
 

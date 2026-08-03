@@ -13,17 +13,16 @@ import {
   internalMutationReference,
 } from "../lib/functionReferences"
 import { createJobLeaseToken, indexAtMost } from "../lib/jobRuntime"
+import { recordProviderMetricBuckets } from "../lib/providerMetricBuckets"
 import { env, indexEquals, internalMutation, type MutationCtx } from "../server"
 import { readResendDeliveryConfiguration } from "./config"
 
 const MAX_EMAIL_CLAIMS = 32
 const BLOCKED_CONFIG_RETRY_MS = 5 * 60_000
-const HOUR_MS = 3_600_000
 
 type GenericRow = Record<string, unknown> & { _id: GenericId<string> }
 type EmailOutboxId = GenericId<"emailOutbox">
 type DigestRunId = GenericId<"digestRuns">
-type ProviderMetricBucketId = GenericId<"providerMetricBuckets">
 
 export function outboxFromRow(row: GenericRow): EmailOutbox {
   const payload = {
@@ -206,57 +205,21 @@ async function recordSendAttempt(
       : { errorMessage: input.errorMessage }),
   })
 
-  const bucketStartAt = Math.floor(now / HOUR_MS) * HOUR_MS
-  const bucket = (await ctx.db
-    .query("providerMetricBuckets")
-    .withIndex("by_provider_operation_granularity_and_bucket", (q) =>
-      indexEquals(
-        q,
-        ["provider", "resend"],
-        ["operation", "emails.send"],
-        ["granularity", "hour"],
-        ["bucketStartAt", bucketStartAt],
-      ),
-    )
-    .unique()) as GenericRow | null
-
-  if (bucket) {
-    await ctx.db.patch(
-      "providerMetricBuckets",
-      bucket._id as ProviderMetricBucketId,
-      {
-        failureCount: (bucket.failureCount as number) + failed,
-        inputItemCount: (bucket.inputItemCount as number) + 1,
-        latencyMaxMs: Math.max(bucket.latencyMaxMs as number, durationMs),
-        latencyTotalMs: (bucket.latencyTotalMs as number) + durationMs,
-        outputItemCount: (bucket.outputItemCount as number) + succeeded,
-        rateLimitedCount: (bucket.rateLimitedCount as number) + rateLimited,
-        requestCount: (bucket.requestCount as number) + 1,
-        retryCount: (bucket.retryCount as number) + retry,
-        successCount: (bucket.successCount as number) + succeeded,
-        updatedAt: now,
-      },
-    )
-    return
-  }
-
-  await ctx.db.insert("providerMetricBuckets", {
-    bucketEndAt: bucketStartAt + HOUR_MS,
-    bucketStartAt,
-    failureCount: failed,
-    granularity: "hour",
-    inputItemCount: 1,
-    latencyMaxMs: durationMs,
-    latencyTotalMs: durationMs,
-    operation: "emails.send",
-    outputItemCount: succeeded,
-    provider: "resend",
-    rateLimitedCount: rateLimited,
-    requestCount: 1,
-    retryCount: retry,
-    successCount: succeeded,
-    updatedAt: now,
-  })
+  await recordProviderMetricBuckets(
+    ctx,
+    {
+      durationMs,
+      failureCount: failed,
+      inputItemCount: 1,
+      operation: "emails.send",
+      outputItemCount: succeeded,
+      provider: "resend",
+      rateLimitedCount: rateLimited,
+      retryCount: retry,
+      successCount: succeeded,
+    },
+    now,
+  )
 }
 
 export const dispatchPendingEmails = internalMutation({

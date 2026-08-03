@@ -148,9 +148,12 @@ const PLAN_RANK = {
 } as const
 
 export const getBillingOverview = customerQuery({
-  args: {},
+  args: { now: v.number() },
   returns: billingOverviewValidator,
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
+    if (!Number.isSafeInteger(args.now) || args.now < 0) {
+      billingError("INVALID_BILLING_INPUT", "Current time is invalid")
+    }
     const subscriptions = await ctx.db
       .query("subscriptions")
       .withIndex("by_workspace", (q) => q.eq("workspaceId", ctx.workspace.id))
@@ -172,7 +175,6 @@ export const getBillingOverview = customerQuery({
           (right.periodStartAt as number) - (left.periodStartAt as number),
       )[0] ?? null
     const providerConfiguration = readCreemApiConfiguration(env)
-    const now = Date.now()
 
     return {
       providerState: providerConfiguration.state,
@@ -188,7 +190,7 @@ export const getBillingOverview = customerQuery({
                   "active" | "inactive",
                 status: subscription.status as string,
               },
-              now,
+              args.now,
             ),
             planId: subscription.planId,
             status: subscription.status,

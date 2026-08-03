@@ -1,13 +1,11 @@
 import type { GenericId } from "convex/values"
 
-import { indexEquals, type MutationCtx } from "../server"
+import { recordProviderMetricBuckets } from "../lib/providerMetricBuckets"
+import { type MutationCtx } from "../server"
 import type { TrackingSourceType } from "./model"
-
-const HOUR_MS = 3_600_000
 
 type TrackingSourceId = GenericId<"trackingSources">
 type ProviderRunId = GenericId<"providerRuns">
-type ProviderMetricBucketId = GenericId<"providerMetricBuckets">
 type GenericRow = Record<string, unknown> & { _id: GenericId<string> }
 
 export function trackingProviderRunIdempotencyKey(
@@ -56,64 +54,25 @@ async function updateTrackingProviderMetric(
   },
   now: number,
 ): Promise<void> {
-  const bucketStartAt = Math.floor(now / HOUR_MS) * HOUR_MS
-  const bucketEndAt = bucketStartAt + HOUR_MS
-  const bucket = (await ctx.db
-    .query("providerMetricBuckets")
-    .withIndex("by_provider_operation_granularity_and_bucket", (q) =>
-      indexEquals(
-        q,
-        ["provider", input.provider],
-        ["operation", input.operation],
-        ["granularity", "hour"],
-        ["bucketStartAt", bucketStartAt],
-      ),
-    )
-    .unique()) as GenericRow | null
-  const durationMs = Math.max(0, Math.round(input.durationMs))
   const successIncrement = input.status === "succeeded" ? 1 : 0
   const failureIncrement = input.status === "failed" ? 1 : 0
   const rateLimitIncrement = input.errorCode === "rate_limit" ? 1 : 0
   const retryIncrement = input.retry ? 1 : 0
-
-  if (bucket) {
-    await ctx.db.patch(
-      "providerMetricBuckets",
-      bucket._id as ProviderMetricBucketId,
-      {
-        failureCount: (bucket.failureCount as number) + failureIncrement,
-        inputItemCount: (bucket.inputItemCount as number) + input.inputCount,
-        latencyMaxMs: Math.max(bucket.latencyMaxMs as number, durationMs),
-        latencyTotalMs: (bucket.latencyTotalMs as number) + durationMs,
-        outputItemCount: (bucket.outputItemCount as number) + input.outputCount,
-        rateLimitedCount:
-          (bucket.rateLimitedCount as number) + rateLimitIncrement,
-        requestCount: (bucket.requestCount as number) + 1,
-        retryCount: (bucket.retryCount as number) + retryIncrement,
-        successCount: (bucket.successCount as number) + successIncrement,
-        updatedAt: now,
-      },
-    )
-    return
-  }
-
-  await ctx.db.insert("providerMetricBuckets", {
-    bucketEndAt,
-    bucketStartAt,
-    failureCount: failureIncrement,
-    granularity: "hour",
-    inputItemCount: input.inputCount,
-    latencyMaxMs: durationMs,
-    latencyTotalMs: durationMs,
-    operation: input.operation,
-    outputItemCount: input.outputCount,
-    provider: input.provider,
-    rateLimitedCount: rateLimitIncrement,
-    requestCount: 1,
-    retryCount: retryIncrement,
-    successCount: successIncrement,
-    updatedAt: now,
-  })
+  await recordProviderMetricBuckets(
+    ctx,
+    {
+      durationMs: input.durationMs,
+      failureCount: failureIncrement,
+      inputItemCount: input.inputCount,
+      operation: input.operation,
+      outputItemCount: input.outputCount,
+      provider: input.provider,
+      rateLimitedCount: rateLimitIncrement,
+      retryCount: retryIncrement,
+      successCount: successIncrement,
+    },
+    now,
+  )
 }
 
 export async function finishTrackingProviderRun(
