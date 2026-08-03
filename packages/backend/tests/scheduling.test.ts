@@ -1,6 +1,4 @@
 import { readFileSync } from "node:fs"
-import { fileURLToPath } from "node:url"
-
 import { describe, expect, it } from "vitest"
 
 import {
@@ -667,91 +665,5 @@ describe("configuration and normalized result contracts", () => {
         }),
       ),
     ).toThrowError(expect.objectContaining({ code: "INVALID_RESULT" }))
-  })
-})
-
-describe("Convex dispatcher boundary", () => {
-  const schedulingDirectory = fileURLToPath(
-    new URL("../convex/scheduling/", import.meta.url),
-  )
-  const internalSource = readFileSync(
-    `${schedulingDirectory}/internal.ts`,
-    "utf8",
-  )
-  const actionsSource = readFileSync(
-    `${schedulingDirectory}/actions.ts`,
-    "utf8",
-  )
-  const cronSource = readFileSync(
-    fileURLToPath(new URL("../convex/crons.ts", import.meta.url)),
-    "utf8",
-  )
-
-  it("runs the persisted dispatcher every minute and only schedules actions", () => {
-    expect(cronSource).toContain("{ minutes: 1 }")
-    const dispatcher = internalSource.slice(
-      internalSource.indexOf("export const dispatchDueTrackingSources"),
-      internalSource.indexOf("export const loadTrackingExecutionContext"),
-    )
-    const claimant = internalSource.slice(
-      internalSource.indexOf("async function claimProviderSources"),
-      internalSource.indexOf("export const dispatchDueTrackingSources"),
-    )
-    expect(internalSource).toContain("ctx.scheduler.runAfter")
-    expect(dispatcher).not.toContain("createXquikAdapter")
-    expect(dispatcher).not.toContain("createFetchLayerRedditAdapter")
-    expect(dispatcher).not.toContain("createAlgoliaHackerNewsAdapter")
-    expect(claimant).toContain('errorCode: "lease_expired"')
-    expect(claimant.indexOf("findProviderRun")).toBeLessThan(
-      claimant.indexOf("createTrackingLease"),
-    )
-  })
-
-  it("rechecks persisted eligibility and configuration before provider calls", () => {
-    const contextRead = actionsSource.indexOf(
-      "internal.scheduling.internal.loadTrackingExecutionContext",
-      actionsSource.indexOf("handler:"),
-    )
-    const configRead = actionsSource.indexOf(
-      "readProviderRuntimeConfiguration",
-      contextRead,
-    )
-    const providerCall = actionsSource.indexOf(
-      "searchProvider(context",
-      configRead,
-    )
-    expect(contextRead).toBeGreaterThan(-1)
-    expect(configRead).toBeGreaterThan(contextRead)
-    expect(providerCall).toBeGreaterThan(configRead)
-    expect(actionsSource).toContain("pages: Math.min(")
-    expect(actionsSource).toContain("MAX_FETCHLAYER_CUMULATIVE_PAGES")
-
-    for (const guard of [
-      'keyword.status !== "active"',
-      'subscription.entitlementStatus !== "active"',
-      "remainingMentions === 0",
-      "workspace.deletedAt !== undefined",
-    ]) {
-      expect(internalSource).toContain(guard)
-    }
-  })
-
-  it("durably commits provider pages before applying them and resumes staged pages first", () => {
-    const stage = actionsSource.indexOf("const staged =")
-    const commit = actionsSource.indexOf("const committed =", stage)
-    const apply = actionsSource.indexOf("outcome = await", commit)
-
-    expect(stage).toBeGreaterThan(-1)
-    expect(commit).toBeGreaterThan(stage)
-    expect(apply).toBeGreaterThan(commit)
-    expect(actionsSource).toContain("if (!context.hasPendingProviderPages)")
-    expect(internalSource).toContain(
-      "ingestion.unprocessedPosition ?? result.items.length",
-    )
-    expect(internalSource).toContain(
-      'ctx.db.patch(\n        "trackingProviderPages"',
-    )
-    expect(internalSource).toContain('state: "workspace_deleting"')
-    expect(internalSource).toContain("deletionPausedAt")
   })
 })

@@ -82,6 +82,7 @@ type CategorizationFixture = {
   disabledCategory: CategoryFixture
   invalidOutputs: Array<
     | "duplicate_mapping"
+    | "extra_field"
     | "missing_mapping"
     | "unknown_category"
     | "unknown_mention"
@@ -258,6 +259,7 @@ function categorizationOutput(
   seeded: SeededCategorization,
   kind:
     | "duplicate_mapping"
+    | "extra_field"
     | "missing_mapping"
     | "unknown_category"
     | "unknown_mention"
@@ -281,6 +283,8 @@ function categorizationOutput(
       return { results: [first] }
     case "duplicate_mapping":
       return { results: [first, first] }
+    case "extra_field":
+      return { explanation: "untrusted model output", results: [first, second] }
     case "unknown_mention":
       return {
         results: [first, { ...second, mentionId: "unknown-mention-id" }],
@@ -847,16 +851,5 @@ describe("durable DeepSeek categorization worker", () => {
       }),
     ])
     expect(state.usage).toEqual(usageBefore)
-  })
-
-  it("wires the categorization dispatcher to a one-minute cron", () => {
-    const cronSource = readFileSync(
-      fileURLToPath(new URL("../convex/crons.ts", import.meta.url)),
-      "utf8",
-    )
-    expect(cronSource).toContain('import { internal } from "./_generated/api"')
-    expect(cronSource).toMatch(
-      /"dispatch mention categorization jobs",\s*\{ minutes: 1 \},\s*internal\.categorization\.internal\.dispatchDueCategorizationJobs/,
-    )
   })
 })

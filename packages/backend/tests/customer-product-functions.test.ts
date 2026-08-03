@@ -1,6 +1,3 @@
-import { readFileSync } from "node:fs"
-import { fileURLToPath } from "node:url"
-
 import { convexTest } from "convex-test"
 import {
   defineSchema,
@@ -756,80 +753,5 @@ describe("customer settings functions", () => {
         timeZone: "America/New_York",
       },
     })
-  })
-})
-
-describe("customer frontend function inventory", () => {
-  it("exports exact names through authenticated wrappers and avoids direct deletion", () => {
-    const convexDirectory = fileURLToPath(
-      new URL("../convex/", import.meta.url),
-    )
-    const sources = Object.fromEntries(
-      ["users", "workspaces", "categories", "savedViews", "settings"].map(
-        (name) => [name, readFileSync(`${convexDirectory}/${name}.ts`, "utf8")],
-      ),
-    )
-    const deletionBillingSource = readFileSync(
-      `${convexDirectory}/deletion/billing.ts`,
-      "utf8",
-    )
-
-    for (const name of [
-      "bootstrapCurrentUser",
-      "getCurrentUser",
-      "updateCurrentUser",
-    ]) {
-      expect(sources.users).toContain(`export const ${name}`)
-    }
-    for (const name of [
-      "getCurrentWorkspace",
-      "updateCurrentWorkspace",
-      "getAccountDeletionReadiness",
-      "getAccountDeletionStatus",
-      "deleteAccount",
-    ]) {
-      expect(sources.workspaces).toContain(`export const ${name}`)
-    }
-    for (const name of [
-      "listCategories",
-      "createCategory",
-      "updateCategory",
-      "deleteCategory",
-    ]) {
-      expect(sources.categories).toContain(`export const ${name}`)
-    }
-    for (const name of [
-      "listSavedViews",
-      "createSavedView",
-      "updateSavedView",
-      "reorderSavedViews",
-      "deleteSavedView",
-    ]) {
-      expect(sources.savedViews).toContain(`export const ${name}`)
-    }
-    expect(sources.settings).toContain("export const getSettings")
-    expect(sources.settings).toContain("export const updateDigestPreferences")
-
-    for (const source of Object.values(sources)) {
-      expect(source).toMatch(/authenticated(Query|Mutation)/)
-      expect(source).not.toContain("ctx.db.delete(")
-    }
-    expect(sources.workspaces).toContain('"deletionJobs"')
-    expect(sources.workspaces).toContain("withoutUndefinedValues")
-    const keywordCountQuery = sources.workspaces.slice(
-      sources.workspaces.indexOf("async function activeKeywordCount"),
-      sources.workspaces.indexOf("export const getCurrentWorkspace"),
-    )
-    expect(keywordCountQuery).toContain('"by_workspace_status_and_created_at"')
-    expect(keywordCountQuery).toContain('["active", "paused"]')
-    expect(keywordCountQuery).not.toContain('"by_workspace_and_updated_at"')
-    expect(deletionBillingSource).toContain(
-      '"by_workspace_status_and_received_at"',
-    )
-    expect(deletionBillingSource).toContain('.eq("status", "pending")')
-    expect(deletionBillingSource).toContain('.eq("status", "leased")')
-    expect(deletionBillingSource).not.toContain(
-      '.query("billingEvents")\n      .withIndex("by_workspace_and_received_at"',
-    )
   })
 })

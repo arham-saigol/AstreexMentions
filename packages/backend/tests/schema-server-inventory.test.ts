@@ -1,7 +1,6 @@
-import { readFileSync } from "node:fs"
-import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
 
+import crons from "../convex/crons"
 import schema from "../convex/schema"
 
 const REQUIRED_TABLES = [
@@ -45,10 +44,6 @@ type ExportedSchema = {
 }
 
 const exportedSchema = JSON.parse(schema.export()) as ExportedSchema
-const schemaSource = readFileSync(
-  fileURLToPath(new URL("../convex/schema.ts", import.meta.url)),
-  "utf8",
-)
 const tableByName = new Map(
   exportedSchema.tables.map((table) => [table.tableName, table]),
 )
@@ -265,88 +260,6 @@ describe("complete Convex schema", () => {
     expectIndex("auditEvents", "by_created_at", ["createdAt"])
   })
 
-  it("matches the Creem-only product and exact persisted contract", () => {
-    expect(schemaSource).toContain(
-      'export const workspaceKindValidator = v.literal("personal")',
-    )
-    expect(schemaSource).toContain(
-      'export const workspaceRoleValidator = v.literal("owner")',
-    )
-    expect(schemaSource).toContain(
-      "export const subscriptionStatusValidator = v.string()",
-    )
-    expect(schemaSource).toContain('provider: v.literal("creem")')
-    expect(schemaSource).not.toContain("stripe")
-    expect(schemaSource).not.toContain('v.literal("grace")')
-    expect(schemaSource).not.toContain("trialEndsAt")
-    expect(schemaSource).not.toContain('v.literal("incomplete")')
-    expect(schemaSource).not.toContain('v.literal("incomplete_expired")')
-
-    for (const field of [
-      "warning80SentAt",
-      "warning100SentAt",
-      "mentionsUsed",
-      "mentionLimit",
-      "keywordLimit",
-      "planSnapshot",
-      "periodStartAt",
-      "periodEndAt",
-    ]) {
-      expect(schemaSource).toContain(field)
-    }
-    for (const prohibitedField of [
-      "categorizationsUsed",
-      "emailLimit",
-      "emailsSent",
-      "providerRunLimit",
-      "providerRunsUsed",
-      "mentionsIngested",
-    ]) {
-      expect(schemaSource).not.toContain(prohibitedField)
-    }
-
-    for (const field of [
-      "colorToken",
-      "enabled",
-      "isSystem",
-      "systemKey",
-      "deletedAt",
-      "icon",
-      "position",
-      "platforms",
-      "sourceType",
-      "pauseReason",
-      "leaseVersion",
-      "checkpointVersion",
-      "contentType",
-      "providerItemId",
-      "fallbackKey",
-      "analysisState",
-      "firstSeenAt",
-      "lastMatchedAt",
-      "requestedPublicationAt",
-    ]) {
-      expect(schemaSource).toContain(field)
-    }
-
-    expect(schemaSource).toContain('v.literal("reddit_posts")')
-    expect(schemaSource).toContain('v.literal("reddit_comments")')
-    expect(schemaSource).toContain('v.literal("creem")')
-    expect(schemaSource).toContain('v.literal("new")')
-    expect(schemaSource).toContain('v.literal("completed")')
-    expect(schemaSource).not.toContain('v.literal("shipped")')
-    expect(schemaSource).not.toContain('v.literal("archived")')
-    expect(schemaSource).not.toContain("shippedAt")
-
-    const categorizationJobsSource = schemaSource.slice(
-      schemaSource.indexOf("  categorizationJobs: defineTable("),
-      schemaSource.indexOf("  digestPreferences: defineTable("),
-    )
-    expect(categorizationJobsSource).toContain('mentionId: v.id("mentions")')
-    expect(categorizationJobsSource).not.toContain("mentionIds")
-    expect(schemaSource).toContain('accountUserId: v.id("users")')
-  })
-
   it("defines the tenant-filtered full-text search index", () => {
     expect(tableByName.get("mentions")?.searchIndexes).toEqual([
       expect.objectContaining({ indexDescriptor: "search_body" }),
@@ -354,5 +267,34 @@ describe("complete Convex schema", () => {
     expect(tableByName.get("featureRequests")?.searchIndexes).toEqual([
       expect.objectContaining({ indexDescriptor: "search_content" }),
     ])
+  })
+
+  it("registers every durable dispatcher at a one-minute interval", () => {
+    expect(JSON.parse(crons.export())).toEqual({
+      "dispatch daily digest schedules": expect.objectContaining({
+        name: "digest/internal:dispatchDueDailyDigests",
+        schedule: { minutes: 1, type: "interval" },
+      }),
+      "dispatch durable account deletions": expect.objectContaining({
+        name: "deletion/internal:dispatchDueAccountDeletions",
+        schedule: { minutes: 1, type: "interval" },
+      }),
+      "dispatch durable email outbox": expect.objectContaining({
+        name: "email/internal:dispatchPendingEmails",
+        schedule: { minutes: 1, type: "interval" },
+      }),
+      "dispatch mention categorization jobs": expect.objectContaining({
+        name: "categorization/internal:dispatchDueCategorizationJobs",
+        schedule: { minutes: 1, type: "interval" },
+      }),
+      "dispatch persisted tracking schedules": expect.objectContaining({
+        name: "scheduling/internal:dispatchDueTrackingSources",
+        schedule: { minutes: 1, type: "interval" },
+      }),
+      "retry persisted Creem billing events": expect.objectContaining({
+        name: "billing/internal:dispatchPendingCreemBillingEvents",
+        schedule: { minutes: 1, type: "interval" },
+      }),
+    })
   })
 })

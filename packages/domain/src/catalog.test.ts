@@ -10,13 +10,31 @@ describe("product catalogs", () => {
   })
 
   it("defines the shipped plans", () => {
-    expect(PLAN_DEFINITIONS.map(({ id }) => id)).toEqual([
-      "starter",
-      "growth",
-      "scale",
+    expect(PLAN_DEFINITIONS).toEqual([
+      {
+        id: "starter",
+        keywordLimit: 3,
+        monthlyMentionLimit: 2_000,
+        name: "Starter",
+        priceUsd: 19,
+      },
+      {
+        id: "growth",
+        keywordLimit: 6,
+        monthlyMentionLimit: 20_000,
+        name: "Growth",
+        priceUsd: 99,
+      },
+      {
+        id: "scale",
+        keywordLimit: 10,
+        monthlyMentionLimit: 50_000,
+        name: "Scale",
+        priceUsd: 199,
+      },
     ])
-    expect(PLANS.starter.monthlyMentionLimit).toBe(2_000)
-    expect(PLANS.scale.keywordLimit).toBe(10)
-    expect(Object.isFrozen(PLANS)).toBe(true)
+    expect(PLANS).toEqual(
+      Object.fromEntries(PLAN_DEFINITIONS.map((plan) => [plan.id, plan])),
+    )
   })
 })

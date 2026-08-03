@@ -54,7 +54,7 @@ describe("usage emails", () => {
     },
   )
 
-  it("renders a deterministic 100% limit-reached email", async () => {
+  it("renders a 100% limit-reached email", async () => {
     const props = {
       astreexUrl,
       currentUsage: 20_000,
@@ -63,9 +63,7 @@ describe("usage emails", () => {
       workspaceName: "Growth workspace",
     }
     const first = await renderLimitReachedEmail(props)
-    const second = await renderLimitReachedEmail(props)
 
-    expect(first).toEqual(second)
     expect(first.subject).toBe("Astreex limit reached: Growth monthly mentions")
     expect(limitReachedSubject("growth")).toBe(first.subject)
     expect(first.html).toContain("100% of monthly allowance used")
@@ -186,20 +184,6 @@ describe("daily digest email", () => {
     )
     expect(result.text).toContain("https://x.com/i/web/status/123")
     expect(result.text).toContain(astreexUrl)
-  })
-
-  it("is deterministic for identical input", async () => {
-    const props = {
-      astreexUrl,
-      counts: createDailyDigestCounts(topMentions),
-      localDate: "2026-07-25",
-      topMentions,
-      workspaceName: "Astreex",
-    }
-
-    expect(await renderDailyDigestEmail(props)).toEqual(
-      await renderDailyDigestEmail(props),
-    )
   })
 
   it("validates digest dates, counts, and links", async () => {

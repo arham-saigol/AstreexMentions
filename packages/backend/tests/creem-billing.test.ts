@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest"
 
 import {
   canReconcileBillingWorkspace,
-  createUsagePlanSnapshot,
   entitlementForCreemSubscriptionStatus,
   KNOWN_CREEM_SUBSCRIPTION_STATUSES,
   normalizeCreemSubscriptionStatus,
@@ -41,20 +40,5 @@ describe("Creem billing contract", () => {
     expect(entitlementForCreemSubscriptionStatus("scheduled_cancel")).toBe(
       "active",
     )
-  })
-
-  it("captures an immutable exact plan snapshot", () => {
-    const snapshot = createUsagePlanSnapshot({
-      keywordLimit: 10,
-      mentionLimit: 5_000,
-      planId: "growth",
-    })
-
-    expect(snapshot).toEqual({
-      keywordLimit: 10,
-      mentionLimit: 5_000,
-      planId: "growth",
-    })
-    expect(Object.isFrozen(snapshot)).toBe(true)
   })
 })

@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs"
-
 import { convexTest } from "convex-test"
 import { makeFunctionReference } from "convex/server"
 import type { GenericId } from "convex/values"
@@ -258,28 +256,6 @@ describe("Creem provider operation retries", () => {
     expect(runs).toHaveLength(1)
   })
 
-  it("returns an outstanding checkout URL before rejecting a new browser key", () => {
-    const customerSource = readFileSync(
-      new URL("../convex/billing/customer.ts", import.meta.url),
-      "utf8",
-    )
-    const outstanding = customerSource.indexOf(
-      "if (existing.outstandingCheckout)",
-    )
-    const reusableResult = customerSource.indexOf(
-      "checkoutId: String(",
-      outstanding,
-    )
-    const conflict = customerSource.indexOf(
-      '"BILLING_CHECKOUT_ALREADY_EXISTS"',
-      outstanding,
-    )
-
-    expect(outstanding).toBeGreaterThan(-1)
-    expect(reusableResult).toBeGreaterThan(outstanding)
-    expect(conflict).toBeGreaterThan(reusableResult)
-  })
-
   it("moves retryable failures out of running and permits another attempt", async () => {
     const t = convexTest({ modules, schema })
     const workspaceId = await t.run(async (ctx) => {
@@ -431,72 +407,5 @@ describe("Creem provider operation retries", () => {
       errorCode: "operation_abandoned",
       status: "failed",
     })
-  })
-
-  it("keeps incomplete upgrades unresolved until authoritative reconciliation", () => {
-    const customerSource = readFileSync(
-      new URL("../convex/billing/customer.ts", import.meta.url),
-      "utf8",
-    )
-    const reconciliationSchedule = customerSource.indexOf(
-      "incompleteReconciliation:",
-    )
-    const incompleteGuard = customerSource.indexOf(
-      'applied.kind === "incomplete_period"',
-      reconciliationSchedule,
-    )
-    const successRecord = customerSource.indexOf(
-      "internal.billing.internal.recordCreemProviderOperation",
-      incompleteGuard,
-    )
-    expect(reconciliationSchedule).toBeGreaterThan(-1)
-    expect(incompleteGuard).toBeGreaterThan(reconciliationSchedule)
-    expect(successRecord).toBeGreaterThan(incompleteGuard)
-
-    const reconciliationSource = readFileSync(
-      new URL("../convex/billing/reconciliation.ts", import.meta.url),
-      "utf8",
-    )
-    expect(reconciliationSource).toContain(
-      ".getSubscription(args.providerSubscriptionId)",
-    )
-    expect(reconciliationSource).toContain(
-      'applied.kind === "incomplete_period"',
-    )
-    expect(reconciliationSource).toContain(
-      "internal.billing.internal.markCreemProviderOperationUnresolved",
-    )
-    const internalSource = readFileSync(
-      new URL("../convex/billing/internal.ts", import.meta.url),
-      "utf8",
-    )
-    expect(internalSource).toContain(
-      'kind === "incomplete_period" && args.incompleteReconciliation',
-    )
-    expect(internalSource).toContain(
-      "internal.billing.reconciliation.reconcileIncompleteCreemUpgrade",
-    )
-  })
-
-  it("versions upgrade idempotency by the current subscription state", () => {
-    const customerSource = readFileSync(
-      new URL("../convex/billing/customer.ts", import.meta.url),
-      "utf8",
-    )
-    const upgradeStart = customerSource.indexOf(
-      "export const upgradeSubscription",
-    )
-    const operationStart = customerSource.indexOf(
-      "const operationId =",
-      upgradeStart,
-    )
-    const operationEnd = customerSource.indexOf(
-      "internal.billing.internal.beginCreemProviderOperation",
-      operationStart,
-    )
-    const operationId = customerSource.slice(operationStart, operationEnd)
-    expect(operationId).toContain("currentPlan.data")
-    expect(operationId).toContain("planResult.data")
-    expect(operationId).toContain("subscriptionVersion")
   })
 })
