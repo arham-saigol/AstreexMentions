@@ -1,15 +1,15 @@
 import { readFileSync } from "node:fs"
 
-import { engagementScore } from "../convex/lib/engagementRanking"
+import { engagementScore } from "@astreex/domain"
+import { createAlgoliaHackerNewsAdapter } from "../convex/integrations/providers/algoliaHackerNews"
+import { createFetchLayerRedditAdapter } from "../convex/integrations/providers/fetchLayer"
+import { parseRetryAfterMs } from "../convex/integrations/providers/http"
 import {
-  createAlgoliaHackerNewsAdapter,
-  createFetchLayerRedditAdapter,
-  createXquikAdapter,
-  parseRetryAfterMs,
   ProviderAdapterError,
   type ProviderErrorCode,
   type ProviderLogEvent,
-} from "../convex/integrations/providers"
+} from "../convex/integrations/providers/types"
+import { createXquikAdapter } from "../convex/integrations/providers/xquik"
 import { describe, expect, it, vi } from "vitest"
 
 function fixture(name: string): unknown {

@@ -1,22 +1,20 @@
-import { type GenericId, v } from "convex/values"
+import { internal } from "../_generated/api"
+import { v } from "convex/values"
 
 import {
   applyResendEmailEvent,
   type ResendEmailEventType,
   type VerifiedResendEmailEvent,
 } from "../lib/resendWebhook"
-import { internalMutationReference } from "../lib/functionReferences"
 import { incrementDailySystemMetric } from "../lib/systemMetricBuckets"
-import { indexEquals, internalMutation, type MutationCtx } from "../server"
+import { internalMutation, type MutationCtx } from "../_generated/server"
+import type { Doc, Id } from "../_generated/dataModel"
 import { outboxFromRow } from "./internal"
 
 const WEBHOOK_RETRY_DELAY_MS = 30_000
 const MAX_WEBHOOK_MATCH_ATTEMPTS = 8
 
-type GenericRow = Record<string, unknown> & { _id: GenericId<string> }
-type EmailOutboxId = GenericId<"emailOutbox">
-type EmailWebhookEventId = GenericId<"emailWebhookEvents">
-type WorkspaceId = GenericId<"workspaces">
+type EmailWebhookEventId = Id<"emailWebhookEvents">
 
 const resendEmailEventTypeValidator = v.union(
   v.literal("email.scheduled"),
@@ -44,7 +42,7 @@ async function applyEventToOutbox(
   ctx: MutationCtx,
   eventRowId: EmailWebhookEventId,
   event: VerifiedResendEmailEvent,
-  outboxRow: GenericRow,
+  outboxRow: Doc<"emailOutbox">,
   now: number,
 ): Promise<"applied" | "ignored_stale"> {
   const outbox = outboxFromRow(outboxRow)
@@ -54,7 +52,7 @@ async function applyEventToOutbox(
   const application = applyResendEmailEvent(outbox, event)
   const status = application.applied ? "applied" : "ignored_stale"
   if (application.applied) {
-    await ctx.db.patch("emailOutbox", outboxRow._id as EmailOutboxId, {
+    await ctx.db.patch("emailOutbox", outboxRow._id, {
       deliveryStatus: application.outbox.deliveryStatus,
       lastProviderEventAt: application.outbox.lastProviderEventAt,
       lastProviderEventId: application.outbox.lastProviderEventId,
@@ -64,16 +62,16 @@ async function applyEventToOutbox(
       bucketAt: now,
       metric: `email_delivery_${application.outbox.deliveryStatus}`,
       updatedAt: now,
-      workspaceId: outboxRow.workspaceId as WorkspaceId,
+      workspaceId: outboxRow.workspaceId,
     })
   }
   await ctx.db.patch("emailWebhookEvents", eventRowId, {
     nextAttemptAt: undefined,
-    outboxId: outboxRow._id as EmailOutboxId,
+    outboxId: outboxRow._id,
     processedAt: now,
     status,
     updatedAt: now,
-    workspaceId: outboxRow.workspaceId as WorkspaceId,
+    workspaceId: outboxRow.workspaceId,
   })
   return status
 }
@@ -81,27 +79,20 @@ async function applyEventToOutbox(
 async function findOutboxByProviderMessage(
   ctx: MutationCtx,
   providerMessageId: string,
-): Promise<GenericRow | null> {
-  return (await ctx.db
+): Promise<Doc<"emailOutbox"> | null> {
+  return await ctx.db
     .query("emailOutbox")
     .withIndex("by_provider_message", (q) =>
-      indexEquals(
-        q,
-        ["provider", "resend"],
-        ["providerMessageId", providerMessageId],
-      ),
+      q.eq("provider", "resend").eq("providerMessageId", providerMessageId),
     )
-    .unique()) as GenericRow | null
+    .unique()
 }
 
 async function workspaceRejectsDeliveryEvents(
   ctx: MutationCtx,
-  outbox: GenericRow,
+  outbox: Doc<"emailOutbox">,
 ): Promise<boolean> {
-  const workspace = (await ctx.db.get(
-    "workspaces",
-    outbox.workspaceId as WorkspaceId,
-  )) as GenericRow | null
+  const workspace = await ctx.db.get("workspaces", outbox.workspaceId)
   return (
     !workspace ||
     workspace.deletedAt !== undefined ||
@@ -138,7 +129,7 @@ export const ingestResendWebhookEvent = internalMutation({
     const existing = await ctx.db
       .query("emailWebhookEvents")
       .withIndex("by_provider_event", (q) =>
-        indexEquals(q, ["provider", "resend"], ["eventId", args.eventId]),
+        q.eq("provider", "resend").eq("eventId", args.eventId),
       )
       .unique()
     if (existing) {
@@ -151,7 +142,7 @@ export const ingestResendWebhookEvent = internalMutation({
     )
     const now = args.receivedAt
     const event = eventFromArguments(args)
-    const eventRowId = (await ctx.db.insert("emailWebhookEvents", {
+    const eventRowId = await ctx.db.insert("emailWebhookEvents", {
       attempts: 1,
       eventId: args.eventId,
       provider: "resend",
@@ -163,8 +154,8 @@ export const ingestResendWebhookEvent = internalMutation({
       updatedAt: now,
       ...(outbox === null
         ? { nextAttemptAt: now + WEBHOOK_RETRY_DELAY_MS }
-        : { workspaceId: outbox.workspaceId as WorkspaceId }),
-    })) as EmailWebhookEventId
+        : { workspaceId: outbox.workspaceId }),
+    })
 
     if (outbox) {
       if (await workspaceRejectsDeliveryEvents(ctx, outbox)) {
@@ -179,7 +170,7 @@ export const ingestResendWebhookEvent = internalMutation({
 
     await ctx.scheduler.runAfter(
       WEBHOOK_RETRY_DELAY_MS,
-      reconcileResendWebhookEventReference,
+      internal.email.webhookInternal.reconcileResendWebhookEvent,
       { eventRowId },
     )
     return { state: "pending_match" as const }
@@ -189,10 +180,7 @@ export const ingestResendWebhookEvent = internalMutation({
 export const reconcileResendWebhookEvent = internalMutation({
   args: { eventRowId: v.id("emailWebhookEvents") },
   handler: async (ctx, args) => {
-    const row = (await ctx.db.get(
-      "emailWebhookEvents",
-      args.eventRowId,
-    )) as GenericRow | null
+    const row = await ctx.db.get("emailWebhookEvents", args.eventRowId)
     if (!row || row.status !== "pending_match") {
       return { state: "not_pending" as const }
     }
@@ -248,21 +236,9 @@ export const reconcileResendWebhookEvent = internalMutation({
     })
     await ctx.scheduler.runAfter(
       WEBHOOK_RETRY_DELAY_MS,
-      reconcileResendWebhookEventReference,
+      internal.email.webhookInternal.reconcileResendWebhookEvent,
       args,
     )
     return { state: "pending_match" as const }
   },
 })
-
-export const ingestResendWebhookEventReference = internalMutationReference<{
-  createdAt: number
-  eventId: string
-  providerMessageId: string
-  receivedAt: number
-  type: ResendEmailEventType
-}>("email/webhookInternal:ingestResendWebhookEvent")
-
-export const reconcileResendWebhookEventReference = internalMutationReference<{
-  eventRowId: EmailWebhookEventId
-}>("email/webhookInternal:reconcileResendWebhookEvent")

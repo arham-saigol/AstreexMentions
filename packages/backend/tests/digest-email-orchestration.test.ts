@@ -339,8 +339,12 @@ describe("Convex digest and email boundaries", () => {
     const digestSource = source("digest/internal.ts")
     const emailSource = source("email/internal.ts")
 
-    expect(cronSource).toContain("dispatchDueDailyDigestsReference")
-    expect(cronSource).toContain("dispatchPendingEmailsReference")
+    expect(cronSource).toContain(
+      "internal.digest.internal.dispatchDueDailyDigests",
+    )
+    expect(cronSource).toContain(
+      "internal.email.internal.dispatchPendingEmails",
+    )
     expect(digestSource).toContain("ctx.scheduler.runAfter")
     expect(digestSource).toContain(
       "deletionPausedAt: workspace.deletionPendingAt",
@@ -359,7 +363,7 @@ describe("Convex digest and email boundaries", () => {
     expect(renderContextSource).toContain(
       '"by_workspace_deleted_enabled_and_sort_order"',
     )
-    expect(renderContextSource).toContain('["deletedAt", undefined]')
+    expect(renderContextSource).toContain('.eq("deletedAt", undefined)')
     expect(renderContextSource).not.toContain('"by_workspace_and_sort_order"')
   })
 

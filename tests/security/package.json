@@ -10,7 +10,6 @@
     "test": "vitest run"
   },
   "devDependencies": {
-    "@astreex/config": "workspace:*",
     "@types/node": "^24.0.0",
     "eslint": "^9.0.0",
     "typescript": "^6.0.0",

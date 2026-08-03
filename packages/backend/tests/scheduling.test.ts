@@ -709,7 +709,7 @@ describe("Convex dispatcher boundary", () => {
 
   it("rechecks persisted eligibility and configuration before provider calls", () => {
     const contextRead = actionsSource.indexOf(
-      "loadTrackingExecutionContextReference",
+      "internal.scheduling.internal.loadTrackingExecutionContext",
       actionsSource.indexOf("handler:"),
     )
     const configRead = actionsSource.indexOf(

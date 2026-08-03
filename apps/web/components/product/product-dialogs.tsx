@@ -1,13 +1,11 @@
 "use client"
 
-import { Button } from "@astreex/ui/components/button"
 import {
   createContext,
   useContext,
   useMemo,
   useRef,
   useState,
-  type ComponentProps,
   type ReactNode,
 } from "react"
 
@@ -15,7 +13,6 @@ import { FeatureRequestDialogShell } from "@/components/product/feature-request-
 import { productSettingsSections } from "@/components/product/settings/product-settings-sections"
 import {
   SettingsDialogShell,
-  type SettingsDialogSection,
   type SettingsSectionId,
 } from "@/components/product/settings-dialog-shell"
 
@@ -31,15 +28,7 @@ const ProductDialogsContext = createContext<ProductDialogsContextValue | null>(
   null,
 )
 
-export function ProductDialogsProvider({
-  children,
-  featureRequestBody,
-  settingsSections = productSettingsSections,
-}: {
-  children: ReactNode
-  featureRequestBody?: ReactNode
-  settingsSections?: SettingsDialogSection[]
-}) {
+export function ProductDialogsProvider({ children }: { children: ReactNode }) {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsDialogKey, setSettingsDialogKey] = useState(0)
   const [settingsSectionId, setSettingsSectionId] =
@@ -83,15 +72,13 @@ export function ProductDialogsProvider({
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
         returnFocusRef={settingsReturnFocusRef}
-        sections={settingsSections}
+        sections={productSettingsSections}
       />
       <FeatureRequestDialogShell
         open={featureRequestsOpen}
         onOpenChange={setFeatureRequestsOpen}
         returnFocusRef={featureRequestReturnFocusRef}
-      >
-        {featureRequestBody}
-      </FeatureRequestDialogShell>
+      />
     </ProductDialogsContext.Provider>
   )
 }
@@ -104,38 +91,4 @@ export function useProductDialogs(): ProductDialogsContextValue {
   }
 
   return context
-}
-
-type DialogTriggerProps = Omit<ComponentProps<typeof Button>, "onClick"> & {
-  children?: ReactNode
-}
-
-export function SettingsDialogTrigger({
-  children = "Settings",
-  ...props
-}: DialogTriggerProps) {
-  const { openSettings } = useProductDialogs()
-  return (
-    <Button
-      onClick={(event) => openSettings("general", event.currentTarget)}
-      {...props}
-    >
-      {children}
-    </Button>
-  )
-}
-
-export function FeatureRequestDialogTrigger({
-  children = "Feature Requests",
-  ...props
-}: DialogTriggerProps) {
-  const { openFeatureRequests } = useProductDialogs()
-  return (
-    <Button
-      onClick={(event) => openFeatureRequests(event.currentTarget)}
-      {...props}
-    >
-      {children}
-    </Button>
-  )
 }

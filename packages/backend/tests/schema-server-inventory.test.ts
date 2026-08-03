@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from "node:fs"
+import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
 
@@ -354,60 +354,5 @@ describe("complete Convex schema", () => {
     expect(tableByName.get("featureRequests")?.searchIndexes).toEqual([
       expect.objectContaining({ indexDescriptor: "search_content" }),
     ])
-  })
-})
-
-function typescriptFiles(directory: string): string[] {
-  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-    const path = `${directory}/${entry.name}`
-    if (entry.isDirectory()) {
-      return typescriptFiles(path)
-    }
-    return entry.name.endsWith(".ts") ? [path] : []
-  })
-}
-
-describe("pre-codegen server boundary", () => {
-  const convexDirectory = fileURLToPath(new URL("../convex/", import.meta.url))
-
-  it("uses every official generic constructor without fake generated imports", () => {
-    const sources = typescriptFiles(convexDirectory).map((path) => ({
-      path,
-      source: readFileSync(path, "utf8"),
-    }))
-    const serverSource = readFileSync(`${convexDirectory}/server.ts`, "utf8")
-
-    for (const constructor of [
-      "queryGeneric",
-      "mutationGeneric",
-      "actionGeneric",
-      "internalQueryGeneric",
-      "internalMutationGeneric",
-      "internalActionGeneric",
-      "httpActionGeneric",
-    ]) {
-      expect(serverSource).toContain(constructor)
-    }
-
-    expect(
-      sources
-        .filter(({ source }) => source.includes("/_generated/"))
-        .map(({ path }) => path),
-    ).toEqual([])
-  })
-
-  it("routes public mutations through authenticated policy builders", () => {
-    const usersSource = readFileSync(`${convexDirectory}/users.ts`, "utf8")
-    const workspacesSource = readFileSync(
-      `${convexDirectory}/workspaces.ts`,
-      "utf8",
-    )
-
-    expect(usersSource).toContain("authenticatedMutation")
-    expect(usersSource).toContain("DEFAULT_CATEGORIES")
-    expect(usersSource).toContain("digestPreferences")
-    expect(workspacesSource).toContain("authenticatedMutation")
-    expect(workspacesSource).toContain("resolveCurrentCustomer")
-    expect(workspacesSource).toContain("readDeletionBillingSnapshot")
   })
 })

@@ -444,7 +444,7 @@ export declare const api: {
       getBillingOverview: FunctionReference<
         "query",
         "public",
-        {},
+        { now: number },
         {
           missing?: Array<string>;
           providerState: "configured" | "provider_unconfigured";
@@ -893,6 +893,7 @@ export declare const api: {
           publishedBefore?: number;
         };
         limit?: number;
+        now: number;
         query?: string;
         sort?: "newest" | "oldest" | "most_engaged";
       },

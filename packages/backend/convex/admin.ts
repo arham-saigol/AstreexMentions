@@ -1,6 +1,6 @@
 import type { UserIdentity } from "convex/server"
-import type { GenericId } from "convex/values"
 import { ConvexError, v } from "convex/values"
+import type { Doc, Id } from "./_generated/dataModel"
 
 import {
   CATEGORIZATION_JOB_STATUSES,
@@ -19,7 +19,6 @@ import {
   ingestedMentionPlatformMetric,
 } from "./ingestion/model"
 import { adminMutation, adminQuery } from "./lib/authorization"
-import { withoutUndefinedValues } from "./lib/jobRuntime"
 import {
   subscriptionCountMetric,
   USAGE_PAUSED_WORKSPACE_METRIC,
@@ -30,13 +29,7 @@ import {
   PROVIDER_DAILY_ROLLUP_OPERATION,
 } from "./lib/providerMetricBuckets"
 import { SYSTEM_METRIC_GAUGE_BUCKET_START_AT } from "./lib/systemMetricBuckets"
-import {
-  indexEquals,
-  indexGreaterThanOrEqual,
-  indexLessThan,
-  type MutationCtx,
-  type QueryCtx,
-} from "./server"
+import { type MutationCtx, type QueryCtx } from "./_generated/server"
 
 const DAY_MS = 86_400_000
 const MAX_TIMESTAMP = 8_640_000_000_000_000
@@ -242,15 +235,10 @@ const metricsResultValidator = v.object({
 })
 
 type DatabaseCtx = Pick<QueryCtx | MutationCtx, "db">
-type GenericRow = Record<string, unknown> & { _id: GenericId<string> }
-type FeatureRequestId = GenericId<"featureRequests">
-type ChangelogEntryId = GenericId<"changelogEntries">
-type DeletionJobId = GenericId<"deletionJobs">
-type UserId = GenericId<"users">
-type WorkspaceId = GenericId<"workspaces">
+type FeatureRequestId = Id<"featureRequests">
+type ChangelogEntryId = Id<"changelogEntries">
 type FeatureRequestStatus =
   "new" | "planned" | "in_progress" | "completed" | "declined"
-type ChangelogStatus = "draft" | "published"
 type FeatureRequestSort = "newest" | "oldest"
 type FeatureRequestSearchCursorInput = {
   query: string
@@ -413,11 +401,8 @@ function validatedPublicationTimestamp(value: number): number {
 async function featureRequestForId(
   ctx: DatabaseCtx,
   requestId: FeatureRequestId,
-): Promise<GenericRow> {
-  const request = (await ctx.db.get(
-    "featureRequests",
-    requestId,
-  )) as GenericRow | null
+): Promise<Doc<"featureRequests">> {
+  const request = await ctx.db.get("featureRequests", requestId)
   if (!request) {
     adminError("FEATURE_REQUEST_NOT_FOUND", "Feature request not found")
   }
@@ -427,11 +412,8 @@ async function featureRequestForId(
 async function changelogEntryForId(
   ctx: DatabaseCtx,
   entryId: ChangelogEntryId,
-): Promise<GenericRow> {
-  const entry = (await ctx.db.get(
-    "changelogEntries",
-    entryId,
-  )) as GenericRow | null
+): Promise<Doc<"changelogEntries">> {
+  const entry = await ctx.db.get("changelogEntries", entryId)
   if (!entry) {
     adminError("CHANGELOG_ENTRY_NOT_FOUND", "Changelog entry not found")
   }
@@ -455,121 +437,103 @@ async function assertAvailableSlug(
   }
 }
 
-async function formatFeatureRequest(ctx: DatabaseCtx, row: GenericRow) {
+async function formatFeatureRequest(
+  ctx: DatabaseCtx,
+  row: Doc<"featureRequests">,
+) {
   const [user, workspace] = await Promise.all([
-    ctx.db.get("users", row.createdByUserId as UserId),
-    ctx.db.get("workspaces", row.workspaceId as WorkspaceId),
+    ctx.db.get("users", row.createdByUserId),
+    ctx.db.get("workspaces", row.workspaceId),
   ])
 
   return {
-    ...(row.adminNote === undefined
-      ? {}
-      : { adminNote: row.adminNote as string }),
-    body: row.body as string,
-    createdAt: row.createdAt as number,
-    id: row._id as FeatureRequestId,
-    status: row.status as FeatureRequestStatus,
-    title: row.title as string,
-    updatedAt: row.updatedAt as number,
+    ...(row.adminNote === undefined ? {} : { adminNote: row.adminNote }),
+    body: row.body,
+    createdAt: row.createdAt,
+    id: row._id,
+    status: row.status,
+    title: row.title,
+    updatedAt: row.updatedAt,
     user: user
       ? {
-          clerkUserId: user.clerkUserId as string,
-          ...(user.email === undefined ? {} : { email: user.email as string }),
-          id: user._id as UserId,
-          ...(user.name === undefined ? {} : { name: user.name as string }),
+          clerkUserId: user.clerkUserId,
+          ...(user.email === undefined ? {} : { email: user.email }),
+          id: user._id,
+          ...(user.name === undefined ? {} : { name: user.name }),
         }
       : null,
     workspace: workspace
       ? {
-          id: workspace._id as WorkspaceId,
-          name: workspace.name as string,
+          id: workspace._id,
+          name: workspace.name,
         }
       : null,
   }
 }
 
-function formatChangelogEntry(row: GenericRow) {
-  const status = row.status as ChangelogStatus
+function formatChangelogEntry(row: Doc<"changelogEntries">) {
+  const status = row.status
   const displayedPublicationAt =
     status === "published" ? row.publishedAt : row.requestedPublicationAt
 
   return {
-    body: row.body as string,
-    id: row._id as ChangelogEntryId,
-    ...(row.label === undefined ? {} : { label: row.label as string }),
+    body: row.body,
+    id: row._id,
+    ...(row.label === undefined ? {} : { label: row.label }),
     ...(displayedPublicationAt === undefined
       ? {}
-      : { publishedAt: displayedPublicationAt as number }),
-    slug: row.slug as string,
+      : { publishedAt: displayedPublicationAt }),
+    slug: row.slug,
     status,
-    summary: row.summary as string,
-    title: row.title as string,
-    updatedAt: row.updatedAt as number,
+    summary: row.summary,
+    title: row.title,
+    updatedAt: row.updatedAt,
   }
 }
 
-function formatDeletionJob(row: GenericRow) {
+function formatDeletionJob(row: Doc<"deletionJobs">) {
   return {
-    attempts: row.attempts as number,
+    attempts: row.attempts,
     billingGuardStatus: String(row.billingGuardStatus),
-    createdAt: row.createdAt as number,
-    id: row._id as DeletionJobId,
-    maxAttempts: row.maxAttempts as number,
-    scheduledAt: row.scheduledAt as number,
-    status: row.status as
-      | "billing_check"
-      | "blocked"
-      | "canceled"
-      | "completed"
-      | "dead"
-      | "failed"
-      | "leased"
-      | "pending"
-      | "running",
-    updatedAt: row.updatedAt as number,
-    workspaceId: row.workspaceId as WorkspaceId,
-    ...(row.completedAt === undefined
-      ? {}
-      : { completedAt: row.completedAt as number }),
+    createdAt: row.createdAt,
+    id: row._id,
+    maxAttempts: row.maxAttempts,
+    scheduledAt: row.scheduledAt,
+    status: row.status,
+    updatedAt: row.updatedAt,
+    workspaceId: row.workspaceId,
+    ...(row.completedAt === undefined ? {} : { completedAt: row.completedAt }),
     ...(row.dataDeletionVerifiedAt === undefined
       ? {}
-      : { dataDeletionVerifiedAt: row.dataDeletionVerifiedAt as number }),
-    ...(row.generation === undefined
-      ? {}
-      : { generation: row.generation as number }),
+      : { dataDeletionVerifiedAt: row.dataDeletionVerifiedAt }),
+    ...(row.generation === undefined ? {} : { generation: row.generation }),
     ...(row.identityDeletionVerifiedAt === undefined
       ? {}
       : {
-          identityDeletionVerifiedAt: row.identityDeletionVerifiedAt as number,
+          identityDeletionVerifiedAt: row.identityDeletionVerifiedAt,
         }),
     ...(row.lastErrorCode === undefined
       ? {}
-      : { lastErrorCode: row.lastErrorCode as string }),
+      : { lastErrorCode: row.lastErrorCode }),
     ...(row.leaseExpiresAt === undefined
       ? {}
-      : { leaseExpiresAt: row.leaseExpiresAt as number }),
+      : { leaseExpiresAt: row.leaseExpiresAt }),
     ...(row.nextAttemptAt === undefined
       ? {}
-      : { nextAttemptAt: row.nextAttemptAt as number }),
-    ...(row.operationId === undefined
-      ? {}
-      : { operationId: row.operationId as string }),
-    ...(row.phase === undefined ? {} : { phase: row.phase as string }),
-    ...(row.purgeStage === undefined
-      ? {}
-      : { purgeStage: row.purgeStage as string }),
-    ...(row.quiescedAt === undefined
-      ? {}
-      : { quiescedAt: row.quiescedAt as number }),
+      : { nextAttemptAt: row.nextAttemptAt }),
+    ...(row.operationId === undefined ? {} : { operationId: row.operationId }),
+    ...(row.phase === undefined ? {} : { phase: row.phase }),
+    ...(row.purgeStage === undefined ? {} : { purgeStage: row.purgeStage }),
+    ...(row.quiescedAt === undefined ? {} : { quiescedAt: row.quiescedAt }),
     ...(row.securityFenceExpiresAt === undefined
       ? {}
-      : { securityFenceExpiresAt: row.securityFenceExpiresAt as number }),
+      : { securityFenceExpiresAt: row.securityFenceExpiresAt }),
     ...(row.supersedesJobId === undefined
       ? {}
-      : { supersedesJobId: row.supersedesJobId as DeletionJobId }),
+      : { supersedesJobId: row.supersedesJobId }),
     ...(row.workflowVersion === undefined
       ? {}
-      : { workflowVersion: row.workflowVersion as number }),
+      : { workflowVersion: row.workflowVersion }),
   }
 }
 
@@ -602,13 +566,12 @@ function startOfUtcDay(timestamp: number): number {
   return Math.floor(timestamp / DAY_MS) * DAY_MS
 }
 
-function metricAmount(row: GenericRow): number {
-  const value = row.value
-  return typeof value === "number" && Number.isFinite(value) ? value : 0
+function metricAmount(row: Doc<"systemMetricBuckets">): number {
+  return Number.isFinite(row.value) ? row.value : 0
 }
 
 function sumMetric(
-  rows: readonly GenericRow[],
+  rows: readonly Doc<"systemMetricBuckets">[],
   metric: string,
   startAt: number,
 ): number {
@@ -616,21 +579,24 @@ function sumMetric(
     (sum, row) =>
       row.scope === "global" &&
       row.metric === metric &&
-      (row.bucketStartAt as number) >= startAt
+      row.bucketStartAt >= startAt
         ? sum + metricAmount(row)
         : sum,
     0,
   )
 }
 
-function providerHealth(rows: readonly GenericRow[], startAt: number) {
+function providerHealth(
+  rows: readonly Doc<"providerMetricBuckets">[],
+  startAt: number,
+) {
   const aggregates = new Map<string, ProviderAggregate>()
 
   for (const row of rows) {
-    if ((row.bucketStartAt as number) < startAt) {
+    if (row.bucketStartAt < startAt) {
       continue
     }
-    const provider = row.provider as string
+    const provider = row.provider
     const current = aggregates.get(provider) ?? {
       failureCount: 0,
       inputItemCount: 0,
@@ -642,18 +608,15 @@ function providerHealth(rows: readonly GenericRow[], startAt: number) {
       retryCount: 0,
       successCount: 0,
     }
-    current.failureCount += row.failureCount as number
-    current.inputItemCount += row.inputItemCount as number
-    current.latencyMaxMs = Math.max(
-      current.latencyMaxMs,
-      row.latencyMaxMs as number,
-    )
-    current.latencyTotalMs += row.latencyTotalMs as number
-    current.outputItemCount += row.outputItemCount as number
-    current.rateLimitedCount += row.rateLimitedCount as number
-    current.requestCount += row.requestCount as number
-    current.retryCount += row.retryCount as number
-    current.successCount += row.successCount as number
+    current.failureCount += row.failureCount
+    current.inputItemCount += row.inputItemCount
+    current.latencyMaxMs = Math.max(current.latencyMaxMs, row.latencyMaxMs)
+    current.latencyTotalMs += row.latencyTotalMs
+    current.outputItemCount += row.outputItemCount
+    current.rateLimitedCount += row.rateLimitedCount
+    current.requestCount += row.requestCount
+    current.retryCount += row.retryCount
+    current.successCount += row.successCount
     aggregates.set(provider, current)
   }
 
@@ -681,7 +644,7 @@ function providerHealth(rows: readonly GenericRow[], startAt: number) {
 }
 
 function mentionVolume(
-  rows: readonly GenericRow[],
+  rows: readonly Doc<"systemMetricBuckets">[],
   startAt: number,
   days: 7 | 30 | 90,
 ) {
@@ -694,11 +657,11 @@ function mentionVolume(
     if (
       row.scope !== "global" ||
       row.metric !== MENTION_METRIC ||
-      (row.bucketStartAt as number) < startAt
+      row.bucketStartAt < startAt
     ) {
       continue
     }
-    const timestamp = startOfUtcDay(row.bucketStartAt as number)
+    const timestamp = startOfUtcDay(row.bucketStartAt)
     if (!counts.has(timestamp)) {
       continue
     }
@@ -711,7 +674,10 @@ function mentionVolume(
   }))
 }
 
-function digestDelivery(rows: readonly GenericRow[], startAt: number) {
+function digestDelivery(
+  rows: readonly Doc<"systemMetricBuckets">[],
+  startAt: number,
+) {
   const result = {
     bounced: 0,
     clicked: 0,
@@ -731,7 +697,7 @@ function digestDelivery(rows: readonly GenericRow[], startAt: number) {
       row.scope !== "global" ||
       typeof row.metric !== "string" ||
       !row.metric.startsWith(DELIVERY_METRIC_PREFIX) ||
-      (row.bucketStartAt as number) < startAt
+      row.bucketStartAt < startAt
     ) {
       continue
     }
@@ -816,27 +782,19 @@ export const getMetricsOverview = adminQuery({
       categorizationGaugeRows,
       operationalGaugeRows,
       activeWorkspaceRows,
-    ] = (await Promise.all([
+    ] = await Promise.all([
       Promise.all(
         METRIC_PROVIDERS.map(
           async (provider) =>
             await ctx.db
               .query("providerMetricBuckets")
               .withIndex("by_provider_operation_granularity_and_bucket", (q) =>
-                indexLessThan(
-                  indexGreaterThanOrEqual(
-                    indexEquals(
-                      q,
-                      ["provider", provider],
-                      ["operation", PROVIDER_DAILY_ROLLUP_OPERATION],
-                      ["granularity", "day"],
-                    ),
-                    "bucketStartAt",
-                    startAt,
-                  ),
-                  "bucketStartAt",
-                  tomorrowStartAt,
-                ),
+                q
+                  .eq("provider", provider)
+                  .eq("operation", PROVIDER_DAILY_ROLLUP_OPERATION)
+                  .eq("granularity", "day")
+                  .gte("bucketStartAt", startAt)
+                  .lt("bucketStartAt", tomorrowStartAt),
               )
               .collect(),
         ),
@@ -849,21 +807,13 @@ export const getMetricsOverview = adminQuery({
               .withIndex(
                 "by_metric_scope_workspace_granularity_and_bucket",
                 (q) =>
-                  indexLessThan(
-                    indexGreaterThanOrEqual(
-                      indexEquals(
-                        q,
-                        ["metric", metric],
-                        ["scope", "global"],
-                        ["workspaceId", undefined],
-                        ["granularity", "day"],
-                      ),
-                      "bucketStartAt",
-                      metricReadStartAt,
-                    ),
-                    "bucketStartAt",
-                    tomorrowStartAt,
-                  ),
+                  q
+                    .eq("metric", metric)
+                    .eq("scope", "global")
+                    .eq("workspaceId", undefined)
+                    .eq("granularity", "day")
+                    .gte("bucketStartAt", metricReadStartAt)
+                    .lt("bucketStartAt", tomorrowStartAt),
               )
               .collect(),
         ),
@@ -871,57 +821,47 @@ export const getMetricsOverview = adminQuery({
       Promise.all(
         CATEGORIZATION_JOB_STATUSES.map(
           async (status) =>
-            (await ctx.db
+            await ctx.db
               .query("systemMetricBuckets")
               .withIndex(
                 "by_metric_scope_workspace_granularity_and_bucket",
                 (q) =>
-                  indexEquals(
-                    q,
-                    ["metric", categorizationStatusMetric(status)],
-                    ["scope", "global"],
-                    ["workspaceId", undefined],
-                    ["granularity", "hour"],
-                    ["bucketStartAt", SYSTEM_METRIC_GAUGE_BUCKET_START_AT],
-                  ),
+                  q
+                    .eq("metric", categorizationStatusMetric(status))
+                    .eq("scope", "global")
+                    .eq("workspaceId", undefined)
+                    .eq("granularity", "hour")
+                    .eq("bucketStartAt", SYSTEM_METRIC_GAUGE_BUCKET_START_AT),
               )
-              .unique()) as GenericRow | null,
+              .unique(),
         ),
       ),
       Promise.all(
         operationalMetricNames.map(
           async (metric) =>
-            (await ctx.db
+            await ctx.db
               .query("systemMetricBuckets")
               .withIndex(
                 "by_metric_scope_workspace_granularity_and_bucket",
                 (q) =>
-                  indexEquals(
-                    q,
-                    ["metric", metric],
-                    ["scope", "global"],
-                    ["workspaceId", undefined],
-                    ["granularity", "hour"],
-                    ["bucketStartAt", SYSTEM_METRIC_GAUGE_BUCKET_START_AT],
-                  ),
+                  q
+                    .eq("metric", metric)
+                    .eq("scope", "global")
+                    .eq("workspaceId", undefined)
+                    .eq("granularity", "hour")
+                    .eq("bucketStartAt", SYSTEM_METRIC_GAUGE_BUCKET_START_AT),
               )
-              .unique()) as GenericRow | null,
+              .unique(),
         ),
       ),
       ctx.db
         .query("workspaces")
         .withIndex("by_last_mention_at", (q) => q.gte("lastMentionAt", startAt))
         .take(MAX_ACTIVE_WORKSPACE_COUNT + 1),
-    ])) as [
-      GenericRow[],
-      GenericRow[],
-      Array<GenericRow | null>,
-      Array<GenericRow | null>,
-      GenericRow[],
-    ]
+    ])
 
     const relevantSystemRows = systemRows.filter(
-      (row) => (row.bucketStartAt as number) >= metricReadStartAt,
+      (row) => row.bucketStartAt >= metricReadStartAt,
     )
     const categoryCounts = new Map<string, number>()
     let categorizedMentions = 0
@@ -1045,22 +985,21 @@ export const listDeletionJobs = adminQuery({
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 200) {
       adminError("INVALID_ADMIN_INPUT", "Deletion job limit must be 1 to 200")
     }
-    const rows = args.status
+    const status = args.status
+    const rows = status
       ? await ctx.db
           .query("deletionJobs")
           .withIndex("by_kind_status_and_created_at", (q) =>
-            indexEquals(q, ["kind", "account"], ["status", args.status]),
+            q.eq("kind", "account").eq("status", status),
           )
           .order("desc")
           .take(limit)
       : await ctx.db
           .query("deletionJobs")
-          .withIndex("by_kind_and_created_at", (q) =>
-            indexEquals(q, ["kind", "account"]),
-          )
+          .withIndex("by_kind_and_created_at", (q) => q.eq("kind", "account"))
           .order("desc")
           .take(limit)
-    return (rows as GenericRow[]).map(formatDeletionJob)
+    return rows.map(formatDeletionJob)
   },
 })
 
@@ -1071,21 +1010,16 @@ export const getDeletionJob = adminQuery({
     job: deletionJobResultValidator,
   }),
   handler: async (ctx, args) => {
-    const row = (await ctx.db.get(
-      "deletionJobs",
-      args.deletionJobId,
-    )) as GenericRow | null
+    const row = await ctx.db.get("deletionJobs", args.deletionJobId)
     if (!row) {
       adminError("DELETION_JOB_NOT_FOUND", "Deletion job not found")
     }
     const events = await ctx.db
       .query("auditEvents")
       .withIndex("by_target_and_created_at", (q) =>
-        indexEquals(
-          q,
-          ["targetType", "deletionJob"],
-          ["targetId", String(args.deletionJobId)],
-        ),
+        q
+          .eq("targetType", "deletionJob")
+          .eq("targetId", String(args.deletionJobId)),
       )
       .order("asc")
       .collect()
@@ -1113,10 +1047,7 @@ export const retryDeletionJob = adminMutation({
     if (args.confirmation !== "RETRY") {
       adminError("CONFIRMATION_MISMATCH", "Type RETRY to create a new attempt")
     }
-    const original = (await ctx.db.get(
-      "deletionJobs",
-      args.deletionJobId,
-    )) as GenericRow | null
+    const original = await ctx.db.get("deletionJobs", args.deletionJobId)
     if (!original) {
       adminError("DELETION_JOB_NOT_FOUND", "Deletion job not found")
     }
@@ -1159,8 +1090,9 @@ export const retryDeletionJob = adminMutation({
       : hasQuiesced
         ? ("purge" as const)
         : ("billing_check" as const)
-    const persistedStage = original.purgeStage as string | undefined
-    const purgeStage =
+    const persistedStage = original.purgeStage
+    const purgeStage:
+      (typeof ACCOUNT_DELETION_PURGE_STAGES)[number] | undefined =
       phase === "purge" &&
       ACCOUNT_DELETION_PURGE_STAGES.includes(
         persistedStage as (typeof ACCOUNT_DELETION_PURGE_STAGES)[number],
@@ -1169,36 +1101,39 @@ export const retryDeletionJob = adminMutation({
         : phase === "purge"
           ? ACCOUNT_DELETION_PURGE_STAGES[0]
           : undefined
-    const deletionJobId = (await ctx.db.insert(
-      "deletionJobs",
-      withoutUndefinedValues({
-        accountUserId: original.accountUserId,
-        accessFencedAt: original.accessFencedAt,
-        attempts: 0,
-        billingCheckedAt: original.billingCheckedAt,
-        billingGuardStatus: original.billingGuardStatus,
-        createdAt: now,
-        generation,
-        idempotencyKey: operationId,
-        identityClerkUserId: original.identityClerkUserId,
-        kind: "account",
-        leaseVersion: 0,
-        maxAttempts: ACCOUNT_DELETION_MAX_ATTEMPTS,
-        nextAttemptAt: now,
-        operationId,
-        phase,
-        purgeStage,
-        quiescedAt: original.quiescedAt,
-        requestedByUserId: original.requestedByUserId,
-        resourceKey: original.resourceKey,
-        scheduledAt: now,
-        status: "pending",
-        supersedesJobId: original._id,
-        updatedAt: now,
-        workflowVersion: ACCOUNT_DELETION_WORKFLOW_VERSION,
-        workspaceId: original.workspaceId,
-      }),
-    )) as DeletionJobId
+    const deletionJobId = await ctx.db.insert("deletionJobs", {
+      accountUserId: original.accountUserId,
+      ...(original.accessFencedAt === undefined
+        ? {}
+        : { accessFencedAt: original.accessFencedAt }),
+      attempts: 0,
+      ...(original.billingCheckedAt === undefined
+        ? {}
+        : { billingCheckedAt: original.billingCheckedAt }),
+      billingGuardStatus: original.billingGuardStatus,
+      createdAt: now,
+      generation,
+      idempotencyKey: operationId,
+      identityClerkUserId: original.identityClerkUserId,
+      kind: "account",
+      leaseVersion: 0,
+      maxAttempts: ACCOUNT_DELETION_MAX_ATTEMPTS,
+      nextAttemptAt: now,
+      operationId,
+      phase,
+      ...(purgeStage === undefined ? {} : { purgeStage }),
+      ...(original.quiescedAt === undefined
+        ? {}
+        : { quiescedAt: original.quiescedAt }),
+      requestedByUserId: original.requestedByUserId,
+      resourceKey: original.resourceKey,
+      scheduledAt: now,
+      status: "pending",
+      supersedesJobId: original._id,
+      updatedAt: now,
+      workflowVersion: ACCOUNT_DELETION_WORKFLOW_VERSION,
+      workspaceId: original.workspaceId,
+    })
     await auditAdminMutation(
       ctx,
       ctx.adminIdentity,
@@ -1210,10 +1145,7 @@ export const retryDeletionJob = adminMutation({
       },
       now,
     )
-    const created = (await ctx.db.get(
-      "deletionJobs",
-      deletionJobId,
-    )) as GenericRow | null
+    const created = await ctx.db.get("deletionJobs", deletionJobId)
     if (!created) {
       adminError("DELETION_RETRY_FAILED", "Deletion retry was not persisted")
     }
@@ -1231,10 +1163,7 @@ export const cancelDeletionJob = adminMutation({
     if (args.confirmation !== "CANCEL") {
       adminError("CONFIRMATION_MISMATCH", "Type CANCEL to stop deletion")
     }
-    const job = (await ctx.db.get(
-      "deletionJobs",
-      args.deletionJobId,
-    )) as GenericRow | null
+    const job = await ctx.db.get("deletionJobs", args.deletionJobId)
     if (!job) {
       adminError("DELETION_JOB_NOT_FOUND", "Deletion job not found")
     }
@@ -1252,30 +1181,27 @@ export const cancelDeletionJob = adminMutation({
     }
 
     const now = Date.now()
-    const user = await ctx.db.get("users", job.accountUserId as UserId)
-    const workspace = await ctx.db.get(
-      "workspaces",
-      job.workspaceId as WorkspaceId,
-    )
+    const user = await ctx.db.get("users", job.accountUserId)
+    const workspace = await ctx.db.get("workspaces", job.workspaceId)
     if (user && user.disabledAt === job.accessFencedAt) {
-      await ctx.db.patch("users", job.accountUserId as UserId, {
+      await ctx.db.patch("users", job.accountUserId, {
         disabledAt: undefined,
         updatedAt: now,
       })
     }
     const restoresWorkspaceFence =
+      typeof job.accessFencedAt === "number" &&
       workspace?.deletionPendingAt === job.accessFencedAt
     if (restoresWorkspaceFence) {
-      await ctx.db.patch("workspaces", job.workspaceId as WorkspaceId, {
+      const accessFencedAt = job.accessFencedAt
+      if (accessFencedAt === undefined) {
+        throw new Error("Deletion fence timestamp disappeared")
+      }
+      await ctx.db.patch("workspaces", job.workspaceId, {
         deletionPendingAt: undefined,
         updatedAt: now,
       })
-      await restoreDeletionFenceState(
-        ctx,
-        job.workspaceId as WorkspaceId,
-        job.accessFencedAt as number,
-        now,
-      )
+      await restoreDeletionFenceState(ctx, job.workspaceId, accessFencedAt, now)
     }
     await ctx.db.patch("deletionJobs", args.deletionJobId, {
       lastError: "CANCELED_BY_OPERATOR",
@@ -1296,10 +1222,7 @@ export const cancelDeletionJob = adminMutation({
       },
       now,
     )
-    const canceled = (await ctx.db.get(
-      "deletionJobs",
-      args.deletionJobId,
-    )) as GenericRow | null
+    const canceled = await ctx.db.get("deletionJobs", args.deletionJobId)
     if (!canceled) {
       adminError(
         "DELETION_CANCEL_FAILED",
@@ -1429,12 +1352,11 @@ export const listFeatureRequests = adminQuery({
       }
     }
 
-    const result = args.status
+    const status = args.status
+    const result = status
       ? await ctx.db
           .query("featureRequests")
-          .withIndex("by_status_and_created_at", (q) =>
-            indexEquals(q, ["status", args.status]),
-          )
+          .withIndex("by_status_and_created_at", (q) => q.eq("status", status))
           .order(order)
           .paginate({ cursor: args.cursor ?? null, numItems: limit })
       : await ctx.db
@@ -1467,7 +1389,7 @@ export const updateFeatureRequest = adminMutation({
     const status = args.status as FeatureRequestStatus
 
     await ctx.db.patch("featureRequests", requestId, {
-      ...(args.adminNote === undefined ? {} : { adminNote }),
+      ...(adminNote === undefined ? {} : { adminNote }),
       completedAt:
         status === "completed"
           ? ((request.completedAt as number | undefined) ?? now)
@@ -1491,12 +1413,10 @@ export const updateFeatureRequest = adminMutation({
       now,
     )
 
-    return await formatFeatureRequest(ctx, {
-      ...request,
-      ...(args.adminNote === undefined ? {} : { adminNote }),
-      status,
-      updatedAt: now,
-    })
+    return await formatFeatureRequest(
+      ctx,
+      await featureRequestForId(ctx, requestId),
+    )
   },
 })
 
@@ -1510,12 +1430,11 @@ export const listChangelogEntries = adminQuery({
     nextCursor: v.optional(v.string()),
   }),
   handler: async (ctx, args) => {
-    const result = args.status
+    const status = args.status
+    const result = status
       ? await ctx.db
           .query("changelogEntries")
-          .withIndex("by_status_and_updated_at", (q) =>
-            indexEquals(q, ["status", args.status]),
-          )
+          .withIndex("by_status_and_updated_at", (q) => q.eq("status", status))
           .order("desc")
           .paginate({ cursor: args.cursor ?? null, numItems: 25 })
       : await ctx.db
@@ -1622,7 +1541,7 @@ export const updateChangelogEntry = adminMutation({
       now,
     )
 
-    return formatChangelogEntry({ ...entry, ...patch })
+    return formatChangelogEntry(await changelogEntryForId(ctx, entryId))
   },
 })
 
@@ -1666,7 +1585,7 @@ export const publishChangelogEntry = adminMutation({
       now,
     )
 
-    return formatChangelogEntry({ ...entry, ...patch })
+    return formatChangelogEntry(await changelogEntryForId(ctx, entryId))
   },
 })
 
@@ -1704,7 +1623,7 @@ export const unpublishChangelogEntry = adminMutation({
       now,
     )
 
-    return formatChangelogEntry({ ...entry, ...patch })
+    return formatChangelogEntry(await changelogEntryForId(ctx, entryId))
   },
 })
 

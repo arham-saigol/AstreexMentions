@@ -123,7 +123,7 @@ export function MentionCard({
 }: {
   actionError?: string
   mention: MentionItem
-  onStatusChange: (mentionId: string, status: MentionStatus) => void
+  onStatusChange: (mentionId: MentionItem["id"], status: MentionStatus) => void
   pending: boolean
 }) {
   const { Icon: PlatformIcon, label: platformLabel } = platformDetails(

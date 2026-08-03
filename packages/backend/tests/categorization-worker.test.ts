@@ -854,11 +854,9 @@ describe("durable DeepSeek categorization worker", () => {
       fileURLToPath(new URL("../convex/crons.ts", import.meta.url)),
       "utf8",
     )
-    expect(cronSource).toContain(
-      'import { dispatchDueCategorizationJobsReference } from "./categorization/internal"',
-    )
+    expect(cronSource).toContain('import { internal } from "./_generated/api"')
     expect(cronSource).toMatch(
-      /"dispatch mention categorization jobs",\s*\{ minutes: 1 \},\s*dispatchDueCategorizationJobsReference/,
+      /"dispatch mention categorization jobs",\s*\{ minutes: 1 \},\s*internal\.categorization\.internal\.dispatchDueCategorizationJobs/,
     )
   })
 })

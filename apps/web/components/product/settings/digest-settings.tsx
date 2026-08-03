@@ -1,5 +1,6 @@
 "use client"
 
+import { api } from "@astreex/backend/api"
 import {
   BellIcon,
   CircleNotchIcon,
@@ -17,10 +18,7 @@ import {
 } from "@astreex/ui/components/select"
 import { Switch } from "@astreex/ui/components/switch"
 import { useMutation, useQuery } from "convex/react"
-import { useMemo, useState, type FormEvent } from "react"
-
-import { customerConvex } from "@/lib/customer-convex"
-import { settingsResultSchema } from "@/lib/settings-convex"
+import { useState, type FormEvent } from "react"
 
 function detectedTimeZone(): string {
   try {
@@ -99,32 +97,23 @@ function formatNextRun(timestamp: number, timeZone: string): string {
 }
 
 export function DigestSettings() {
-  const value = useQuery(customerConvex.settings.get, {})
-  const updateDigest = useMutation(customerConvex.settings.updateDigest)
-  const parsed = useMemo(
-    () => (value === undefined ? null : settingsResultSchema.safeParse(value)),
-    [value],
-  )
+  const value = useQuery(api.settings.getSettings, {})
+  const updateDigest = useMutation(api.settings.updateDigestPreferences)
   const [enabledDraft, setEnabledDraft] = useState<boolean | null>(null)
   const [localTimeDraft, setLocalTimeDraft] = useState<string | null>(null)
   const [timeZoneDraft, setTimeZoneDraft] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const enabled =
-    enabledDraft ?? (parsed?.success ? parsed.data.digest.enabled : true)
+  const enabled = enabledDraft ?? value?.digest.enabled ?? true
   const localTime =
     localTimeDraft ??
-    (parsed?.success
-      ? toTime(parsed.data.digest.hour, parsed.data.digest.minute)
-      : "09:00")
-  const timeZone =
-    timeZoneDraft ??
-    (parsed?.success ? parsed.data.digest.timeZone : detectedTimeZone())
+    (value ? toTime(value.digest.hour, value.digest.minute) : "09:00")
+  const timeZone = timeZoneDraft ?? value?.digest.timeZone ?? detectedTimeZone()
 
   const save = async (event: FormEvent) => {
     event.preventDefault()
-    if (!parsed?.success) {
+    if (!value) {
       setError(
         "Digest preferences are unavailable, so no schedule was changed.",
       )
@@ -143,7 +132,7 @@ export function DigestSettings() {
       await updateDigest({
         enabled,
         hour: time.hour,
-        mentionLimit: parsed.data.digest.mentionLimit,
+        mentionLimit: value.digest.mentionLimit,
         minute: time.minute,
         timeZone,
       })
@@ -160,23 +149,6 @@ export function DigestSettings() {
       <p role="status" className="text-muted-foreground text-sm">
         Loading digest preferences…
       </p>
-    )
-  }
-
-  if (!parsed?.success) {
-    return (
-      <div
-        role="alert"
-        className="border-border bg-muted/35 rounded-md border px-4 py-4"
-      >
-        <p className="text-foreground text-sm font-medium">
-          Digest preferences are unavailable.
-        </p>
-        <p className="text-muted-foreground mt-1 text-xs leading-5">
-          The connected result could not be validated, so Astreex is not
-          displaying a guessed schedule.
-        </p>
-      </div>
     )
   }
 
@@ -235,7 +207,7 @@ export function DigestSettings() {
         </div>
       </div>
 
-      {enabled && parsed.data.digest.nextRunAt !== undefined && (
+      {enabled && value.digest.nextRunAt !== undefined && (
         <div className="border-border bg-muted/30 flex items-start gap-3 rounded-md border px-4 py-3">
           <BellIcon
             aria-hidden="true"
@@ -243,7 +215,7 @@ export function DigestSettings() {
           />
           <p className="text-muted-foreground text-xs leading-5">
             Next scheduled run:{" "}
-            {formatNextRun(parsed.data.digest.nextRunAt, timeZone)}
+            {formatNextRun(value.digest.nextRunAt, timeZone)}
           </p>
         </div>
       )}

@@ -1,17 +1,12 @@
-import type { GenericId } from "convex/values"
+import type { Id } from "../_generated/dataModel"
 
 import { effectiveEntitlementStatus } from "../billing/lifecycle"
-import { indexEquals, type MutationCtx } from "../server"
+import { type MutationCtx } from "../_generated/server"
 
 const MAX_DELETION_RECONCILE_SOURCES = 200
 const MAX_DELETION_RECONCILE_DIGESTS = 50
 
-type UserId = GenericId<"users">
-type WorkspaceId = GenericId<"workspaces">
-type KeywordId = GenericId<"keywords">
-type TrackingSourceId = GenericId<"trackingSources">
-type DigestPreferenceId = GenericId<"digestPreferences">
-type GenericRow = Record<string, unknown> & { _id: GenericId<string> }
+type WorkspaceId = Id<"workspaces">
 
 export async function restoreDeletionFenceState(
   ctx: MutationCtx,
@@ -31,7 +26,7 @@ export async function restoreDeletionFenceState(
       ctx.db
         .query("usageCycles")
         .withIndex("by_workspace_status_and_period_end", (q) =>
-          indexEquals(q, ["workspaceId", workspaceId], ["status", "open"]),
+          q.eq("workspaceId", workspaceId).eq("status", "open"),
         )
         .collect(),
       ctx.db
@@ -47,10 +42,10 @@ export async function restoreDeletionFenceState(
         )
         .take(MAX_DELETION_RECONCILE_DIGESTS + 1),
     ])
-  const subscriptionRow = subscription as GenericRow | null
-  const usageCycleRows = usageCycles as GenericRow[]
-  const sourceRows = sources as GenericRow[]
-  const digestPreferenceRows = digestPreferences as GenericRow[]
+  const subscriptionRow = subscription
+  const usageCycleRows = usageCycles
+  const sourceRows = sources
+  const digestPreferenceRows = digestPreferences
   if (sourceRows.length > MAX_DELETION_RECONCILE_SOURCES) {
     throw new RangeError(
       "Tracking source count exceeds the deletion-fence recovery limit",
@@ -66,34 +61,26 @@ export async function restoreDeletionFenceState(
     subscriptionRow !== null &&
     effectiveEntitlementStatus(
       {
-        currentPeriodEnd: subscriptionRow.currentPeriodEnd as number,
-        entitlementStatus: subscriptionRow.entitlementStatus as
-          "active" | "inactive",
-        status: subscriptionRow.status as string,
+        currentPeriodEnd: subscriptionRow.currentPeriodEnd,
+        entitlementStatus: subscriptionRow.entitlementStatus,
+        status: subscriptionRow.status,
       },
       now,
     ) === "active"
   const usageCycle = usageCycleRows
-    .filter(
-      (cycle) =>
-        (cycle.periodStartAt as number) <= now &&
-        (cycle.periodEndAt as number) > now,
-    )
-    .sort(
-      (left, right) =>
-        (right.periodStartAt as number) - (left.periodStartAt as number),
-    )[0]
+    .filter((cycle) => cycle.periodStartAt <= now && cycle.periodEndAt > now)
+    .sort((left, right) => right.periodStartAt - left.periodStartAt)[0]
   const hasUsageCapacity =
     usageCycle !== undefined &&
-    (usageCycle.mentionsUsed as number) < (usageCycle.mentionLimit as number)
+    usageCycle.mentionsUsed < usageCycle.mentionLimit
 
   for (const source of sourceRows) {
     if (source.deletionPausedAt !== accessFencedAt) {
       continue
     }
-    const keyword = await ctx.db.get("keywords", source.keywordId as KeywordId)
+    const keyword = await ctx.db.get("keywords", source.keywordId)
     if (source.deletedAt !== undefined || source.status === "deleted") {
-      await ctx.db.patch("trackingSources", source._id as TrackingSourceId, {
+      await ctx.db.patch("trackingSources", source._id, {
         deletionPausedAt: undefined,
         updatedAt: now,
       })
@@ -108,7 +95,7 @@ export async function restoreDeletionFenceState(
         : !hasUsageCapacity
           ? { pauseReason: "usage" as const, status: "paused" as const }
           : { pauseReason: undefined, status: "active" as const }
-    await ctx.db.patch("trackingSources", source._id as TrackingSourceId, {
+    await ctx.db.patch("trackingSources", source._id, {
       deletionPausedAt: undefined,
       leaseExpiresAt: undefined,
       leaseToken: undefined,
@@ -121,21 +108,17 @@ export async function restoreDeletionFenceState(
     if (preference.deletionPausedAt !== accessFencedAt) {
       continue
     }
-    const digestUser = await ctx.db.get("users", preference.userId as UserId)
+    const digestUser = await ctx.db.get("users", preference.userId)
     const recipientAvailable =
       digestUser !== null &&
       digestUser.deletedAt === undefined &&
       digestUser.disabledAt === undefined &&
       typeof digestUser.email === "string" &&
       digestUser.email.trim().length > 0
-    await ctx.db.patch(
-      "digestPreferences",
-      preference._id as DigestPreferenceId,
-      {
-        deletionPausedAt: undefined,
-        enabled: recipientAvailable,
-        updatedAt: now,
-      },
-    )
+    await ctx.db.patch("digestPreferences", preference._id, {
+      deletionPausedAt: undefined,
+      enabled: recipientAvailable,
+      updatedAt: now,
+    })
   }
 }

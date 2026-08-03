@@ -1,4 +1,5 @@
-import { ConvexError, type GenericId, v } from "convex/values"
+import { ConvexError, v } from "convex/values"
+import type { Id } from "./_generated/dataModel"
 
 import { authenticatedMutation, authenticatedQuery } from "./lib/authorization"
 import {
@@ -11,12 +12,11 @@ import {
   mentionStatusValidator,
   platformValidator,
 } from "./schema"
-import { indexEquals } from "./server"
 import { resolveCurrentCustomer } from "./users"
 
-type SavedViewId = GenericId<"savedViews">
-type CategoryId = GenericId<"categories">
-type KeywordId = GenericId<"keywords">
+type SavedViewId = Id<"savedViews">
+type CategoryId = Id<"categories">
+type KeywordId = Id<"keywords">
 type MentionStatus = "new" | "saved" | "dismissed"
 type MentionSort = "newest" | "oldest" | "most_engaged"
 type Platform = "x" | "reddit" | "hacker_news"
@@ -130,7 +130,7 @@ function validatedTimestamp(value: number, field: string): number {
 
 async function validatedFilters(
   ctx: Parameters<typeof resolveCurrentCustomer>[0],
-  workspaceId: GenericId<"workspaces">,
+  workspaceId: Id<"workspaces">,
   filters: MentionFilters,
 ): Promise<MentionFilters> {
   const categoryIds =
@@ -222,38 +222,34 @@ function storedSavedViewResult(row: Record<string, unknown>): SavedViewResult {
 
 async function findDuplicateName(
   ctx: Parameters<typeof resolveCurrentCustomer>[0],
-  workspaceId: GenericId<"workspaces">,
-  userId: GenericId<"users">,
+  workspaceId: Id<"workspaces">,
+  userId: Id<"users">,
   normalizedName: string,
 ): Promise<Record<string, unknown> | null> {
   return await ctx.db
     .query("savedViews")
     .withIndex("by_workspace_user_normalized_name_and_deleted_at", (q) =>
-      indexEquals(
-        q,
-        ["workspaceId", workspaceId],
-        ["userId", userId],
-        ["normalizedName", normalizedName],
-        ["deletedAt", undefined],
-      ),
+      q
+        .eq("workspaceId", workspaceId)
+        .eq("userId", userId)
+        .eq("normalizedName", normalizedName)
+        .eq("deletedAt", undefined),
     )
     .unique()
 }
 
 async function storedViews(
   ctx: Parameters<typeof resolveCurrentCustomer>[0],
-  workspaceId: GenericId<"workspaces">,
-  userId: GenericId<"users">,
+  workspaceId: Id<"workspaces">,
+  userId: Id<"users">,
 ): Promise<Record<string, unknown>[]> {
   const rows = await ctx.db
     .query("savedViews")
     .withIndex("by_workspace_user_deleted_and_position", (q) =>
-      indexEquals(
-        q,
-        ["workspaceId", workspaceId],
-        ["userId", userId],
-        ["deletedAt", undefined],
-      ),
+      q
+        .eq("workspaceId", workspaceId)
+        .eq("userId", userId)
+        .eq("deletedAt", undefined),
     )
     .take(MAX_ACTIVE_SAVED_VIEWS + 1)
 

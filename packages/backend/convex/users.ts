@@ -1,4 +1,5 @@
-import { ConvexError, type GenericId, v } from "convex/values"
+import { ConvexError, v } from "convex/values"
+import type { Id } from "./_generated/dataModel"
 
 import {
   authenticatedMutation,
@@ -19,11 +20,11 @@ import {
   nextDailyDigestRunAt,
 } from "./lib/dailyDigest"
 import { adjustWorkspaceCountMetric } from "./lib/operationalMetrics"
-import { indexEquals, type MutationCtx } from "./server"
+import { type MutationCtx } from "./_generated/server"
 
-type UserId = GenericId<"users">
-type WorkspaceId = GenericId<"workspaces">
-type MembershipId = GenericId<"workspaceMembers">
+type UserId = Id<"users">
+type WorkspaceId = Id<"workspaces">
+type MembershipId = Id<"workspaceMembers">
 
 type BootstrapStore = PersonalWorkspaceBootstrapStore<
   UserId,
@@ -90,7 +91,7 @@ function bootstrapStore(ctx: MutationCtx): BootstrapStore {
       const membership = await ctx.db
         .query("workspaceMembers")
         .withIndex("by_workspace_and_user", (q) =>
-          indexEquals(q, ["workspaceId", workspaceId], ["userId", userId]),
+          q.eq("workspaceId", workspaceId).eq("userId", userId),
         )
         .unique()
 
@@ -100,7 +101,7 @@ function bootstrapStore(ctx: MutationCtx): BootstrapStore {
       const workspace = await ctx.db
         .query("workspaces")
         .withIndex("by_owner_and_kind", (q) =>
-          indexEquals(q, ["ownerUserId", userId], ["kind", "personal"]),
+          q.eq("ownerUserId", userId).eq("kind", "personal"),
         )
         .unique()
 
@@ -162,11 +163,7 @@ async function ensureDefaultCategories(
     const existing = await ctx.db
       .query("categories")
       .withIndex("by_workspace_and_system_key", (q) =>
-        indexEquals(
-          q,
-          ["workspaceId", workspaceId],
-          ["systemKey", category.systemKey],
-        ),
+        q.eq("workspaceId", workspaceId).eq("systemKey", category.systemKey),
       )
       .unique()
 
@@ -198,18 +195,14 @@ async function ensureDefaultCategories(
         existing.deletedAt !== undefined ||
         existing.isSystem !== true)
     ) {
-      await ctx.db.patch(
-        "categories",
-        existing._id as GenericId<"categories">,
-        {
-          deletedAt: undefined,
-          enabled: true,
-          isSystem: true,
-          name: "Other",
-          normalizedName: "other",
-          updatedAt: now,
-        },
-      )
+      await ctx.db.patch("categories", existing._id, {
+        deletedAt: undefined,
+        enabled: true,
+        isSystem: true,
+        name: "Other",
+        normalizedName: "other",
+        updatedAt: now,
+      })
     }
   }
 }
@@ -223,7 +216,7 @@ async function ensureDigestDefaults(
   const existing = await ctx.db
     .query("digestPreferences")
     .withIndex("by_workspace_and_user", (q) =>
-      indexEquals(q, ["workspaceId", workspaceId], ["userId", userId]),
+      q.eq("workspaceId", workspaceId).eq("userId", userId),
     )
     .unique()
 

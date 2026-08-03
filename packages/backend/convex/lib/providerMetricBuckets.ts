@@ -1,6 +1,6 @@
-import type { GenericId } from "convex/values"
+import type { Id } from "../_generated/dataModel"
 
-import { indexEquals, type MutationCtx } from "../server"
+import { type MutationCtx } from "../_generated/server"
 
 const HOUR_MS = 3_600_000
 const DAY_MS = 86_400_000
@@ -18,8 +18,7 @@ export const METRIC_PROVIDERS = [
 
 export type MetricProvider = (typeof METRIC_PROVIDERS)[number]
 
-type GenericRow = Record<string, unknown> & { _id: GenericId<string> }
-type ProviderMetricBucketId = GenericId<"providerMetricBuckets">
+type ProviderMetricBucketId = Id<"providerMetricBuckets">
 
 export async function recordProviderMetricBuckets(
   ctx: MutationCtx,
@@ -52,18 +51,16 @@ export async function recordProviderMetricBuckets(
   ]) {
     const bucketStartAt =
       Math.floor(updatedAt / bucket.duration) * bucket.duration
-    const existing = (await ctx.db
+    const existing = await ctx.db
       .query("providerMetricBuckets")
       .withIndex("by_provider_operation_granularity_and_bucket", (q) =>
-        indexEquals(
-          q,
-          ["provider", input.provider],
-          ["operation", bucket.operation],
-          ["granularity", bucket.granularity],
-          ["bucketStartAt", bucketStartAt],
-        ),
+        q
+          .eq("provider", input.provider)
+          .eq("operation", bucket.operation)
+          .eq("granularity", bucket.granularity)
+          .eq("bucketStartAt", bucketStartAt),
       )
-      .unique()) as GenericRow | null
+      .unique()
 
     if (existing) {
       await ctx.db.patch(

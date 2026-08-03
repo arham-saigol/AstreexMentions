@@ -1,11 +1,11 @@
+import { internal } from "../_generated/api"
 import {
   CreemIntegrationError,
   parseCreemWebhookEvent,
   verifyCreemWebhookSignature,
 } from "../integrations/creem"
-import { env, httpAction } from "../server"
+import { env, httpAction } from "../_generated/server"
 import { readCreemWebhookConfiguration } from "./config"
-import { ingestCreemWebhookReference } from "./internal"
 
 function jsonResponse(status: number, body: Record<string, unknown>): Response {
   return new Response(JSON.stringify(body), {
@@ -47,10 +47,13 @@ export const creemWebhook = httpAction(async (ctx, request) => {
   }
 
   try {
-    const result = await ctx.runMutation(ingestCreemWebhookReference, {
-      rawBody,
-      receivedAt: Date.now(),
-    })
+    const result = await ctx.runMutation(
+      internal.billing.internal.ingestCreemWebhook,
+      {
+        rawBody,
+        receivedAt: Date.now(),
+      },
+    )
     if (result.kind === "pending" || result.kind === "provider_unconfigured") {
       return jsonResponse(503, {
         ...(result.missing === undefined ? {} : { missing: result.missing }),

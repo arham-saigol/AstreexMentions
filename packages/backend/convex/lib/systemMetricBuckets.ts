@@ -1,10 +1,9 @@
-import type { GenericId } from "convex/values"
+import type { Id } from "../_generated/dataModel"
 
-import { indexEquals, type MutationCtx } from "../server"
+import { type MutationCtx } from "../_generated/server"
 
-type GenericRow = Record<string, unknown> & { _id: GenericId<string> }
-type SystemMetricBucketId = GenericId<"systemMetricBuckets">
-type WorkspaceId = GenericId<"workspaces">
+type SystemMetricBucketId = Id<"systemMetricBuckets">
+type WorkspaceId = Id<"workspaces">
 
 const HOUR_MS = 3_600_000
 const DAY_MS = 86_400_000
@@ -25,19 +24,17 @@ export async function adjustSystemMetricGauge(
   for (const scope of ["global", "workspace"] as const) {
     const metricWorkspaceId =
       scope === "workspace" ? input.workspaceId : undefined
-    const bucket = (await ctx.db
+    const bucket = await ctx.db
       .query("systemMetricBuckets")
       .withIndex("by_metric_scope_workspace_granularity_and_bucket", (q) =>
-        indexEquals(
-          q,
-          ["metric", input.metric],
-          ["scope", scope],
-          ["workspaceId", metricWorkspaceId],
-          ["granularity", "hour"],
-          ["bucketStartAt", bucketStartAt],
-        ),
+        q
+          .eq("metric", input.metric)
+          .eq("scope", scope)
+          .eq("workspaceId", metricWorkspaceId)
+          .eq("granularity", "hour")
+          .eq("bucketStartAt", bucketStartAt),
       )
-      .unique()) as GenericRow | null
+      .unique()
 
     if (!bucket) {
       // Older rows may predate gauge accounting. A missing decrement is a
@@ -100,19 +97,17 @@ export async function incrementDailySystemMetric(
   for (const scope of scopes) {
     const metricWorkspaceId =
       scope === "workspace" ? input.workspaceId : undefined
-    const bucket = (await ctx.db
+    const bucket = await ctx.db
       .query("systemMetricBuckets")
       .withIndex("by_metric_scope_workspace_granularity_and_bucket", (q) =>
-        indexEquals(
-          q,
-          ["metric", input.metric],
-          ["scope", scope],
-          ["workspaceId", metricWorkspaceId],
-          ["granularity", "day"],
-          ["bucketStartAt", bucketStartAt],
-        ),
+        q
+          .eq("metric", input.metric)
+          .eq("scope", scope)
+          .eq("workspaceId", metricWorkspaceId)
+          .eq("granularity", "day")
+          .eq("bucketStartAt", bucketStartAt),
       )
-      .unique()) as GenericRow | null
+      .unique()
 
     if (bucket) {
       await ctx.db.patch(

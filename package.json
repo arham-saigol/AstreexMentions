@@ -23,16 +23,8 @@
     "verify:release": "node scripts/verify-release-env.mjs && pnpm verify"
   },
   "devDependencies": {
-    "@eslint/js": "^9.0.0",
-    "@types/node": "^24.0.0",
-    "eslint": "^9.0.0",
-    "eslint-config-prettier": "^10.0.0",
-    "globals": "^16.0.0",
     "prettier": "^3.0.0",
     "prettier-plugin-tailwindcss": "^0.8.0",
-    "turbo": "^2.0.0",
-    "typescript": "^6.0.0",
-    "typescript-eslint": "^8.0.0",
-    "vitest": "^4.0.0"
+    "turbo": "^2.0.0"
   }
 }

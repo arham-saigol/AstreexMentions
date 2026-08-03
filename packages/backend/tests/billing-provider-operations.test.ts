@@ -446,7 +446,7 @@ describe("Creem provider operation retries", () => {
       reconciliationSchedule,
     )
     const successRecord = customerSource.indexOf(
-      "recordCreemProviderOperationReference",
+      "internal.billing.internal.recordCreemProviderOperation",
       incompleteGuard,
     )
     expect(reconciliationSchedule).toBeGreaterThan(-1)
@@ -464,7 +464,7 @@ describe("Creem provider operation retries", () => {
       'applied.kind === "incomplete_period"',
     )
     expect(reconciliationSource).toContain(
-      "markCreemProviderOperationUnresolvedReference",
+      "internal.billing.internal.markCreemProviderOperationUnresolved",
     )
     const internalSource = readFileSync(
       new URL("../convex/billing/internal.ts", import.meta.url),
@@ -473,7 +473,9 @@ describe("Creem provider operation retries", () => {
     expect(internalSource).toContain(
       'kind === "incomplete_period" && args.incompleteReconciliation',
     )
-    expect(internalSource).toContain("reconcileIncompleteCreemUpgradeReference")
+    expect(internalSource).toContain(
+      "internal.billing.reconciliation.reconcileIncompleteCreemUpgrade",
+    )
   })
 
   it("versions upgrade idempotency by the current subscription state", () => {
@@ -489,7 +491,7 @@ describe("Creem provider operation retries", () => {
       upgradeStart,
     )
     const operationEnd = customerSource.indexOf(
-      "beginCreemProviderOperationReference",
+      "internal.billing.internal.beginCreemProviderOperation",
       operationStart,
     )
     const operationId = customerSource.slice(operationStart, operationEnd)

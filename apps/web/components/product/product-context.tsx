@@ -5,8 +5,8 @@ import { createContext, useContext, type ReactNode } from "react"
 import type {
   BillingOverviewResult,
   CurrentWorkspaceResult,
-} from "@/lib/customer-convex"
-import type { ProductAccess } from "@/lib/product-access"
+  ProductAccess,
+} from "@/lib/product-access"
 
 export type ProductContextValue = {
   access: ProductAccess

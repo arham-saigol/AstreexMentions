@@ -1130,7 +1130,7 @@ describe("frontend function inventory", () => {
       keywordSource.indexOf("async function keywordForWorkspace"),
     )
     expect(uniquenessQuery).toContain('"by_workspace_phrase_and_deleted_at"')
-    expect(uniquenessQuery).toContain('["deletedAt", undefined]')
+    expect(uniquenessQuery).toContain('.eq("deletedAt", undefined)')
     expect(uniquenessQuery).toContain(".take(2)")
     expect(uniquenessQuery).not.toContain(".collect()")
 

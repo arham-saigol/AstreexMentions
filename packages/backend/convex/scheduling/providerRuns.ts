@@ -1,12 +1,11 @@
-import type { GenericId } from "convex/values"
+import type { Doc, Id } from "../_generated/dataModel"
 
 import { recordProviderMetricBuckets } from "../lib/providerMetricBuckets"
-import { type MutationCtx } from "../server"
+import { type MutationCtx } from "../_generated/server"
 import type { TrackingSourceType } from "./model"
 
-type TrackingSourceId = GenericId<"trackingSources">
-type ProviderRunId = GenericId<"providerRuns">
-type GenericRow = Record<string, unknown> & { _id: GenericId<string> }
+type TrackingSourceId = Id<"trackingSources">
+type ProviderRunId = Id<"providerRuns">
 
 export function trackingProviderRunIdempotencyKey(
   trackingSourceId: TrackingSourceId,
@@ -18,16 +17,16 @@ export function trackingProviderRunIdempotencyKey(
 export async function findTrackingProviderRun(
   ctx: MutationCtx,
   idempotencyKey: string,
-): Promise<GenericRow | null> {
-  return (await ctx.db
+): Promise<Doc<"providerRuns"> | null> {
+  return await ctx.db
     .query("providerRuns")
     .withIndex("by_idempotency_key", (q) =>
       q.eq("idempotencyKey", idempotencyKey),
     )
-    .unique()) as GenericRow | null
+    .unique()
 }
 
-function trackingProviderFromRun(run: GenericRow): TrackingSourceType {
+function trackingProviderFromRun(run: Doc<"providerRuns">): TrackingSourceType {
   const provider = run.provider
   if (
     provider !== "x" &&
@@ -82,7 +81,7 @@ export async function finishTrackingProviderRun(
     errorCode?: string | undefined
     errorMessage?: string | undefined
     outputCount: number
-    run: GenericRow
+    run: Doc<"providerRuns">
     status: "failed" | "succeeded"
   },
   now: number,
@@ -119,7 +118,7 @@ export async function finalizeInvalidatedTrackingProviderRun(
     errorCode: "source_changed" | "source_deleted" | "source_paused"
     errorMessage: string
     now: number
-    source: GenericRow
+    source: Doc<"trackingSources">
   },
 ): Promise<void> {
   if (input.source.leaseToken === undefined) {

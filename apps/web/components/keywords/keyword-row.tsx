@@ -17,7 +17,7 @@ import { Badge } from "@astreex/ui/components/badge"
 import { Button } from "@astreex/ui/components/button"
 import { cn } from "@astreex/ui/lib/utils"
 
-import type { Platform } from "@/lib/customer-convex"
+import type { Platform } from "@/lib/keywords"
 import {
   displaySources,
   formatInterval,

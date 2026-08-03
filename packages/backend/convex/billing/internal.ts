@@ -1,4 +1,5 @@
-import { type GenericId, v } from "convex/values"
+import { internal } from "../_generated/api"
+import { v } from "convex/values"
 
 import {
   creemReferenceId,
@@ -11,17 +12,12 @@ import {
   type CreemSubscriptionWebhookEvent,
   type CreemWebhookEvent,
 } from "../integrations/creem"
-import {
-  internalActionReference,
-  internalMutationReference,
-  internalQueryReference,
-} from "../lib/functionReferences"
 import { canReconcileBillingWorkspace } from "../lib/creemBilling"
 import {
   PROVIDER_OPERATION_STALE_MS,
   providerRunIsStale,
 } from "../lib/billingDeletionGuard"
-import { indexAtMost, withoutUndefinedValues } from "../lib/jobRuntime"
+import { withoutUndefinedValues } from "../lib/jobRuntime"
 import {
   syncUsagePausedWorkspaceMetric,
   transitionSubscriptionMetrics,
@@ -29,13 +25,12 @@ import {
 import { recordProviderMetricBuckets } from "../lib/providerMetricBuckets"
 import {
   env,
-  indexEquals,
-  indexGreaterThanOrEqual,
   internalMutation,
   internalQuery,
   type MutationCtx,
   type QueryCtx,
-} from "../server"
+} from "../_generated/server"
+import type { Doc, Id } from "../_generated/dataModel"
 import { finalizeInvalidatedTrackingProviderRun } from "../scheduling/providerRuns"
 import {
   isProviderUnconfigured,
@@ -69,13 +64,12 @@ const POST_PURGE_DELETION_PHASES = new Set([
   "done",
 ])
 
-type WorkspaceId = GenericId<"workspaces">
-type UserId = GenericId<"users">
-type SubscriptionId = GenericId<"subscriptions">
-type UsageCycleId = GenericId<"usageCycles">
-type BillingEventId = GenericId<"billingEvents">
-type ProviderRunId = GenericId<"providerRuns">
-type GenericRow = Record<string, unknown> & { _id: GenericId<string> }
+type WorkspaceId = Id<"workspaces">
+type UserId = Id<"users">
+type SubscriptionId = Id<"subscriptions">
+type UsageCycleId = Id<"usageCycles">
+type BillingEventId = Id<"billingEvents">
+type ProviderRunId = Id<"providerRuns">
 
 type GenericMutationContext = MutationCtx
 type DatabaseContext = Pick<MutationCtx | QueryCtx, "db">
@@ -92,15 +86,14 @@ async function findOutstandingCheckout(
   ctx: DatabaseContext,
   workspaceId: WorkspaceId,
   now: number,
-): Promise<Record<string, unknown> | null> {
+): Promise<Doc<"billingCheckouts"> | null> {
   const openCheckout = await ctx.db
     .query("billingCheckouts")
     .withIndex("by_workspace_status_and_expires_at", (q) =>
-      indexGreaterThanOrEqual(
-        indexEquals(q, ["workspaceId", workspaceId], ["status", "open"]),
-        "expiresAt",
-        now + 1,
-      ),
+      q
+        .eq("workspaceId", workspaceId)
+        .eq("status", "open")
+        .gte("expiresAt", now + 1),
     )
     .first()
   if (openCheckout) {
@@ -113,19 +106,17 @@ async function findOutstandingCheckout(
         ctx.db
           .query("billingCheckouts")
           .withIndex("by_workspace_status_plan_and_completed_at", (q) =>
-            indexEquals(
-              q,
-              ["workspaceId", workspaceId],
-              ["status", "complete"],
-              ["planId", planId],
-            ),
+            q
+              .eq("workspaceId", workspaceId)
+              .eq("status", "complete")
+              .eq("planId", planId),
           )
           .order("desc")
           .first(),
         ctx.db
           .query("subscriptions")
           .withIndex("by_workspace_plan_and_last_synced_at", (q) =>
-            indexEquals(q, ["workspaceId", workspaceId], ["planId", planId]),
+            q.eq("workspaceId", workspaceId).eq("planId", planId),
           )
           .order("desc")
           .first(),
@@ -220,19 +211,15 @@ async function recordProviderRunAndMetric(
     ) {
       return
     }
-    await ctx.db.patch(
-      "providerRuns",
-      existingRun._id as GenericId<"providerRuns">,
-      {
-        durationMs,
-        errorCode: input.errorCode,
-        errorMessage: input.errorMessage,
-        finishedAt: now,
-        outputCount: input.status === "succeeded" ? 1 : 0,
-        status: input.status,
-        updatedAt: now,
-      },
-    )
+    await ctx.db.patch("providerRuns", existingRun._id, {
+      durationMs,
+      errorCode: input.errorCode,
+      errorMessage: input.errorMessage,
+      finishedAt: now,
+      outputCount: input.status === "succeeded" ? 1 : 0,
+      status: input.status,
+      updatedAt: now,
+    })
   } else {
     await ctx.db.insert("providerRuns", {
       attempt: 1,
@@ -331,7 +318,7 @@ async function findOpenUsageCycle(
   const cycles = await ctx.db
     .query("usageCycles")
     .withIndex("by_workspace_status_and_period_end", (q) =>
-      indexEquals(q, ["workspaceId", workspaceId], ["status", "open"]),
+      q.eq("workspaceId", workspaceId).eq("status", "open"),
     )
     .collect()
   return (
@@ -349,11 +336,9 @@ async function findSubscriptionByProviderId(
   return await ctx.db
     .query("subscriptions")
     .withIndex("by_provider_subscription", (q) =>
-      indexEquals(
-        q,
-        ["provider", "creem"],
-        ["providerSubscriptionId", providerSubscriptionId],
-      ),
+      q
+        .eq("provider", "creem")
+        .eq("providerSubscriptionId", providerSubscriptionId),
     )
     .unique()
 }
@@ -381,7 +366,7 @@ async function findWorkspaceForNewSubscription(
   const matchingCheckouts = await ctx.db
     .query("billingCheckouts")
     .withIndex("by_workspace_plan_and_created_at", (q) =>
-      indexEquals(q, ["workspaceId", workspaceId], ["planId", plan.planId]),
+      q.eq("workspaceId", workspaceId).eq("planId", plan.planId),
     )
     .order("desc")
     .take(1)
@@ -422,16 +407,12 @@ async function synchronizeTrackingSourcesForBilling(
   },
 ): Promise<void> {
   if (input.entitlementStatus === "inactive") {
-    const activeSources = (await ctx.db
+    const activeSources = await ctx.db
       .query("trackingSources")
       .withIndex("by_workspace_status_and_created_at", (q) =>
-        indexEquals(
-          q,
-          ["workspaceId", input.workspaceId],
-          ["status", "active"],
-        ),
+        q.eq("workspaceId", input.workspaceId).eq("status", "active"),
       )
-      .collect()) as GenericRow[]
+      .collect()
     for (const source of activeSources) {
       await finalizeInvalidatedTrackingProviderRun(ctx, {
         errorCode: "source_paused",
@@ -439,17 +420,13 @@ async function synchronizeTrackingSourcesForBilling(
         now: input.now,
         source,
       })
-      await ctx.db.patch(
-        "trackingSources",
-        source._id as GenericId<"trackingSources">,
-        {
-          leaseExpiresAt: undefined,
-          leaseToken: undefined,
-          pauseReason: "paid",
-          status: "paused",
-          updatedAt: input.now,
-        },
-      )
+      await ctx.db.patch("trackingSources", source._id, {
+        leaseExpiresAt: undefined,
+        leaseToken: undefined,
+        pauseReason: "paid",
+        status: "paused",
+        updatedAt: input.now,
+      })
     }
     await syncUsagePausedWorkspaceMetric(ctx, input.workspaceId, input.now)
     return
@@ -459,7 +436,7 @@ async function synchronizeTrackingSourcesForBilling(
   const pausedSources = await ctx.db
     .query("trackingSources")
     .withIndex("by_workspace_status_and_created_at", (q) =>
-      indexEquals(q, ["workspaceId", input.workspaceId], ["status", "paused"]),
+      q.eq("workspaceId", input.workspaceId).eq("status", "paused"),
     )
     .collect()
   for (const source of pausedSources) {
@@ -470,15 +447,11 @@ async function synchronizeTrackingSourcesForBilling(
     ) {
       continue
     }
-    await ctx.db.patch(
-      "trackingSources",
-      source._id as GenericId<"trackingSources">,
-      {
-        pauseReason: undefined,
-        status: "active",
-        updatedAt: input.now,
-      },
-    )
+    await ctx.db.patch("trackingSources", source._id, {
+      pauseReason: undefined,
+      status: "active",
+      updatedAt: input.now,
+    })
   }
   await syncUsagePausedWorkspaceMetric(ctx, input.workspaceId, input.now)
 }
@@ -494,7 +467,7 @@ async function reconcileKeywordLimit(
   const activeKeywords = await ctx.db
     .query("keywords")
     .withIndex("by_workspace_status_and_created_at", (q) =>
-      indexEquals(q, ["workspaceId", input.workspaceId], ["status", "active"]),
+      q.eq("workspaceId", input.workspaceId).eq("status", "active"),
     )
     .order("asc")
     .take(MAX_WORKSPACE_KEYWORDS + 1)
@@ -505,7 +478,7 @@ async function reconcileKeywordLimit(
   }
 
   for (const keyword of activeKeywords.slice(input.keywordLimit)) {
-    await ctx.db.patch("keywords", keyword._id as GenericId<"keywords">, {
+    await ctx.db.patch("keywords", keyword._id, {
       pausedAt: input.now,
       status: "paused",
       updatedAt: input.now,
@@ -517,12 +490,12 @@ async function reconcileKeywordLimit(
             await ctx.db
               .query("trackingSources")
               .withIndex("by_keyword_and_status", (q) =>
-                indexEquals(q, ["keywordId", keyword._id], ["status", status]),
+                q.eq("keywordId", keyword._id).eq("status", status),
               )
               .take(5),
         ),
       )
-    ).flat() as GenericRow[]
+    ).flat()
     for (const source of sources) {
       await finalizeInvalidatedTrackingProviderRun(ctx, {
         errorCode: "source_paused",
@@ -530,17 +503,13 @@ async function reconcileKeywordLimit(
         now: input.now,
         source,
       })
-      await ctx.db.patch(
-        "trackingSources",
-        source._id as GenericId<"trackingSources">,
-        {
-          leaseExpiresAt: undefined,
-          leaseToken: undefined,
-          pauseReason: "user",
-          status: "paused",
-          updatedAt: input.now,
-        },
-      )
+      await ctx.db.patch("trackingSources", source._id, {
+        leaseExpiresAt: undefined,
+        leaseToken: undefined,
+        pauseReason: "user",
+        status: "paused",
+        updatedAt: input.now,
+      })
     }
   }
 }
@@ -676,15 +645,13 @@ function planForEvent(
 async function findCheckoutForCompletion(
   ctx: GenericMutationContext,
   event: Extract<CreemWebhookEvent, { eventType: "checkout.completed" }>,
-): Promise<Record<string, unknown> | null> {
+): Promise<Doc<"billingCheckouts"> | null> {
   const bySession = await ctx.db
     .query("billingCheckouts")
     .withIndex("by_provider_session", (q) =>
-      indexEquals(
-        q,
-        ["provider", "creem"],
-        ["providerCheckoutSessionId", event.object.id],
-      ),
+      q
+        .eq("provider", "creem")
+        .eq("providerCheckoutSessionId", event.object.id),
     )
     .unique()
   if (bySession) {
@@ -738,7 +705,7 @@ async function applyCheckoutEvent(
 
   await ctx.db.patch(
     "billingCheckouts",
-    checkout._id as GenericId<"billingCheckouts">,
+    checkout._id,
     completeCheckoutWithoutEntitlement(event.created_at),
   )
   return {
@@ -1001,7 +968,7 @@ export const applyUpgradeResponse = internalMutation({
     if (kind === "incomplete_period" && args.incompleteReconciliation) {
       await ctx.scheduler.runAfter(
         args.incompleteReconciliation.delayMs,
-        reconcileIncompleteCreemUpgradeReference,
+        internal.billing.reconciliation.reconcileIncompleteCreemUpgrade,
         {
           actorClerkUserId: args.incompleteReconciliation.actorClerkUserId,
           actorUserId: args.incompleteReconciliation.actorUserId,
@@ -1093,13 +1060,11 @@ export const beginCreemProviderOperation = internalMutation({
         .withIndex(
           "by_workspace_provider_operation_status_and_started_at",
           (q) =>
-            indexEquals(
-              q,
-              ["workspaceId", args.workspaceId],
-              ["provider", "creem"],
-              ["operation", "checkout"],
-              ["status", "running"],
-            ),
+            q
+              .eq("workspaceId", args.workspaceId)
+              .eq("provider", "creem")
+              .eq("operation", "checkout")
+              .eq("status", "running"),
         )
         .order("desc")
         .first()
@@ -1241,7 +1206,7 @@ async function ingestCreemWebhookBody(
   const existing = await ctx.db
     .query("billingEvents")
     .withIndex("by_provider_event", (q) =>
-      indexEquals(q, ["provider", "creem"], ["providerEventId", event.id]),
+      q.eq("provider", "creem").eq("providerEventId", event.id),
     )
     .unique()
 
@@ -1393,7 +1358,7 @@ async function ingestCreemWebhookBody(
     if (args.scheduleIncompleteReconciliation !== false) {
       await ctx.scheduler.runAfter(
         0,
-        reconcileIncompleteCreemBillingEventReference,
+        internal.billing.reconciliation.reconcileIncompleteCreemBillingEvent,
         { billingEventId },
       )
     }
@@ -1533,11 +1498,10 @@ export const dispatchPendingCreemBillingEvents = internalMutation({
     const staleOperations = await ctx.db
       .query("providerRuns")
       .withIndex("by_provider_status_and_started_at", (q) =>
-        indexAtMost(
-          indexEquals(q, ["provider", "creem"], ["status", "running"]),
-          "startedAt",
-          now - PROVIDER_OPERATION_STALE_MS,
-        ),
+        q
+          .eq("provider", "creem")
+          .eq("status", "running")
+          .lte("startedAt", now - PROVIDER_OPERATION_STALE_MS),
       )
       .take(MAX_STALE_CREEM_OPERATIONS_PER_DISPATCH)
     for (const run of staleOperations) {
@@ -1557,11 +1521,7 @@ export const dispatchPendingCreemBillingEvents = internalMutation({
     const due = await ctx.db
       .query("billingEvents")
       .withIndex("by_status_and_next_attempt_at", (q) =>
-        indexAtMost(
-          indexEquals(q, ["status", "pending"]),
-          "nextAttemptAt",
-          now,
-        ),
+        q.eq("status", "pending").lte("nextAttemptAt", now),
       )
       .take(MAX_BILLING_EVENT_RETRIES_PER_DISPATCH)
     const outcomes: Record<string, number> = {}
@@ -1593,87 +1553,6 @@ export type CustomerBillingActionContext = {
   subscription: Record<string, unknown> | null
 }
 
-export const getCustomerBillingActionContextReference = internalQueryReference<
-  { idempotencyKey?: string; workspaceId: WorkspaceId },
-  CustomerBillingActionContext
->("billing/internal:getCustomerBillingActionContext")
-
-type RecordCheckoutArguments = {
-  createdAt: number
-  idempotencyKey: string
-  planId: "growth" | "scale" | "starter"
-  providerCheckoutSessionId: string
-  providerStatus: string
-  requestedByUserId: UserId
-  url: string
-  workspaceId: WorkspaceId
-}
-
-export const recordCheckoutReference = internalMutationReference<
-  RecordCheckoutArguments,
-  Record<string, unknown> | null
->("billing/internal:recordCheckout")
-
-export const applyUpgradeResponseReference = internalMutationReference<
-  {
-    incompleteReconciliation?: {
-      actorClerkUserId: string
-      actorUserId: UserId
-      attempt: number
-      delayMs: number
-      idempotencyKey: string
-    }
-    providerCreatedAt: number
-    rawSubscriptionJson: string
-    workspaceId: WorkspaceId
-  },
-  { kind?: string; state: string }
->("billing/internal:applyUpgradeResponse")
-
-export const beginCreemProviderOperationReference = internalMutationReference<
-  {
-    idempotencyKey: string
-    operation: string
-    workspaceId: WorkspaceId
-  },
-  { state: "completed" | "outstanding" | "running" | "started" }
->("billing/internal:beginCreemProviderOperation")
-
-export const markCreemProviderOperationUnresolvedReference =
-  internalMutationReference<{
-    errorCode: string
-    errorMessage: string
-    idempotencyKey: string
-    workspaceId: WorkspaceId
-  }>("billing/internal:markCreemProviderOperationUnresolved")
-
-export const recordCreemProviderOperationReference = internalMutationReference<{
-  actorClerkUserId?: string
-  actorUserId?: UserId
-  durationMs: number
-  errorCode?: string
-  errorMessage?: string
-  idempotencyKey: string
-  operation: string
-  status: "failed" | "succeeded"
-  targetId?: string
-  workspaceId?: WorkspaceId
-}>("billing/internal:recordCreemProviderOperation")
-
-export const ingestCreemWebhookReference = internalMutationReference<
-  { rawBody: string; receivedAt: number },
-  { kind: string; missing?: readonly string[]; status?: string }
->("billing/internal:ingestCreemWebhook")
-
-type BillingEventReconciliationArguments = {
-  billingEventId: BillingEventId
-}
-
-export const reconcileIncompleteCreemBillingEventReference =
-  internalActionReference<BillingEventReconciliationArguments>(
-    "billing/reconciliation:reconcileIncompleteCreemBillingEvent",
-  )
-
 export type IncompleteCreemUpgradeReconciliationArguments = {
   actorClerkUserId: string
   actorUserId: UserId
@@ -1682,26 +1561,3 @@ export type IncompleteCreemUpgradeReconciliationArguments = {
   providerSubscriptionId: string
   workspaceId: WorkspaceId
 }
-
-export const reconcileIncompleteCreemUpgradeReference =
-  internalActionReference<IncompleteCreemUpgradeReconciliationArguments>(
-    "billing/reconciliation:reconcileIncompleteCreemUpgrade",
-  )
-
-export const loadIncompleteCreemBillingEventReference = internalQueryReference<
-  BillingEventReconciliationArguments,
-  { state: "not_pending" } | { providerSubscriptionId: string; state: "ready" }
->("billing/internal:loadIncompleteCreemBillingEvent")
-
-export const applyIncompleteCreemBillingEventReference =
-  internalMutationReference<
-    BillingEventReconciliationArguments & {
-      authoritativeSubscriptionJson: string
-      receivedAt: number
-    }
-  >("billing/internal:applyIncompleteCreemBillingEvent")
-
-export const dispatchPendingCreemBillingEventsReference =
-  internalMutationReference<{ now?: number }>(
-    "billing/internal:dispatchPendingCreemBillingEvents",
-  )

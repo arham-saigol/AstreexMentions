@@ -1,4 +1,8 @@
-import { Badge, Button, Label } from "@astreex/ui"
+import { api } from "@astreex/backend/api"
+import type { Id } from "@astreex/backend/data-model"
+import { Badge } from "@astreex/ui/components/badge"
+import { Button } from "@astreex/ui/components/button"
+import { Label } from "@astreex/ui/components/label"
 import type { Metadata } from "next"
 import Link from "next/link"
 import type { ReactNode } from "react"
@@ -8,11 +12,10 @@ import { DeletionJobControls } from "@/components/deletion-job-controls"
 import { runAdminQuery } from "@/lib/admin-convex"
 import {
   deletionJobStatuses,
-  parseDeletionJobDetail,
-  parseDeletionJobs,
+  type DeletionJobDetail,
+  type DeletionJobStatus,
   type DeletionJob,
 } from "@/lib/admin-data"
-import { adminConvex, type DeletionJobStatus } from "@/lib/convex-references"
 
 export const metadata: Metadata = {
   title: "Account Deletions",
@@ -88,7 +91,7 @@ export default async function DeletionsPage({
   const params = await searchParams
   const selectedJobId = singleValue(params.job)?.trim()
   const status = parseStatus(params.status)
-  const result = await runAdminQuery(adminConvex.listDeletionJobs, {
+  const result = await runAdminQuery(api.admin.listDeletionJobs, {
     limit: 200,
     ...(status ? { status } : {}),
   })
@@ -103,20 +106,16 @@ export default async function DeletionsPage({
     return <AccessState kind="unavailable" />
   }
 
-  const jobs = parseDeletionJobs(result.data)
-  if (!jobs) {
-    return <AccessState kind="unavailable" />
-  }
+  const jobs = result.data
   const visibleJobs = jobs
-  let detail = null
+  let detail: DeletionJobDetail | null = null
   let detailUnavailable = false
   if (selectedJobId) {
-    const detailResult = await runAdminQuery(adminConvex.getDeletionJob, {
-      deletionJobId: selectedJobId,
+    const detailResult = await runAdminQuery(api.admin.getDeletionJob, {
+      deletionJobId: selectedJobId as Id<"deletionJobs">,
     })
     if (detailResult.status === "ready") {
-      detail = parseDeletionJobDetail(detailResult.data)
-      detailUnavailable = detail === null
+      detail = detailResult.data
     } else {
       detailUnavailable = true
     }

@@ -4,7 +4,7 @@ import {
   rankMentionsDeterministically,
   type RankedMention,
   type RankableMention,
-} from "./engagementRanking"
+} from "@astreex/domain"
 
 export const DEFAULT_DIGEST_MENTION_LIMIT = 20
 

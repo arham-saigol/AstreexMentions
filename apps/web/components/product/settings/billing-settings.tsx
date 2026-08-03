@@ -12,7 +12,7 @@ import { Button } from "@astreex/ui/components/button"
 import { useProductContext } from "@/components/product/product-context"
 import { useBillingActions } from "@/components/product/settings/use-billing-actions"
 import { subscriptionAllowsNewCheckout } from "@/lib/billing-status"
-import type { PlanId } from "@/lib/customer-convex"
+import type { PlanId } from "@astreex/domain"
 
 const plans = [
   { id: "starter", label: "Starter", price: "$19" },

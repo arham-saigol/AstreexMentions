@@ -1,17 +1,15 @@
 "use client"
 
+import { api } from "@astreex/backend/api"
 import { useMutation, useQuery } from "convex/react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 
 import {
-  billingOverviewResultSchema,
-  bootstrapResultSchema,
-  currentWorkspaceResultSchema,
-  customerConvex,
   type BillingOverviewResult,
   type CurrentWorkspaceResult,
-} from "@/lib/customer-convex"
-import { decideProductAccess, type ProductAccess } from "@/lib/product-access"
+  decideProductAccess,
+  type ProductAccess,
+} from "@/lib/product-access"
 import { useQueryClock } from "@/lib/use-query-clock"
 
 type ProductBootstrapState =
@@ -40,14 +38,12 @@ type BootstrapAttempt =
 export function useProductBootstrap(
   convexAuthenticated: boolean,
 ): ProductBootstrapState {
-  const bootstrapCurrentUser = useMutation(
-    customerConvex.users.bootstrapCurrentUser,
-  )
+  const now = useQueryClock()
+  const bootstrapCurrentUser = useMutation(api.users.bootstrapCurrentUser)
   const [bootstrap, setBootstrap] = useState<BootstrapAttempt>({
     attempt: 0,
     state: "loading",
   })
-  const queryNow = useQueryClock()
 
   useEffect(() => {
     if (!convexAuthenticated || bootstrap.state !== "loading") {
@@ -57,19 +53,8 @@ export function useProductBootstrap(
     let active = true
 
     void bootstrapCurrentUser({})
-      .then((value) => {
+      .then(() => {
         if (!active) {
-          return
-        }
-
-        const parsed = bootstrapResultSchema.safeParse(value)
-        if (!parsed.success) {
-          setBootstrap((current) => ({
-            attempt: current.attempt,
-            description:
-              "The account bootstrap returned an unexpected result. No account data was inferred.",
-            state: "error",
-          }))
           return
         }
 
@@ -98,12 +83,12 @@ export function useProductBootstrap(
 
   const queryEnabled = convexAuthenticated && bootstrap.state === "ready"
   const currentWorkspaceValue = useQuery(
-    customerConvex.workspaces.getCurrentWorkspace,
+    api.workspaces.getCurrentWorkspace,
     queryEnabled ? {} : "skip",
   )
   const billingOverviewValue = useQuery(
-    customerConvex.billing.getOverview,
-    queryEnabled ? { now: queryNow } : "skip",
+    api.billing.customer.getBillingOverview,
+    queryEnabled ? { now } : "skip",
   )
 
   const retry = useCallback(() => {
@@ -147,27 +132,11 @@ export function useProductBootstrap(
       }
     }
 
-    const currentWorkspace = currentWorkspaceResultSchema.safeParse(
-      currentWorkspaceValue,
-    )
-    const billingOverview =
-      billingOverviewResultSchema.safeParse(billingOverviewValue)
-
-    if (!currentWorkspace.success || !billingOverview.success) {
-      return {
-        description:
-          "The connected data service returned a result this version of the app cannot safely display.",
-        retry: () => window.location.reload(),
-        state: "error",
-        title: "Account data is unavailable",
-      }
-    }
-
     return {
-      access: decideProductAccess(currentWorkspace.data, billingOverview.data),
-      billing: billingOverview.data,
+      access: decideProductAccess(currentWorkspaceValue, billingOverviewValue),
+      billing: billingOverviewValue,
       state: "ready",
-      workspace: currentWorkspace.data,
+      workspace: currentWorkspaceValue,
     }
   }, [
     billingOverviewValue,

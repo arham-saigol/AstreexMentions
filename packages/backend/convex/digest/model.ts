@@ -1,16 +1,17 @@
-import type { MentionCategory, Platform } from "@astreex/domain"
+import {
+  rankMentionsDeterministically,
+  type MentionCategory,
+  type MentionEngagement,
+  type Platform,
+  type RankedMention,
+  type RankableMention,
+} from "@astreex/domain"
 import {
   createDailyDigestCounts,
   type DailyDigestCounts,
   type DailyDigestMention,
 } from "@astreex/email"
 
-import {
-  rankMentionsDeterministically,
-  type MentionEngagement,
-  type RankedMention,
-  type RankableMention,
-} from "../lib/engagementRanking"
 import type { CategorySystemKey } from "../lib/categories"
 
 const CATEGORY_LABELS: Record<CategorySystemKey, MentionCategory> = {

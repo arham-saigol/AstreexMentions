@@ -1,12 +1,12 @@
-import type { GenericId } from "convex/values"
+import type { Id } from "../_generated/dataModel"
 
-import { indexEquals, type MutationCtx } from "../server"
+import { type MutationCtx } from "../_generated/server"
 import {
   adjustSystemMetricGauge,
   SYSTEM_METRIC_GAUGE_BUCKET_START_AT,
 } from "./systemMetricBuckets"
 
-type WorkspaceId = GenericId<"workspaces">
+type WorkspaceId = Id<"workspaces">
 type PlanId = "starter" | "growth" | "scale"
 
 export const WORKSPACE_COUNT_METRIC = "operational_workspaces"
@@ -87,7 +87,7 @@ export async function syncUsagePausedWorkspaceMetric(
   const pausedSources = await ctx.db
     .query("trackingSources")
     .withIndex("by_workspace_status_and_created_at", (q) =>
-      indexEquals(q, ["workspaceId", workspaceId], ["status", "paused"]),
+      q.eq("workspaceId", workspaceId).eq("status", "paused"),
     )
     .take(64)
   const desired = pausedSources.some(
@@ -97,14 +97,12 @@ export async function syncUsagePausedWorkspaceMetric(
   const marker = await ctx.db
     .query("systemMetricBuckets")
     .withIndex("by_metric_scope_workspace_granularity_and_bucket", (q) =>
-      indexEquals(
-        q,
-        ["metric", USAGE_PAUSED_WORKSPACE_METRIC],
-        ["scope", "workspace"],
-        ["workspaceId", workspaceId],
-        ["granularity", "hour"],
-        ["bucketStartAt", SYSTEM_METRIC_GAUGE_BUCKET_START_AT],
-      ),
+      q
+        .eq("metric", USAGE_PAUSED_WORKSPACE_METRIC)
+        .eq("scope", "workspace")
+        .eq("workspaceId", workspaceId)
+        .eq("granularity", "hour")
+        .eq("bucketStartAt", SYSTEM_METRIC_GAUGE_BUCKET_START_AT),
     )
     .unique()
   const markerValue = marker?.value

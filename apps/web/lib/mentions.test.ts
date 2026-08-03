@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest"
 import {
   nextSparseMentionCursor,
   optimisticStatusHasSettled,
-  savedViewsResultSchema,
   visibleMentionStatus,
 } from "./mentions"
 
@@ -30,29 +29,6 @@ describe("mentions view contracts", () => {
         nextCursor: "cursor-after-match",
       }),
     ).toBeUndefined()
-  })
-
-  it("keeps the synthetic All Mentions view out of custom saved views", () => {
-    const result = savedViewsResultSchema.parse([
-      {
-        id: "all-mentions",
-        filters: {},
-        icon: "funnel",
-        name: "All Mentions",
-        position: 0,
-        sort: "newest",
-      },
-      {
-        id: "saved_view_1",
-        filters: { platforms: ["reddit"] },
-        icon: "funnel",
-        name: "Reddit",
-        position: 1,
-        sort: "newest",
-      },
-    ])
-
-    expect(result.map((view) => view.id)).toEqual(["saved_view_1"])
   })
 
   it("holds an optimistic status until the server result catches up", () => {

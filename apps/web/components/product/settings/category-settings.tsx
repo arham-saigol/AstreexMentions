@@ -1,5 +1,7 @@
 "use client"
 
+import { api } from "@astreex/backend/api"
+import type { FunctionReturnType } from "convex/server"
 import {
   CircleNotchIcon,
   FloppyDiskIcon,
@@ -31,15 +33,12 @@ import {
 import { Switch } from "@astreex/ui/components/switch"
 import { Textarea } from "@astreex/ui/components/textarea"
 import { useMutation, useQuery } from "convex/react"
-import { useMemo, useState, type CSSProperties, type FormEvent } from "react"
+import { useState, type CSSProperties, type FormEvent } from "react"
 
-import { customerConvex } from "@/lib/customer-convex"
-import {
-  categoryColorTokenSchema,
-  settingsCategoriesResultSchema,
-  type CategoryColorToken,
-  type SettingsCategory,
-} from "@/lib/settings-convex"
+type SettingsCategory = FunctionReturnType<
+  typeof api.categories.listCategories
+>[number]
+type CategoryColorToken = SettingsCategory["colorToken"]
 
 const colorOptions = [
   { value: "blue", label: "Blue" },
@@ -69,8 +68,8 @@ function ColorSwatch({ color }: { color: CategoryColorToken }) {
 }
 
 function CategoryRow({ category }: { category: SettingsCategory }) {
-  const updateCategory = useMutation(customerConvex.categories.update)
-  const removeCategory = useMutation(customerConvex.categories.remove)
+  const updateCategory = useMutation(api.categories.updateCategory)
+  const removeCategory = useMutation(api.categories.deleteCategory)
   const [nameDraft, setNameDraft] = useState<string | null>(null)
   const [descriptionDraft, setDescriptionDraft] = useState<string | null>(null)
   const [colorTokenDraft, setColorTokenDraft] =
@@ -210,8 +209,10 @@ function CategoryRow({ category }: { category: SettingsCategory }) {
               <Select
                 value={colorToken}
                 onValueChange={(value) => {
-                  const parsed = categoryColorTokenSchema.safeParse(value)
-                  if (parsed.success) setColorTokenDraft(parsed.data)
+                  const color = colorOptions.find(
+                    (option) => option.value === value,
+                  )?.value
+                  if (color) setColorTokenDraft(color)
                 }}
               >
                 <SelectTrigger
@@ -319,7 +320,7 @@ function CategoryRow({ category }: { category: SettingsCategory }) {
 }
 
 function CreateCategory() {
-  const createCategory = useMutation(customerConvex.categories.create)
+  const createCategory = useMutation(api.categories.createCategory)
   const [open, setOpen] = useState(false)
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
@@ -400,8 +401,10 @@ function CreateCategory() {
           <Select
             value={colorToken}
             onValueChange={(value) => {
-              const parsed = categoryColorTokenSchema.safeParse(value)
-              if (parsed.success) setColorToken(parsed.data)
+              const color = colorOptions.find(
+                (option) => option.value === value,
+              )?.value
+              if (color) setColorToken(color)
             }}
           >
             <SelectTrigger id="new-category-color" className="w-full">
@@ -442,37 +445,13 @@ function CreateCategory() {
 }
 
 export function CategorySettings() {
-  const value = useQuery(customerConvex.categories.list, {})
-  const parsed = useMemo(
-    () =>
-      value === undefined
-        ? null
-        : settingsCategoriesResultSchema.safeParse(value),
-    [value],
-  )
+  const value = useQuery(api.categories.listCategories, {})
 
   if (value === undefined) {
     return (
       <p role="status" className="text-muted-foreground text-sm">
         Loading categories…
       </p>
-    )
-  }
-
-  if (!parsed?.success) {
-    return (
-      <div
-        role="alert"
-        className="border-border bg-muted/35 rounded-md border px-4 py-4"
-      >
-        <p className="text-foreground text-sm font-medium">
-          Categories are unavailable.
-        </p>
-        <p className="text-muted-foreground mt-1 text-xs leading-5">
-          The connected result could not be validated, so Astreex is not showing
-          or editing guessed category data.
-        </p>
-      </div>
     )
   }
 
@@ -486,7 +465,7 @@ export function CategorySettings() {
         <CreateCategory />
       </div>
       <div className="mt-6">
-        {parsed.data.map((category) => (
+        {value.map((category) => (
           <CategoryRow key={category.id} category={category} />
         ))}
       </div>

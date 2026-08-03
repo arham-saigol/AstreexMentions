@@ -1,43 +1,9 @@
-import type { IndexRange } from "convex/server"
-import type { Value } from "convex/values"
-
-type RuntimeIndexRange = IndexRange & {
-  gte(fieldName: string, value: unknown): RuntimeIndexRange
-  lt(fieldName: string, value: unknown): RuntimeIndexRange
-  lte(fieldName: string, value: unknown): RuntimeIndexRange
-}
-
-export function indexAtMost(
-  builder: IndexRange,
-  fieldName: string,
-  value: unknown,
-): IndexRange {
-  return (builder as RuntimeIndexRange).lte(fieldName, value)
-}
-
-export function indexWindow(
-  builder: IndexRange,
-  fieldName: string,
-  startAt: number,
-  endAt: number,
-): IndexRange {
-  if (!Number.isSafeInteger(startAt) || !Number.isSafeInteger(endAt)) {
-    throw new RangeError("Index window timestamps must be safe integers")
-  }
-  if (endAt < startAt) {
-    throw new RangeError("Index window end must not precede its start")
-  }
-  return (builder as RuntimeIndexRange)
-    .gte(fieldName, startAt)
-    .lt(fieldName, endAt)
-}
-
-export function withoutUndefinedValues(
-  value: Record<string, unknown>,
-): Record<string, Value> {
+export function withoutUndefinedValues<T extends Record<string, unknown>>(
+  value: T,
+): { [Key in keyof T]: Exclude<T[Key], undefined> } {
   return Object.fromEntries(
     Object.entries(value).filter((entry) => entry[1] !== undefined),
-  ) as Record<string, Value>
+  ) as { [Key in keyof T]: Exclude<T[Key], undefined> }
 }
 
 export function boundedDurationMs(

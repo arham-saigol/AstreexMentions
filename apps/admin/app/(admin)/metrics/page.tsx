@@ -1,3 +1,4 @@
+import { api } from "@astreex/backend/api"
 import { Button } from "@astreex/ui/components/button"
 import type { Metadata } from "next"
 import Link from "next/link"
@@ -9,8 +10,7 @@ import {
   ProviderHealthChart,
 } from "@/components/metrics-charts"
 import { runAdminQuery } from "@/lib/admin-convex"
-import { parseMetricsOverview } from "@/lib/admin-data"
-import { adminConvex, type MetricsRangeDays } from "@/lib/convex-references"
+import type { MetricsRangeDays } from "@/lib/admin-data"
 
 export const metadata: Metadata = {
   title: "Metrics",
@@ -33,7 +33,7 @@ export default async function MetricsPage({
 }) {
   const params = await searchParams
   const days = parseRange(params.days)
-  const result = await runAdminQuery(adminConvex.getMetricsOverview, { days })
+  const result = await runAdminQuery(api.admin.getMetricsOverview, { days })
 
   if (result.status === "access-denied") {
     return <AccessState {...result.access} />
@@ -47,11 +47,7 @@ export default async function MetricsPage({
     return <AccessState kind="unavailable" />
   }
 
-  const metrics = parseMetricsOverview(result.data)
-
-  if (!metrics) {
-    return <AccessState kind="unavailable" />
-  }
+  const metrics = result.data
 
   const stats = [
     {

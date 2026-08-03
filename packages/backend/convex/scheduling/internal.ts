@@ -1,4 +1,5 @@
-import { type GenericId, type Value, v } from "convex/values"
+import { internal } from "../_generated/api"
+import { type Value, v } from "convex/values"
 
 import { readEmailSenderConfiguration } from "../email/config"
 import {
@@ -7,19 +8,13 @@ import {
 } from "../ingestion/service"
 import { MAX_INGESTION_CHUNK_SIZE } from "../ingestion/contracts"
 import {
-  internalActionReference,
-  internalMutationReference,
-  internalQueryReference,
-} from "../lib/functionReferences"
-import { indexAtMost } from "../lib/jobRuntime"
-import {
   env,
-  indexEquals,
   internalMutation,
   internalQuery,
   type DatabaseReader,
   type MutationCtx,
-} from "../server"
+} from "../_generated/server"
+import type { Doc, Id } from "../_generated/dataModel"
 import { readSchedulingDispatchConfiguration } from "./config"
 import {
   canClaimTrackingSource,
@@ -58,11 +53,10 @@ const MAX_DUE_SCAN = 256
 const MAX_PENDING_PROVIDER_BATCHES = 4
 const MAX_PENDING_PROVIDER_PAGE_JSON_BYTES = 700_000
 
-type TrackingSourceId = GenericId<"trackingSources">
-type TrackingProviderPageId = GenericId<"trackingProviderPages">
-type KeywordId = GenericId<"keywords">
-type WorkspaceId = GenericId<"workspaces">
-type GenericRow = Record<string, unknown> & { _id: GenericId<string> }
+type TrackingSourceId = Id<"trackingSources">
+type TrackingProviderPageId = Id<"trackingProviderPages">
+type KeywordId = Id<"keywords">
+type WorkspaceId = Id<"workspaces">
 type LeaseArguments = {
   leaseExpiresAt: number
   leaseToken: string
@@ -70,7 +64,7 @@ type LeaseArguments = {
   trackingSourceId: TrackingSourceId
 }
 
-function sourceTypeFromRow(row: GenericRow): TrackingSourceType {
+function sourceTypeFromRow(row: Doc<"trackingSources">): TrackingSourceType {
   const sourceType = row.sourceType
   if (
     sourceType !== "x" &&
@@ -83,7 +77,7 @@ function sourceTypeFromRow(row: GenericRow): TrackingSourceType {
   return sourceType
 }
 
-function planIdFromRow(row: GenericRow): PlanId {
+function planIdFromRow(row: Doc<"subscriptions">): PlanId {
   const planId = row.planId
   if (planId !== "starter" && planId !== "growth" && planId !== "scale") {
     throw new TypeError("Subscription has an invalid planId")
@@ -91,7 +85,7 @@ function planIdFromRow(row: GenericRow): PlanId {
   return planId
 }
 
-function scheduleFromRow(row: GenericRow): TrackingSourceSchedule {
+function scheduleFromRow(row: Doc<"trackingSources">): TrackingSourceSchedule {
   return {
     backoffUntil: row.backoffUntil as number | undefined,
     inProgressCursor: row.inProgressCursor as string | undefined,
@@ -118,10 +112,10 @@ function leaseFromArguments(args: LeaseArguments): TrackingLease {
 }
 
 function currentLeaseMatches(
-  source: GenericRow | null,
+  source: Doc<"trackingSources"> | null,
   expected: TrackingLease,
   now: number,
-): source is GenericRow {
+): source is Doc<"trackingSources"> {
   return Boolean(
     source &&
     source.leaseVersion === expected.version &&
@@ -174,11 +168,11 @@ function operationForSourceType(sourceType: TrackingSourceType): string {
 async function latestWorkspaceSubscription(
   db: DatabaseReader,
   workspaceId: WorkspaceId,
-): Promise<GenericRow | null> {
-  const subscriptions = (await db
+): Promise<Doc<"subscriptions"> | null> {
+  const subscriptions = await db
     .query("subscriptions")
     .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-    .collect()) as GenericRow[]
+    .collect()
 
   return (
     subscriptions.sort(
@@ -192,13 +186,13 @@ async function currentUsageCycle(
   db: DatabaseReader,
   workspaceId: WorkspaceId,
   now: number,
-): Promise<GenericRow | null> {
-  const cycles = (await db
+): Promise<Doc<"usageCycles"> | null> {
+  const cycles = await db
     .query("usageCycles")
     .withIndex("by_workspace_status_and_period_end", (q) =>
-      indexEquals(q, ["workspaceId", workspaceId], ["status", "open"]),
+      q.eq("workspaceId", workspaceId).eq("status", "open"),
     )
-    .collect()) as GenericRow[]
+    .collect()
 
   return (
     cycles
@@ -240,10 +234,7 @@ async function readTrackingEligibility(
   args: LeaseArguments,
   now: number,
 ): Promise<TrackingEligibility> {
-  const source = (await db.get(
-    "trackingSources",
-    args.trackingSourceId,
-  )) as GenericRow | null
+  const source = await db.get("trackingSources", args.trackingSourceId)
   const expectedLease = leaseFromArguments(args)
   if (!currentLeaseMatches(source, expectedLease, now)) {
     return { state: "stale_lease" }
@@ -255,8 +246,8 @@ async function readTrackingEligibility(
   const workspaceId = source.workspaceId as WorkspaceId
   const keywordId = source.keywordId as KeywordId
   const [workspace, keyword, subscription, usageCycle] = await Promise.all([
-    db.get("workspaces", workspaceId) as Promise<GenericRow | null>,
-    db.get("keywords", keywordId) as Promise<GenericRow | null>,
+    db.get("workspaces", workspaceId),
+    db.get("keywords", keywordId),
     latestWorkspaceSubscription(db, workspaceId),
     currentUsageCycle(db, workspaceId, now),
   ])
@@ -305,16 +296,12 @@ async function readTrackingEligibility(
   const schedule = scheduleFromRow(source)
   const window = initialCheckpointWindow({ now, source: schedule })
   const planId = planIdFromRow(subscription)
-  const pendingProviderPage = (await db
+  const pendingProviderPage = await db
     .query("trackingProviderPages")
     .withIndex("by_source_ready_and_batch", (q) =>
-      indexEquals(
-        q,
-        ["trackingSourceId", args.trackingSourceId],
-        ["ready", true],
-      ),
+      q.eq("trackingSourceId", args.trackingSourceId).eq("ready", true),
     )
-    .first()) as GenericRow | null
+    .first()
 
   return {
     cursor: source.inProgressCursor as string | undefined,
@@ -340,17 +327,15 @@ async function hourlyRequestsForProvider(
 ): Promise<number> {
   let requests = 0
   for (const persistedProvider of persistedProvidersFor(provider)) {
-    const buckets = (await ctx.db
+    const buckets = await ctx.db
       .query("providerMetricBuckets")
       .withIndex("by_provider_granularity_and_bucket", (q) =>
-        indexEquals(
-          q,
-          ["provider", persistedProvider],
-          ["granularity", "hour"],
-          ["bucketStartAt", bucketStartAt],
-        ),
+        q
+          .eq("provider", persistedProvider)
+          .eq("granularity", "hour")
+          .eq("bucketStartAt", bucketStartAt),
       )
-      .collect()) as GenericRow[]
+      .collect()
     requests += buckets.reduce(
       (sum, bucket) => sum + (bucket.requestCount as number),
       0,
@@ -367,13 +352,13 @@ async function recentProviderRuns(
   const runs: ProviderCircuitRun[] = []
   for (const persistedProvider of persistedProvidersFor(provider)) {
     for (const status of ["failed", "succeeded"] as const) {
-      const rows = (await ctx.db
+      const rows = await ctx.db
         .query("providerRuns")
         .withIndex("by_provider_status_and_started_at", (q) =>
-          indexEquals(q, ["provider", persistedProvider], ["status", status]),
+          q.eq("provider", persistedProvider).eq("status", status),
         )
         .order("desc")
-        .take(limit)) as GenericRow[]
+        .take(limit)
       runs.push(
         ...rows.map((row) => ({
           startedAt: row.startedAt as number,
@@ -391,17 +376,16 @@ async function dueSourcesForType(
   ctx: MutationCtx,
   sourceType: TrackingSourceType,
   now: number,
-): Promise<GenericRow[]> {
-  return (await ctx.db
+): Promise<Doc<"trackingSources">[]> {
+  return await ctx.db
     .query("trackingSources")
     .withIndex("by_source_type_status_and_next_run_at", (q) =>
-      indexAtMost(
-        indexEquals(q, ["sourceType", sourceType], ["status", "active"]),
-        "nextRunAt",
-        now,
-      ),
+      q
+        .eq("sourceType", sourceType)
+        .eq("status", "active")
+        .lte("nextRunAt", now),
     )
-    .take(MAX_DUE_SCAN)) as GenericRow[]
+    .take(MAX_DUE_SCAN)
 }
 
 async function claimProviderSources(
@@ -487,7 +471,7 @@ async function claimProviderSources(
     })
     await ctx.scheduler.runAfter(
       trackingDispatchDelayMs(String(trackingSourceId), lease.version),
-      executeTrackingSourceReference,
+      internal.scheduling.actions.executeTrackingSource,
       {
         leaseExpiresAt: lease.expiresAt,
         leaseToken: lease.token,
@@ -611,10 +595,7 @@ export const releaseIneligibleTrackingLease = internalMutation({
   },
   handler: async (ctx, args) => {
     const now = Date.now()
-    const source = (await ctx.db.get(
-      "trackingSources",
-      args.trackingSourceId,
-    )) as GenericRow | null
+    const source = await ctx.db.get("trackingSources", args.trackingSourceId)
     if (!currentLeaseMatches(source, leaseFromArguments(args), now)) {
       return { state: "stale_lease" as const }
     }
@@ -648,10 +629,7 @@ export const startTrackingProviderRun = internalMutation({
   },
   handler: async (ctx, args) => {
     const now = Date.now()
-    const source = (await ctx.db.get(
-      "trackingSources",
-      args.trackingSourceId,
-    )) as GenericRow | null
+    const source = await ctx.db.get("trackingSources", args.trackingSourceId)
     if (!currentLeaseMatches(source, leaseFromArguments(args), now)) {
       return { state: "stale_lease" as const }
     }
@@ -662,12 +640,12 @@ export const startTrackingProviderRun = internalMutation({
     )
     const existing = await findTrackingProviderRun(ctx, idempotencyKey)
 
-    const pendingProviderPages = (await ctx.db
+    const pendingProviderPages = await ctx.db
       .query("trackingProviderPages")
       .withIndex("by_source_and_created_at", (q) =>
         q.eq("trackingSourceId", args.trackingSourceId),
       )
-      .take(MAX_PENDING_PROVIDER_BATCHES + 1)) as GenericRow[]
+      .take(MAX_PENDING_PROVIDER_BATCHES + 1)
     if (pendingProviderPages.length > MAX_PENDING_PROVIDER_BATCHES) {
       throw new RangeError("Pending provider page count exceeds the maximum")
     }
@@ -797,10 +775,7 @@ export const stageTrackingProviderPage = internalMutation({
   },
   handler: async (ctx, args) => {
     const now = Date.now()
-    const source = (await ctx.db.get(
-      "trackingSources",
-      args.trackingSourceId,
-    )) as GenericRow | null
+    const source = await ctx.db.get("trackingSources", args.trackingSourceId)
     if (!currentLeaseMatches(source, leaseFromArguments(args), now)) {
       return { state: "stale_lease" as const }
     }
@@ -830,12 +805,10 @@ export const stageTrackingProviderPage = internalMutation({
     const existing = await ctx.db
       .query("trackingProviderPages")
       .withIndex("by_source_generation_and_batch", (q) =>
-        indexEquals(
-          q,
-          ["trackingSourceId", args.trackingSourceId],
-          ["generation", args.leaseVersion],
-          ["batchIndex", args.batchIndex],
-        ),
+        q
+          .eq("trackingSourceId", args.trackingSourceId)
+          .eq("generation", args.leaseVersion)
+          .eq("batchIndex", args.batchIndex),
       )
       .unique()
     if (existing) {
@@ -878,10 +851,7 @@ export const commitTrackingProviderPages = internalMutation({
   },
   handler: async (ctx, args) => {
     const now = Date.now()
-    const source = (await ctx.db.get(
-      "trackingSources",
-      args.trackingSourceId,
-    )) as GenericRow | null
+    const source = await ctx.db.get("trackingSources", args.trackingSourceId)
     if (!currentLeaseMatches(source, leaseFromArguments(args), now)) {
       return { state: "stale_lease" as const }
     }
@@ -902,16 +872,14 @@ export const commitTrackingProviderPages = internalMutation({
     ) {
       throw new RangeError("Staged provider batch count is invalid")
     }
-    const pages = (await ctx.db
+    const pages = await ctx.db
       .query("trackingProviderPages")
       .withIndex("by_source_generation_and_batch", (q) =>
-        indexEquals(
-          q,
-          ["trackingSourceId", args.trackingSourceId],
-          ["generation", args.leaseVersion],
-        ),
+        q
+          .eq("trackingSourceId", args.trackingSourceId)
+          .eq("generation", args.leaseVersion),
       )
-      .take(MAX_PENDING_PROVIDER_BATCHES + 1)) as GenericRow[]
+      .take(MAX_PENDING_PROVIDER_BATCHES + 1)
     if (
       pages.length !== args.batchCount ||
       pages.some(
@@ -945,10 +913,7 @@ export const applyNextTrackingProviderPage = internalMutation({
   },
   handler: async (ctx, args) => {
     const now = Date.now()
-    const source = (await ctx.db.get(
-      "trackingSources",
-      args.trackingSourceId,
-    )) as GenericRow | null
+    const source = await ctx.db.get("trackingSources", args.trackingSourceId)
     if (!currentLeaseMatches(source, leaseFromArguments(args), now)) {
       return { state: "stale_lease" as const }
     }
@@ -963,16 +928,12 @@ export const applyNextTrackingProviderPage = internalMutation({
       return { state: "stale_run" as const }
     }
 
-    const pendingPage = (await ctx.db
+    const pendingPage = await ctx.db
       .query("trackingProviderPages")
       .withIndex("by_source_ready_and_batch", (q) =>
-        indexEquals(
-          q,
-          ["trackingSourceId", args.trackingSourceId],
-          ["ready", true],
-        ),
+        q.eq("trackingSourceId", args.trackingSourceId).eq("ready", true),
       )
-      .first()) as GenericRow | null
+      .first()
     if (!pendingPage || pendingPage.providerQuery !== source.providerQuery) {
       return { state: "no_pending_page" as const }
     }
@@ -1190,10 +1151,7 @@ export const failTrackingProviderRun = internalMutation({
   },
   handler: async (ctx, args) => {
     const now = Date.now()
-    const source = (await ctx.db.get(
-      "trackingSources",
-      args.trackingSourceId,
-    )) as GenericRow | null
+    const source = await ctx.db.get("trackingSources", args.trackingSourceId)
     if (!currentLeaseMatches(source, leaseFromArguments(args), now)) {
       return { state: "stale_lease" as const }
     }
@@ -1254,70 +1212,3 @@ export const failTrackingProviderRun = internalMutation({
 export type TrackingExecutionContext = Awaited<
   ReturnType<typeof readTrackingEligibility>
 >
-
-export const dispatchDueTrackingSourcesReference = internalMutationReference<{
-  now?: number
-}>("scheduling/internal:dispatchDueTrackingSources")
-
-export const executeTrackingSourceReference =
-  internalActionReference<LeaseArguments>(
-    "scheduling/actions:executeTrackingSource",
-  )
-
-export const loadTrackingExecutionContextReference = internalQueryReference<
-  LeaseArguments,
-  TrackingExecutionContext
->("scheduling/internal:loadTrackingExecutionContext")
-
-type ReleaseIneligibleTrackingLeaseArguments = LeaseArguments & {
-  deletionPausedAt?: number
-  reason:
-    | "keyword_inactive"
-    | "paid_inactive"
-    | "provider_unconfigured"
-    | "usage_exhausted"
-    | "workspace_deleting"
-}
-
-export const releaseIneligibleTrackingLeaseReference =
-  internalMutationReference<ReleaseIneligibleTrackingLeaseArguments>(
-    "scheduling/internal:releaseIneligibleTrackingLease",
-  )
-
-export const startTrackingProviderRunReference =
-  internalMutationReference<LeaseArguments>(
-    "scheduling/internal:startTrackingProviderRun",
-  )
-
-export const stageTrackingProviderPageReference = internalMutationReference<
-  LeaseArguments & {
-    batchIndex: number
-    durationMs: number
-    finalize: boolean
-    providerOutputCount: number
-    resultJson: string
-  },
-  { state: string }
->("scheduling/internal:stageTrackingProviderPage")
-
-export const commitTrackingProviderPagesReference = internalMutationReference<
-  LeaseArguments & {
-    batchCount: number
-  },
-  { state: string }
->("scheduling/internal:commitTrackingProviderPages")
-
-export const applyNextTrackingProviderPageReference = internalMutationReference<
-  LeaseArguments,
-  { state: string }
->("scheduling/internal:applyNextTrackingProviderPage")
-
-export const failTrackingProviderRunReference = internalMutationReference<
-  LeaseArguments & {
-    durationMs: number
-    errorCode: string
-    errorMessage: string
-    retryable: boolean
-    retryAfterMs?: number
-  }
->("scheduling/internal:failTrackingProviderRun")

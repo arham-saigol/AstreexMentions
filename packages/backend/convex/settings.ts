@@ -2,7 +2,6 @@ import { ConvexError, v } from "convex/values"
 
 import { authenticatedMutation, authenticatedQuery } from "./lib/authorization"
 import { nextDailyDigestRunAt } from "./lib/dailyDigest"
-import { indexEquals } from "./server"
 import { resolveCurrentCustomer } from "./users"
 
 type DigestPreferenceInput = {
@@ -101,7 +100,7 @@ export const getSettings = authenticatedQuery({
     const preference = await ctx.db
       .query("digestPreferences")
       .withIndex("by_workspace_and_user", (q) =>
-        indexEquals(q, ["workspaceId", workspace.id], ["userId", viewer.id]),
+        q.eq("workspaceId", workspace.id).eq("userId", viewer.id),
       )
       .unique()
 
@@ -143,7 +142,7 @@ export const updateDigestPreferences = authenticatedMutation({
     const existing = await ctx.db
       .query("digestPreferences")
       .withIndex("by_workspace_and_user", (q) =>
-        indexEquals(q, ["workspaceId", workspace.id], ["userId", viewer.id]),
+        q.eq("workspaceId", workspace.id).eq("userId", viewer.id),
       )
       .unique()
 

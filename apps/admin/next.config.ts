@@ -13,7 +13,7 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  transpilePackages: ["@astreex/ui", "@astreex/domain"],
+  transpilePackages: ["@astreex/ui"],
   experimental: {
     optimizePackageImports: ["@phosphor-icons/react"],
   },

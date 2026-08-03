@@ -1,5 +1,6 @@
 "use client"
 
+import { api } from "@astreex/backend/api"
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
@@ -33,7 +34,6 @@ import { MentionFilterPopover } from "@/components/mentions/mention-filter-popov
 import {
   FeedNotice,
   MentionsEmptyState,
-  MentionsErrorState,
   MentionsLoadingState,
   MentionsPausedState,
   MentionsSetupRequiredState,
@@ -42,19 +42,13 @@ import {
 } from "@/components/mentions/mention-states"
 import { SavedViews } from "@/components/mentions/saved-views"
 import { useProductContext } from "@/components/product/product-context"
-import { customerConvex } from "@/lib/customer-convex"
 import {
   EMPTY_MENTION_FILTERS,
-  categoriesResultSchema,
   compactMentionFilters,
   copyMentionFilters,
-  keywordsResultSchema,
   mentionFilterCount,
   nextSparseMentionCursor,
-  mentionResultSchema,
-  mentionsPageResultSchema,
   optimisticStatusHasSettled,
-  savedViewsResultSchema,
   visibleMentionStatus,
   type MentionCategory,
   type MentionFilters,
@@ -67,26 +61,6 @@ import {
 import { useQueryClock } from "@/lib/use-query-clock"
 
 const PAGE_SIZE = 12
-
-function useParsedResult<T>(
-  value: unknown | undefined,
-  schema: {
-    safeParse: (
-      input: unknown,
-    ) => { success: true; data: T } | { success: false }
-  },
-) {
-  return useMemo(() => {
-    if (value === undefined) {
-      return { state: "loading" as const }
-    }
-
-    const parsed = schema.safeParse(value)
-    return parsed.success
-      ? { data: parsed.data, state: "ready" as const }
-      : { state: "invalid" as const }
-  }, [schema, value])
-}
 
 function mentionsQueryArguments({
   cursor,
@@ -199,29 +173,16 @@ function SavedViewsDataRegion({
   onSelectView,
   selectedViewId,
 }: SavedViewsRegionProps) {
-  const savedViewsValue = useQuery(customerConvex.savedViews.list, {})
-  const savedViewsResult = useParsedResult(
-    savedViewsValue,
-    savedViewsResultSchema,
-  )
-  const createSavedView = useMutation(customerConvex.savedViews.create)
-  const updateSavedView = useMutation(customerConvex.savedViews.update)
-  const reorderSavedViews = useMutation(customerConvex.savedViews.reorder)
-  const deleteSavedView = useMutation(customerConvex.savedViews.remove)
+  const savedViewsValue = useQuery(api.savedViews.listSavedViews, {})
+  const createSavedView = useMutation(api.savedViews.createSavedView)
+  const updateSavedView = useMutation(api.savedViews.updateSavedView)
+  const reorderSavedViews = useMutation(api.savedViews.reorderSavedViews)
+  const deleteSavedView = useMutation(api.savedViews.deleteSavedView)
 
-  if (savedViewsResult.state === "loading") {
+  if (savedViewsValue === undefined) {
     return (
       <SavedViewsFallback
         loading
-        onSelectAll={onSelectAll}
-        selectedViewId={selectedViewId}
-      />
-    )
-  }
-
-  if (savedViewsResult.state === "invalid") {
-    return (
-      <SavedViewsFallback
         onSelectAll={onSelectAll}
         selectedViewId={selectedViewId}
       />
@@ -261,7 +222,7 @@ function SavedViewsDataRegion({
         onSelectedViewUpdated(savedViewId, patch)
       }}
       selectedViewId={selectedViewId}
-      views={savedViewsResult.data}
+      views={savedViewsValue}
     />
   )
 }
@@ -282,6 +243,7 @@ function SavedViewsRegion(props: SavedViewsRegionProps) {
 }
 
 export function MentionsScreen() {
+  const now = useQueryClock()
   const { access, billing, workspace } = useProductContext()
   const preview = access.mode === "preview"
   const [filters, setFilters] = useState<MentionFilters>(EMPTY_MENTION_FILTERS)
@@ -300,7 +262,6 @@ export function MentionsScreen() {
     Record<string, boolean>
   >({})
   const [actionErrors, setActionErrors] = useState<Record<string, string>>({})
-  const queryNow = useQueryClock()
 
   const resetPagination = () => {
     setCursor(undefined)
@@ -308,50 +269,35 @@ export function MentionsScreen() {
   }
 
   const queryArguments = useMemo(
-    () => ({
-      ...mentionsQueryArguments({
+    () =>
+      mentionsQueryArguments({
         cursor,
         filters,
         query: deferredSearch,
         sort,
       }),
-      now: queryNow,
-    }),
-    [cursor, deferredSearch, filters, queryNow, sort],
+    [cursor, deferredSearch, filters, sort],
   )
 
   const categoriesValue = useQuery(
-    customerConvex.categories.list,
+    api.categories.listCategories,
     preview ? "skip" : {},
   )
   const keywordsValue = useQuery(
-    customerConvex.keywords.list,
+    api.keywords.listKeywords,
     preview ? "skip" : {},
   )
   const mentionsValue = useQuery(
-    customerConvex.mentions.list,
-    preview ? "skip" : queryArguments,
+    api.mentions.listMentions,
+    preview ? "skip" : { ...queryArguments, now },
   )
 
-  const categoriesResult = useParsedResult(
-    categoriesValue,
-    categoriesResultSchema,
-  )
-  const keywordsResult = useParsedResult(keywordsValue, keywordsResultSchema)
-  const mentionsResult = useParsedResult(
-    mentionsValue,
-    mentionsPageResultSchema,
-  )
+  const updateMentionStatus = useMutation(api.mentions.updateMentionStatus)
 
-  const updateMentionStatus = useMutation(customerConvex.mentions.updateStatus)
-
-  const mentions = useMemo(
-    () => (mentionsResult.state === "ready" ? mentionsResult.data.items : []),
-    [mentionsResult],
-  )
+  const mentions = useMemo(() => mentionsValue?.items ?? [], [mentionsValue])
 
   useEffect(() => {
-    const serverStatuses = new Map(
+    const serverStatuses = new Map<string, MentionStatus>(
       mentions.map((mention) => [mention.id, mention.status]),
     )
     const settleTimer = window.setTimeout(() => {
@@ -387,7 +333,7 @@ export function MentionsScreen() {
   }))
 
   const changeMentionStatus = async (
-    mentionId: string,
+    mentionId: MentionItem["id"],
     status: MentionStatus,
   ) => {
     const base =
@@ -406,8 +352,7 @@ export function MentionsScreen() {
 
     try {
       const value = await updateMentionStatus({ mentionId, status })
-      const result = mentionResultSchema.safeParse(value)
-      if (!result.success || result.data.status !== status) {
+      if (value.status !== status) {
         throw new Error("Unexpected mention status result")
       }
     } catch {
@@ -456,8 +401,7 @@ export function MentionsScreen() {
 
   const usage = billing.usage
   const usageLimited =
-    (mentionsResult.state === "ready" &&
-      mentionsResult.data.monitoringState === "usage_limited") ||
+    mentionsValue?.monitoringState === "usage_limited" ||
     Boolean(
       usage &&
       usage.mentionLimit > 0 &&
@@ -466,25 +410,16 @@ export function MentionsScreen() {
 
   const loading =
     !preview &&
-    (categoriesResult.state === "loading" ||
-      keywordsResult.state === "loading" ||
-      mentionsResult.state === "loading")
-  const invalid =
-    !preview &&
-    (categoriesResult.state === "invalid" ||
-      keywordsResult.state === "invalid" ||
-      mentionsResult.state === "invalid")
+    (categoriesValue === undefined ||
+      keywordsValue === undefined ||
+      mentionsValue === undefined)
 
-  const categories =
-    categoriesResult.state === "ready" ? categoriesResult.data : []
-  const keywords = keywordsResult.state === "ready" ? keywordsResult.data : []
+  const categories = categoriesValue ?? []
+  const keywords = keywordsValue ?? []
   const allKeywordsPaused =
     keywords.length > 0 &&
     keywords.every((keyword) => keyword.status === "paused")
-  const monitoringState =
-    mentionsResult.state === "ready"
-      ? mentionsResult.data.monitoringState
-      : "active"
+  const monitoringState = mentionsValue?.monitoringState ?? "active"
   const setupRequired =
     monitoringState === "setup_required" || keywords.length === 0
   const paused = monitoringState === "paused" || allKeywordsPaused
@@ -494,15 +429,15 @@ export function MentionsScreen() {
     selectedViewId !== null
   const paginationAvailable =
     cursorHistory.length > 0 ||
-    (mentionsResult.state === "ready" &&
-      !mentionsResult.data.isDone &&
-      Boolean(mentionsResult.data.nextCursor))
+    (mentionsValue !== undefined &&
+      !mentionsValue.isDone &&
+      Boolean(mentionsValue.nextCursor))
   const sparsePageCursor =
-    mentionsResult.state === "ready"
+    mentionsValue !== undefined
       ? nextSparseMentionCursor({
           filtered,
-          itemCount: mentionsResult.data.items.length,
-          nextCursor: mentionsResult.data.nextCursor,
+          itemCount: mentionsValue.items.length,
+          nextCursor: mentionsValue.nextCursor,
         })
       : undefined
 
@@ -547,13 +482,6 @@ export function MentionsScreen() {
         <div className="mt-6">
           <UnpaidMentionsPreview
             billingSetupRequired={access.billingSetupRequired}
-          />
-        </div>
-      ) : invalid ? (
-        <div className="mt-6">
-          <MentionsErrorState
-            description="The connected data service returned mention, keyword, or category data this version of Astreex cannot safely display."
-            onRetry={() => window.location.reload()}
           />
         </div>
       ) : loading ? (
@@ -666,9 +594,8 @@ export function MentionsScreen() {
               <>
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <p className="text-muted-foreground text-xs">
-                    {mentionsResult.state === "ready" &&
-                    mentionsResult.data.totalCount !== undefined
-                      ? `${mentionsResult.data.totalCount} mentions`
+                    {mentionsValue?.totalCount !== undefined
+                      ? `${mentionsValue.totalCount} mentions`
                       : `${visibleMentions.length} mentions on this page`}
                   </p>
                   <p className="text-muted-foreground text-xs">
@@ -718,19 +645,19 @@ export function MentionsScreen() {
                   variant="outline"
                   size="sm"
                   disabled={
-                    mentionsResult.state !== "ready" ||
-                    mentionsResult.data.isDone ||
-                    !mentionsResult.data.nextCursor
+                    mentionsValue === undefined ||
+                    mentionsValue.isDone ||
+                    !mentionsValue.nextCursor
                   }
                   onClick={() => {
                     if (
-                      mentionsResult.state !== "ready" ||
-                      !mentionsResult.data.nextCursor
+                      mentionsValue === undefined ||
+                      !mentionsValue.nextCursor
                     ) {
                       return
                     }
                     setCursorHistory((current) => [...current, cursor])
-                    setCursor(mentionsResult.data.nextCursor ?? undefined)
+                    setCursor(mentionsValue.nextCursor ?? undefined)
                   }}
                 >
                   Next

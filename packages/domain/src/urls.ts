@@ -47,10 +47,6 @@ function detectPlatform(url: URL): Platform | undefined {
   return undefined
 }
 
-export function detectPlatformFromUrl(rawUrl: string): Platform | undefined {
-  return detectPlatform(parseWebUrl(rawUrl))
-}
-
 function xContentId(url: URL): string | undefined {
   const match = url.pathname.match(
     /^\/(?:i\/web\/status|[^/]+\/status)\/(\d+)(?:\/|$)/i,
@@ -90,14 +86,6 @@ function providerContentId(
     case "hacker_news":
       return hackerNewsContentId(url)
   }
-}
-
-export function extractProviderContentId(
-  rawUrl: string,
-  platform?: Platform,
-): string | undefined {
-  const url = parseWebUrl(rawUrl)
-  return providerContentId(url, platform ?? detectPlatform(url))
 }
 
 function stripTrackingParameters(url: URL): void {
@@ -158,29 +146,3 @@ export function canonicalizeMentionUrl(
   }
   return canonicalizeParsedUrl(parseWebUrl(rawUrl), platform)
 }
-
-export const canonicalizeUrl = canonicalizeMentionUrl
-
-export type MentionDedupeInput = {
-  platform: Platform
-  providerId?: string
-  url: string
-}
-
-export function createMentionDedupeKey({
-  platform,
-  providerId,
-  url,
-}: MentionDedupeInput): string {
-  const parsedUrl = parseWebUrl(url)
-  const explicitId = providerId?.trim()
-  const contentId = explicitId || providerContentId(parsedUrl, platform)
-  if (contentId) {
-    const normalizedId =
-      platform === "reddit" ? contentId.toLowerCase() : contentId
-    return `${platform}:${normalizedId}`
-  }
-  return `${platform}:url:${canonicalizeParsedUrl(parsedUrl, platform)}`
-}
-
-export const mentionDedupeKey = createMentionDedupeKey

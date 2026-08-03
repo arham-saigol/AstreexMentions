@@ -3,14 +3,22 @@ import { describe, expect, it } from "vitest"
 import type {
   BillingOverviewResult,
   CurrentWorkspaceResult,
-} from "./customer-convex"
+} from "./product-access"
 import { decideProductAccess, productRedirectForPath } from "./product-access"
 
 const workspace: CurrentWorkspaceResult = {
+  keywordCount: 0,
   membership: { role: "owner" },
   onboardingComplete: false,
-  user: null,
-  workspace: { id: "workspace_1", kind: "personal", name: "My Workspace" },
+  user: {
+    clerkUserId: "clerk_1",
+    id: "user_1" as CurrentWorkspaceResult["user"]["id"],
+  },
+  workspace: {
+    id: "workspace_1" as CurrentWorkspaceResult["workspace"]["id"],
+    kind: "personal",
+    name: "My Workspace",
+  },
 }
 
 const billing: BillingOverviewResult = {

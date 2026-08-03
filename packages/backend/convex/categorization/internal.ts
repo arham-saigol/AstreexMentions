@@ -1,4 +1,5 @@
-import { type GenericId, v } from "convex/values"
+import { internal } from "../_generated/api"
+import { v } from "convex/values"
 
 import {
   DEEPSEEK_CATEGORIZATION_MODEL,
@@ -8,12 +9,6 @@ import {
   type CategorizationMention,
 } from "../lib/deepseekCategorization"
 import { isCategorySystemKey } from "../lib/categories"
-import {
-  internalActionReference,
-  internalMutationReference,
-  internalQueryReference,
-} from "../lib/functionReferences"
-import { indexAtMost } from "../lib/jobRuntime"
 import { recordProviderMetricBuckets } from "../lib/providerMetricBuckets"
 import { incrementDailySystemMetric } from "../lib/systemMetricBuckets"
 import {
@@ -21,12 +16,12 @@ import {
   type CategorizedMentionGroup,
 } from "../ingestion/model"
 import {
-  indexEquals,
   internalMutation,
   internalQuery,
   type DatabaseReader,
   type MutationCtx,
-} from "../server"
+} from "../_generated/server"
+import type { Doc, Id } from "../_generated/dataModel"
 import {
   parseCategorySnapshotJson,
   parseCategorizationResultsJson,
@@ -47,12 +42,11 @@ const MAX_WORKSPACES_PER_DISPATCH = 16
 const BLOCKED_CONFIGURATION_RETRY_MS = 5 * 60_000
 const DEEPSEEK_CATEGORIZATION_OPERATION = "chat.completions"
 
-type GenericRow = Record<string, unknown> & { _id: GenericId<string> }
-type CategorizationJobId = GenericId<"categorizationJobs">
-type CategoryId = GenericId<"categories">
-type MentionId = GenericId<"mentions">
-type ProviderRunId = GenericId<"providerRuns">
-type WorkspaceId = GenericId<"workspaces">
+type CategorizationJobId = Id<"categorizationJobs">
+type CategoryId = Id<"categories">
+type MentionId = Id<"mentions">
+type ProviderRunId = Id<"providerRuns">
+type WorkspaceId = Id<"workspaces">
 
 export type CategorizationBatchLeaseArguments = {
   categorySnapshotJson: string
@@ -61,7 +55,7 @@ export type CategorizationBatchLeaseArguments = {
 }
 
 type LeasedBatch = {
-  jobs: GenericRow[]
+  jobs: Doc<"categorizationJobs">[]
   workspaceId: WorkspaceId
 }
 
@@ -84,12 +78,12 @@ export type CategorizationBatchExecutionContext =
       state: "ready"
     }
 
-function dueAt(row: GenericRow): number {
+function dueAt(row: Doc<"categorizationJobs">): number {
   return ((row.status === "leased" ? row.leaseExpiresAt : row.nextAttemptAt) ??
     0) as number
 }
 
-function hasValidAttemptCounters(row: GenericRow): boolean {
+function hasValidAttemptCounters(row: Doc<"categorizationJobs">): boolean {
   return (
     Number.isSafeInteger(row.attempts) &&
     (row.attempts as number) >= 0 &&
@@ -98,7 +92,9 @@ function hasValidAttemptCounters(row: GenericRow): boolean {
   )
 }
 
-function jobForClaim(row: GenericRow): CategorizationJobForClaim {
+function jobForClaim(
+  row: Doc<"categorizationJobs">,
+): CategorizationJobForClaim {
   return {
     attempts: row.attempts as number,
     id: String(row._id),
@@ -116,13 +112,13 @@ function providerRunIdempotencyKey(leaseToken: string): string {
 async function findProviderRun(
   ctx: MutationCtx,
   leaseToken: string,
-): Promise<GenericRow | null> {
-  return (await ctx.db
+): Promise<Doc<"providerRuns"> | null> {
+  return await ctx.db
     .query("providerRuns")
     .withIndex("by_idempotency_key", (q) =>
       q.eq("idempotencyKey", providerRunIdempotencyKey(leaseToken)),
     )
-    .unique()) as GenericRow | null
+    .unique()
 }
 
 function rateLimited(errorCode: string | undefined): number {
@@ -173,7 +169,7 @@ async function finishProviderRun(
     errorCode?: string | undefined
     errorMessage?: string | undefined
     outputCount: number
-    run: GenericRow
+    run: Doc<"providerRuns">
     status: "failed" | "succeeded"
   },
   now: number,
@@ -233,12 +229,12 @@ async function finishExpiredProviderRun(
 
 async function patchMentionAnalysisState(
   ctx: MutationCtx,
-  row: GenericRow,
+  row: Doc<"categorizationJobs">,
   analysisState: "completed" | "failed" | "leased" | "pending",
   now: number,
 ): Promise<void> {
   const mentionId = row.mentionId as MentionId
-  const mention = (await ctx.db.get("mentions", mentionId)) as GenericRow | null
+  const mention = await ctx.db.get("mentions", mentionId)
   if (mention && mention.workspaceId === row.workspaceId) {
     await ctx.db.patch("mentions", mentionId, { analysisState, updatedAt: now })
   }
@@ -246,7 +242,7 @@ async function patchMentionAnalysisState(
 
 async function markJobDead(
   ctx: MutationCtx,
-  row: GenericRow,
+  row: Doc<"categorizationJobs">,
   errorCode: string,
   now: number,
 ): Promise<void> {
@@ -270,9 +266,9 @@ async function markJobDead(
 
 async function recoverExpiredJob(
   ctx: MutationCtx,
-  row: GenericRow,
+  row: Doc<"categorizationJobs">,
   now: number,
-): Promise<GenericRow | null> {
+): Promise<Doc<"categorizationJobs"> | null> {
   await finishExpiredProviderRun(ctx, row.leaseToken as string | undefined, now)
   if ((row.attempts as number) >= (row.maxAttempts as number)) {
     await markJobDead(ctx, row, "lease_expired", now)
@@ -294,11 +290,14 @@ async function recoverExpiredJob(
     updatedAt: now,
   })
   await patchMentionAnalysisState(ctx, row, "pending", now)
+  const {
+    leaseExpiresAt: _leaseExpiresAt,
+    leaseToken: _leaseToken,
+    ...rest
+  } = row
   return {
-    ...row,
+    ...rest,
     lastError: "lease_expired",
-    leaseExpiresAt: undefined,
-    leaseToken: undefined,
     nextAttemptAt: now,
     status: "pending",
     updatedAt: now,
@@ -308,29 +307,21 @@ async function recoverExpiredJob(
 async function dueCategorizationJobs(
   ctx: MutationCtx,
   now: number,
-): Promise<GenericRow[]> {
-  const [pending, expired] = (await Promise.all([
+): Promise<Doc<"categorizationJobs">[]> {
+  const [pending, expired] = await Promise.all([
     ctx.db
       .query("categorizationJobs")
       .withIndex("by_status_and_next_attempt_at", (q) =>
-        indexAtMost(
-          indexEquals(q, ["status", "pending"]),
-          "nextAttemptAt",
-          now,
-        ),
+        q.eq("status", "pending").lte("nextAttemptAt", now),
       )
       .take(MAX_DUE_SCAN),
     ctx.db
       .query("categorizationJobs")
       .withIndex("by_status_and_lease_expires_at", (q) =>
-        indexAtMost(
-          indexEquals(q, ["status", "leased"]),
-          "leaseExpiresAt",
-          now,
-        ),
+        q.eq("status", "leased").lte("leaseExpiresAt", now),
       )
       .take(MAX_DUE_SCAN),
-  ])) as [GenericRow[], GenericRow[]]
+  ])
 
   const rows = [...pending, ...expired]
     .sort(
@@ -339,7 +330,7 @@ async function dueCategorizationJobs(
         String(left._id).localeCompare(String(right._id), "en"),
     )
     .slice(0, MAX_DUE_SCAN)
-  const claimable: GenericRow[] = []
+  const claimable: Doc<"categorizationJobs">[] = []
 
   for (const row of rows) {
     if (
@@ -370,17 +361,15 @@ async function enabledCategorySnapshot(
   db: DatabaseReader,
   workspaceId: WorkspaceId,
 ): Promise<EnabledCategorySnapshot | null> {
-  const rows = (await db
+  const rows = await db
     .query("categories")
     .withIndex("by_workspace_deleted_enabled_and_sort_order", (q) =>
-      indexEquals(
-        q,
-        ["workspaceId", workspaceId],
-        ["deletedAt", undefined],
-        ["enabled", true],
-      ),
+      q
+        .eq("workspaceId", workspaceId)
+        .eq("deletedAt", undefined)
+        .eq("enabled", true),
     )
-    .collect()) as GenericRow[]
+    .collect()
   const otherRows = rows.filter(
     (row) =>
       row.systemKey === "other" &&
@@ -428,9 +417,9 @@ async function currentBatchLease(
     return null
   }
 
-  const jobs = (await Promise.all(
+  const jobs = await Promise.all(
     args.jobIds.map(async (jobId) => await db.get("categorizationJobs", jobId)),
-  )) as (GenericRow | null)[]
+  )
   const first = jobs[0]
   if (!first) {
     return null
@@ -453,18 +442,21 @@ async function currentBatchLease(
     return null
   }
 
-  return { jobs: jobs as GenericRow[], workspaceId }
+  return {
+    jobs: jobs.filter((job): job is Doc<"categorizationJobs"> => job !== null),
+    workspaceId,
+  }
 }
 
 async function mentionsForBatch(
   db: DatabaseReader,
   batch: LeasedBatch,
 ): Promise<CategorizationMention[] | null> {
-  const mentionRows = (await Promise.all(
+  const mentionRows = await Promise.all(
     batch.jobs.map(
       async (job) => await db.get("mentions", job.mentionId as MentionId),
     ),
-  )) as (GenericRow | null)[]
+  )
   if (
     mentionRows.some(
       (mention, index) =>
@@ -477,15 +469,17 @@ async function mentionsForBatch(
   }
 
   try {
-    return (mentionRows as GenericRow[]).map((mention) => ({
-      id: String(mention._id),
-      text: mentionText({
-        body: mention.body as string,
-        ...(mention.title === undefined
-          ? {}
-          : { title: mention.title as string }),
-      }),
-    }))
+    return mentionRows
+      .filter((mention): mention is Doc<"mentions"> => mention !== null)
+      .map((mention) => ({
+        id: String(mention._id),
+        text: mentionText({
+          body: mention.body as string,
+          ...(mention.title === undefined
+            ? {}
+            : { title: mention.title as string }),
+        }),
+      }))
   } catch {
     return null
   }
@@ -493,13 +487,10 @@ async function mentionsForBatch(
 
 async function completeAlreadyCategorizedJob(
   ctx: MutationCtx,
-  row: GenericRow,
+  row: Doc<"categorizationJobs">,
   now: number,
 ): Promise<boolean> {
-  const mention = (await ctx.db.get(
-    "mentions",
-    row.mentionId as MentionId,
-  )) as GenericRow | null
+  const mention = await ctx.db.get("mentions", row.mentionId as MentionId)
   if (
     !mention ||
     mention.workspaceId !== row.workspaceId ||
@@ -529,21 +520,20 @@ async function completeAlreadyCategorizedJob(
 
 async function claimableRowsWithMentions(
   ctx: MutationCtx,
-  rows: readonly GenericRow[],
+  rows: readonly Doc<"categorizationJobs">[],
   now: number,
-): Promise<Array<{ mention: CategorizationMention; row: GenericRow }>> {
+): Promise<
+  Array<{ mention: CategorizationMention; row: Doc<"categorizationJobs"> }>
+> {
   const claimable: Array<{
     mention: CategorizationMention
-    row: GenericRow
+    row: Doc<"categorizationJobs">
   }> = []
   for (const row of rows) {
     if (await completeAlreadyCategorizedJob(ctx, row, now)) {
       continue
     }
-    const mention = (await ctx.db.get(
-      "mentions",
-      row.mentionId as MentionId,
-    )) as GenericRow | null
+    const mention = await ctx.db.get("mentions", row.mentionId as MentionId)
     if (!mention || mention.workspaceId !== row.workspaceId) {
       await markJobDead(ctx, row, "invalid_mention", now)
       continue
@@ -570,9 +560,9 @@ async function claimableRowsWithMentions(
 function promptBoundedJobs(
   candidates: readonly {
     mention: CategorizationMention
-    row: GenericRow
+    row: Doc<"categorizationJobs">
   }[],
-): GenericRow[] {
+): Doc<"categorizationJobs">[] {
   const selected: CategorizationMention[] = []
   for (const candidate of candidates) {
     const next = [...selected, candidate.mention]
@@ -611,7 +601,7 @@ export const dispatchDueCategorizationJobs = internalMutation({
       const workspaceId = first.workspaceId as WorkspaceId
       const workspaceKey = String(workspaceId)
       consideredWorkspaces.add(workspaceKey)
-      const selected: GenericRow[] = []
+      const selected: Doc<"categorizationJobs">[] = []
       for (
         let index = 0;
         index < queue.length && selected.length < MAX_CATEGORIZATION_BATCH_SIZE;
@@ -671,18 +661,22 @@ export const dispatchDueCategorizationJobs = internalMutation({
             leaseExpiresAt: lease.expiresAt,
             leaseToken: lease.token,
             nextAttemptAt: undefined,
-            startedAt: row.startedAt ?? now,
+            startedAt: typeof row.startedAt === "number" ? row.startedAt : now,
             status: "leased",
             updatedAt: now,
           },
         )
         await patchMentionAnalysisState(ctx, row, "leased", now)
       }
-      await ctx.scheduler.runAfter(0, executeCategorizationBatchReference, {
-        categorySnapshotJson: snapshot.json,
-        jobIds,
-        leaseToken: lease.token,
-      })
+      await ctx.scheduler.runAfter(
+        0,
+        internal.categorization.actions.executeCategorizationBatch,
+        {
+          categorySnapshotJson: snapshot.json,
+          jobIds,
+          leaseToken: lease.token,
+        },
+      )
       batches += 1
       claimed += eligible.length
     }
@@ -708,10 +702,7 @@ export const loadCategorizationBatchContext = internalQuery({
     if (!batch) {
       return { state: "stale_lease" }
     }
-    const workspace = (await ctx.db.get(
-      "workspaces",
-      batch.workspaceId,
-    )) as GenericRow | null
+    const workspace = await ctx.db.get("workspaces", batch.workspaceId)
     if (
       !workspace ||
       workspace.deletedAt !== undefined ||
@@ -804,10 +795,7 @@ export const startCategorizationProviderRun = internalMutation({
     if (!batch) {
       return { state: "stale_lease" as const }
     }
-    const workspace = (await ctx.db.get(
-      "workspaces",
-      batch.workspaceId,
-    )) as GenericRow | null
+    const workspace = await ctx.db.get("workspaces", batch.workspaceId)
     if (
       !workspace ||
       workspace.deletedAt !== undefined ||
@@ -868,10 +856,7 @@ export const applyCategorizationBatch = internalMutation({
     if (!run || run.status !== "running") {
       return { state: "stale_run" as const }
     }
-    const workspace = (await ctx.db.get(
-      "workspaces",
-      batch.workspaceId,
-    )) as GenericRow | null
+    const workspace = await ctx.db.get("workspaces", batch.workspaceId)
     if (
       !workspace ||
       workspace.deletedAt !== undefined ||
@@ -921,10 +906,7 @@ export const applyCategorizationBatch = internalMutation({
       if (!result || !categoryId || !metricGroup) {
         throw new TypeError("Categorization result cannot be applied")
       }
-      const mention = (await ctx.db.get(
-        "mentions",
-        mentionId,
-      )) as GenericRow | null
+      const mention = await ctx.db.get("mentions", mentionId)
       if (!mention || mention.workspaceId !== batch.workspaceId) {
         throw new TypeError("Categorization mention is unavailable")
       }
@@ -1065,45 +1047,3 @@ export const failCategorizationBatch = internalMutation({
     return { dead, pending, state: "failed" as const }
   },
 })
-
-export const dispatchDueCategorizationJobsReference =
-  internalMutationReference<{ now?: number }>(
-    "categorization/internal:dispatchDueCategorizationJobs",
-  )
-
-export const executeCategorizationBatchReference =
-  internalActionReference<CategorizationBatchLeaseArguments>(
-    "categorization/actions:executeCategorizationBatch",
-  )
-
-export const loadCategorizationBatchContextReference = internalQueryReference<
-  CategorizationBatchLeaseArguments,
-  CategorizationBatchExecutionContext
->("categorization/internal:loadCategorizationBatchContext")
-
-export const releaseCategorizationBlockedConfigurationReference =
-  internalMutationReference<CategorizationBatchLeaseArguments>(
-    "categorization/internal:releaseCategorizationBlockedConfiguration",
-  )
-
-export const startCategorizationProviderRunReference =
-  internalMutationReference<CategorizationBatchLeaseArguments>(
-    "categorization/internal:startCategorizationProviderRun",
-  )
-
-export const applyCategorizationBatchReference = internalMutationReference<
-  CategorizationBatchLeaseArguments & {
-    durationMs: number
-    resultsJson: string
-  }
->("categorization/internal:applyCategorizationBatch")
-
-export const failCategorizationBatchReference = internalMutationReference<
-  CategorizationBatchLeaseArguments & {
-    durationMs: number
-    errorCode: string
-    errorMessage: string
-    retryable: boolean
-    retryAfterMs?: number
-  }
->("categorization/internal:failCategorizationBatch")

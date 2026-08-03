@@ -4,8 +4,7 @@
     "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./*"],
-      "recharts": ["./node_modules/@astreex/ui/node_modules/recharts"]
+      "@/*": ["./*"]
     },
     "tsBuildInfoFile": "node_modules/.cache/tsconfig.tsbuildinfo"
   },

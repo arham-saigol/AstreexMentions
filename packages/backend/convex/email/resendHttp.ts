@@ -1,8 +1,8 @@
+import { internal } from "../_generated/api"
 import { createResendWebhookVerifier } from "../integrations/resend"
 import { verifyResendEmailWebhook } from "../lib/resendWebhook"
-import { env, httpAction } from "../server"
+import { env, httpAction } from "../_generated/server"
 import { readResendWebhookConfiguration } from "./config"
-import { ingestResendWebhookEventReference } from "./webhookInternal"
 
 function jsonResponse(status: number, body: Record<string, unknown>): Response {
   return new Response(JSON.stringify(body), {
@@ -53,10 +53,13 @@ export const resendWebhook = httpAction(async (ctx, request) => {
   }
 
   try {
-    const result = (await ctx.runMutation(ingestResendWebhookEventReference, {
-      ...event,
-      receivedAt: Date.now(),
-    })) as { state: string }
+    const result = (await ctx.runMutation(
+      internal.email.webhookInternal.ingestResendWebhookEvent,
+      {
+        ...event,
+        receivedAt: Date.now(),
+      },
+    )) as { state: string }
     return jsonResponse(200, { state: result.state })
   } catch {
     return jsonResponse(500, {

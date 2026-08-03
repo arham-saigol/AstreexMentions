@@ -1,7 +1,12 @@
-import type {
-  BillingOverviewResult,
-  CurrentWorkspaceResult,
-} from "@/lib/customer-convex"
+import type { api } from "@astreex/backend/api"
+import type { FunctionReturnType } from "convex/server"
+
+export type BillingOverviewResult = FunctionReturnType<
+  typeof api.billing.customer.getBillingOverview
+>
+export type CurrentWorkspaceResult = FunctionReturnType<
+  typeof api.workspaces.getCurrentWorkspace
+>
 
 export type ProductAccess = {
   billingSetupRequired: boolean

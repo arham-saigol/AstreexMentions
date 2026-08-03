@@ -1,6 +1,6 @@
 "use client"
 
-import { Button } from "@astreex/ui"
+import { Button } from "@astreex/ui/components/button"
 
 export default function DeletionsError({
   reset,

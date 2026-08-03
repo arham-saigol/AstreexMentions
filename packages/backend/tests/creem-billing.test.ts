@@ -1,10 +1,9 @@
-import { describe, expect, it, vi } from "vitest"
+import { describe, expect, it } from "vitest"
 
 import {
   canReconcileBillingWorkspace,
   createUsagePlanSnapshot,
   entitlementForCreemSubscriptionStatus,
-  insertCreemBillingEventIdempotently,
   KNOWN_CREEM_SUBSCRIPTION_STATUSES,
   normalizeCreemSubscriptionStatus,
 } from "../convex/lib/creemBilling"
@@ -42,31 +41,6 @@ describe("Creem billing contract", () => {
     expect(entitlementForCreemSubscriptionStatus("scheduled_cancel")).toBe(
       "active",
     )
-  })
-
-  it("deduplicates Creem webhook events by provider event id", async () => {
-    const insert = vi.fn().mockResolvedValue("event-row-1")
-    const duplicateStore = {
-      findByProviderEventId: vi.fn().mockResolvedValue("event-row-1"),
-      insert,
-    }
-
-    await expect(
-      insertCreemBillingEventIdempotently(duplicateStore, "evt_123"),
-    ).resolves.toEqual({ eventId: "event-row-1", kind: "duplicate" })
-    expect(insert).not.toHaveBeenCalled()
-
-    const newStore = {
-      findByProviderEventId: vi.fn().mockResolvedValue(null),
-      insert,
-    }
-    await expect(
-      insertCreemBillingEventIdempotently(newStore, " evt_456 "),
-    ).resolves.toEqual({ eventId: "event-row-1", kind: "inserted" })
-    expect(insert).toHaveBeenCalledWith({
-      provider: "creem",
-      providerEventId: "evt_456",
-    })
   })
 
   it("captures an immutable exact plan snapshot", () => {

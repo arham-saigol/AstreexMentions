@@ -1,5 +1,3 @@
-import type { GenericId, Value } from "convex/values"
-
 import {
   DEFAULT_CATEGORIZATION_MAX_ATTEMPTS,
   DEEPSEEK_CATEGORIZATION_MODEL,
@@ -11,7 +9,8 @@ import {
 } from "../lib/mentionIngestion"
 import { syncUsagePausedWorkspaceMetric } from "../lib/operationalMetrics"
 import { createPendingEmail, emailPayloadFingerprint } from "../lib/emailOutbox"
-import { indexEquals, type MutationCtx } from "../server"
+import { type MutationCtx } from "../_generated/server"
+import type { Doc, Id, TableNames } from "../_generated/dataModel"
 import { finalizeInvalidatedTrackingProviderRun } from "../scheduling/providerRuns"
 import { incrementDailySystemMetric } from "../lib/systemMetricBuckets"
 import type { IngestionCandidate, IngestionChunk } from "./contracts"
@@ -26,13 +25,11 @@ import {
   type UsageWarningThreshold,
 } from "./model"
 
-type GenericRow = Record<string, unknown> & { _id: GenericId<string> }
-type WorkspaceId = GenericId<"workspaces">
-type UserId = GenericId<"users">
-type KeywordId = GenericId<"keywords">
-type TrackingSourceId = GenericId<"trackingSources">
-type UsageCycleId = GenericId<"usageCycles">
-type MentionId = GenericId<"mentions">
+type WorkspaceId = Id<"workspaces">
+type KeywordId = Id<"keywords">
+type TrackingSourceId = Id<"trackingSources">
+type UsageCycleId = Id<"usageCycles">
+type MentionId = Id<"mentions">
 
 type TrackingSourceType =
   "hacker_news" | "reddit_comments" | "reddit_posts" | "x"
@@ -85,19 +82,19 @@ export type IngestionServiceOptions = {
   now: number
 }
 
-function withoutUndefined(
-  value: Record<string, unknown>,
-): Record<string, Value> {
+function withoutUndefined<T extends Record<string, unknown>>(
+  value: T,
+): { [Key in keyof T]: Exclude<T[Key], undefined> } {
   return Object.fromEntries(
     Object.entries(value).filter((entry) => entry[1] !== undefined),
-  ) as Record<string, Value>
+  ) as { [Key in keyof T]: Exclude<T[Key], undefined> }
 }
 
-function requireId<TableName extends string>(
+function requireId<TableName extends TableNames>(
   ctx: MutationCtx,
   tableName: TableName,
   value: string,
-): GenericId<TableName> {
+): Id<TableName> {
   const id = ctx.db.normalizeId(tableName, value)
   if (!id) {
     throw new IngestionInvariantError(
@@ -105,10 +102,10 @@ function requireId<TableName extends string>(
       `Invalid ${tableName} identifier`,
     )
   }
-  return id as GenericId<TableName>
+  return id
 }
 
-function sourceTypeFromRow(source: GenericRow): TrackingSourceType {
+function sourceTypeFromRow(source: Doc<"trackingSources">): TrackingSourceType {
   const sourceType = source.sourceType
   if (
     sourceType !== "x" &&
@@ -155,13 +152,13 @@ async function currentUsageCycle(
   ctx: MutationCtx,
   workspaceId: WorkspaceId,
   now: number,
-): Promise<GenericRow> {
-  const cycles = (await ctx.db
+): Promise<Doc<"usageCycles">> {
+  const cycles = await ctx.db
     .query("usageCycles")
     .withIndex("by_workspace_status_and_period_end", (q) =>
-      indexEquals(q, ["workspaceId", workspaceId], ["status", "open"]),
+      q.eq("workspaceId", workspaceId).eq("status", "open"),
     )
-    .collect()) as GenericRow[]
+    .collect()
   const current = cycles
     .filter(
       (cycle) =>
@@ -203,34 +200,30 @@ async function findExistingMention(
     fallbackKey?: string | undefined
     workspaceId: WorkspaceId
   },
-): Promise<GenericRow | null> {
+): Promise<Doc<"mentions"> | null> {
   const providerMatch = input.candidate.providerItemId
-    ? ((await ctx.db
+    ? await ctx.db
         .query("mentions")
         .withIndex("by_workspace_platform_content_provider_item", (q) =>
-          indexEquals(
-            q,
-            ["workspaceId", input.workspaceId],
-            ["platform", input.candidate.platform],
-            ["contentType", input.candidate.contentType],
-            ["providerItemId", input.candidate.providerItemId],
-          ),
+          q
+            .eq("workspaceId", input.workspaceId)
+            .eq("platform", input.candidate.platform)
+            .eq("contentType", input.candidate.contentType)
+            .eq("providerItemId", input.candidate.providerItemId),
         )
-        .unique()) as GenericRow | null)
+        .unique()
     : null
   const fallbackMatch = input.fallbackKey
-    ? ((await ctx.db
+    ? await ctx.db
         .query("mentions")
         .withIndex("by_workspace_platform_content_fallback", (q) =>
-          indexEquals(
-            q,
-            ["workspaceId", input.workspaceId],
-            ["platform", input.candidate.platform],
-            ["contentType", input.candidate.contentType],
-            ["fallbackKey", input.fallbackKey],
-          ),
+          q
+            .eq("workspaceId", input.workspaceId)
+            .eq("platform", input.candidate.platform)
+            .eq("contentType", input.candidate.contentType)
+            .eq("fallbackKey", input.fallbackKey),
         )
-        .unique()) as GenericRow | null)
+        .unique()
     : null
 
   if (
@@ -273,11 +266,7 @@ async function ensureKeywordAssociation(
   const existing = await ctx.db
     .query("mentionKeywordMatches")
     .withIndex("by_mention_and_keyword", (q) =>
-      indexEquals(
-        q,
-        ["mentionId", input.mentionId],
-        ["keywordId", input.keywordId],
-      ),
+      q.eq("mentionId", input.mentionId).eq("keywordId", input.keywordId),
     )
     .unique()
   if (existing) {
@@ -303,12 +292,12 @@ async function ensureCategorizationJob(
   const idempotencyKey = categorizationJobIdempotencyKey(
     String(input.mentionId),
   )
-  const existing = (await ctx.db
+  const existing = await ctx.db
     .query("categorizationJobs")
     .withIndex("by_idempotency_key", (q) =>
       q.eq("idempotencyKey", idempotencyKey),
     )
-    .unique()) as GenericRow | null
+    .unique()
   if (existing) {
     if (
       existing.mentionId !== input.mentionId ||
@@ -370,10 +359,10 @@ async function ensureUsageWarningEmail(
     emailReplyTo?: string | undefined
     mentionLimit: number
     mentionsUsed: number
-    owner: GenericRow
+    owner: Doc<"users">
     threshold: UsageWarningThreshold
     usageCycleId: UsageCycleId
-    workspace: GenericRow
+    workspace: Doc<"workspaces">
     workspaceId: WorkspaceId
   },
   now: number,
@@ -401,12 +390,12 @@ async function ensureUsageWarningEmail(
     input.threshold,
   )
   const payloadFingerprint = emailPayloadFingerprint(payload)
-  const existing = (await ctx.db
+  const existing = await ctx.db
     .query("emailOutbox")
     .withIndex("by_idempotency_key", (q) =>
       q.eq("idempotencyKey", idempotencyKey),
     )
-    .unique()) as GenericRow | null
+    .unique()
   if (existing) {
     if (
       existing.payloadFingerprint !== payloadFingerprint ||
@@ -439,7 +428,7 @@ async function ensureUsageWarningEmail(
       text: pending.payload.text,
       to: [...pending.payload.to],
       updatedAt: pending.updatedAt,
-      userId: input.owner._id as UserId,
+      userId: input.owner._id,
       workspaceId: input.workspaceId,
     }),
   )
@@ -452,12 +441,12 @@ async function pauseWorkspaceSourcesForUsage(
   currentTrackingSourceId: TrackingSourceId,
   now: number,
 ): Promise<number> {
-  const activeSources = (await ctx.db
+  const activeSources = await ctx.db
     .query("trackingSources")
     .withIndex("by_workspace_status_and_created_at", (q) =>
-      indexEquals(q, ["workspaceId", workspaceId], ["status", "active"]),
+      q.eq("workspaceId", workspaceId).eq("status", "active"),
     )
-    .collect()) as GenericRow[]
+    .collect()
 
   for (const source of activeSources) {
     if (source._id !== currentTrackingSourceId) {
@@ -511,11 +500,11 @@ export async function applyIngestionChunkAtomically(
     "trackingSources",
     input.trackingSourceId,
   )
-  const [workspace, keyword, source] = (await Promise.all([
+  const [workspace, keyword, source] = await Promise.all([
     ctx.db.get("workspaces", workspaceId),
     ctx.db.get("keywords", keywordId),
     ctx.db.get("trackingSources", trackingSourceId),
-  ])) as [GenericRow | null, GenericRow | null, GenericRow | null]
+  ])
 
   if (
     !workspace ||
@@ -569,10 +558,7 @@ export async function applyIngestionChunkAtomically(
     )
   }
 
-  const owner = (await ctx.db.get(
-    "users",
-    workspace.ownerUserId as UserId,
-  )) as GenericRow | null
+  const owner = await ctx.db.get("users", workspace.ownerUserId)
   if (
     !owner ||
     owner.deletedAt !== undefined ||

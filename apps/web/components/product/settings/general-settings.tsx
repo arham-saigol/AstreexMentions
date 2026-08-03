@@ -1,5 +1,6 @@
 "use client"
 
+import { api } from "@astreex/backend/api"
 import { useClerk, useUser } from "@clerk/nextjs"
 import {
   ArrowSquareOutIcon,
@@ -34,17 +35,12 @@ import {
   SelectValue,
 } from "@astreex/ui/components/select"
 import { useMutation, useQuery } from "convex/react"
-import { useMemo, useState, type FormEvent } from "react"
+import { useState, type FormEvent } from "react"
 
 import { useProductContext } from "@/components/product/product-context"
 import { useBillingActions } from "@/components/product/settings/use-billing-actions"
-import { customerConvex } from "@/lib/customer-convex"
 import { clearOnboardingDraftStorage } from "@/lib/onboarding-draft"
-import {
-  accountDeletionReadinessSchema,
-  accountDeletionResponseSchema,
-  settingsResultSchema,
-} from "@/lib/settings-convex"
+import { accountDeletionResponseSchema } from "@/lib/settings-convex"
 
 function initials(
   name: string | null | undefined,
@@ -126,30 +122,21 @@ function AccountDeletion() {
   const { billing, workspace } = useProductContext()
   const { error: portalError, openPortal, pending } = useBillingActions()
   const readinessValue = useQuery(
-    customerConvex.workspaces.getAccountDeletionReadiness,
+    api.workspaces.getAccountDeletionReadiness,
     {},
-  )
-  const readiness = useMemo(
-    () =>
-      readinessValue === undefined
-        ? null
-        : accountDeletionReadinessSchema.safeParse(readinessValue),
-    [readinessValue],
   )
   const [confirmation, setConfirmation] = useState("")
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
-  const readinessState = readiness?.success ? readiness.data : null
+  const readinessState = readinessValue ?? null
   const deletionAvailable = readinessState?.state === "available"
   const portalRequired = readinessState?.state === "portal_required"
   const portalAvailable =
     billing.providerState === "configured" && Boolean(billing.subscription)
   const readinessMessage =
     readinessState === null
-      ? readinessValue === undefined
-        ? "Checking billing and deletion readiness."
-        : "Deletion readiness could not be verified."
+      ? "Checking billing and deletion readiness."
       : readinessState.state === "available"
         ? "A durable deletion job will remove account data before the Clerk identity is removed."
         : readinessState.message
@@ -321,19 +308,12 @@ function AccountDeletion() {
 export function GeneralSettings() {
   const { user: clerkUser } = useUser()
   const { workspace } = useProductContext()
-  const settingsValue = useQuery(customerConvex.settings.get, {})
-  const updateCurrentUser = useMutation(customerConvex.users.updateCurrentUser)
+  const settingsValue = useQuery(api.settings.getSettings, {})
+  const updateCurrentUser = useMutation(api.users.updateCurrentUser)
   const updateCurrentWorkspace = useMutation(
-    customerConvex.workspaces.updateCurrentWorkspace,
+    api.workspaces.updateCurrentWorkspace,
   )
-  const updateDigest = useMutation(customerConvex.settings.updateDigest)
-  const parsedSettings = useMemo(
-    () =>
-      settingsValue === undefined
-        ? null
-        : settingsResultSchema.safeParse(settingsValue),
-    [settingsValue],
-  )
+  const updateDigest = useMutation(api.settings.updateDigestPreferences)
   const primaryEmail = clerkUser?.primaryEmailAddress?.emailAddress ?? null
   const profileName = workspace.user?.name ?? clerkUser?.fullName ?? ""
   const [nameDraft, setNameDraft] = useState<string | null>(null)
@@ -349,10 +329,7 @@ export function GeneralSettings() {
   const name = nameDraft ?? profileName
   const workspaceName = workspaceNameDraft ?? workspace.workspace.name
   const timeZone =
-    timeZoneDraft ??
-    (parsedSettings?.success
-      ? parsedSettings.data.digest.timeZone
-      : browserTimeZone())
+    timeZoneDraft ?? settingsValue?.digest.timeZone ?? browserTimeZone()
 
   const saveName = async (event: FormEvent) => {
     event.preventDefault()
@@ -399,7 +376,7 @@ export function GeneralSettings() {
   }
 
   const saveTimeZone = async () => {
-    if (!parsedSettings?.success) {
+    if (!settingsValue) {
       setError(
         "Digest preferences are unavailable, so the timezone was not changed.",
       )
@@ -409,7 +386,7 @@ export function GeneralSettings() {
     setSaving("timezone")
     setError(null)
     setStatus(null)
-    const digest = parsedSettings.data.digest
+    const digest = settingsValue.digest
     try {
       await updateDigest({
         enabled: digest.enabled,
@@ -541,13 +518,13 @@ export function GeneralSettings() {
           <div className="space-y-2">
             <Label htmlFor="account-timezone">Timezone</Label>
             <Select
-              value={parsedSettings?.success ? timeZone : ""}
+              value={settingsValue ? timeZone : ""}
               onValueChange={setTimeZoneDraft}
             >
               <SelectTrigger
                 id="account-timezone"
                 className="w-full"
-                disabled={!parsedSettings?.success}
+                disabled={!settingsValue}
               >
                 <SelectValue
                   placeholder={
@@ -570,7 +547,7 @@ export function GeneralSettings() {
             type="button"
             variant="outline"
             onClick={() => void saveTimeZone()}
-            disabled={saving !== null || !parsedSettings?.success}
+            disabled={saving !== null || !settingsValue}
           >
             {saving === "timezone" ? (
               <CircleNotchIcon className="animate-spin" />
@@ -580,12 +557,6 @@ export function GeneralSettings() {
             Save timezone
           </Button>
         </div>
-        {parsedSettings && !parsedSettings.success && (
-          <FieldStatus
-            message="Connected settings data could not be validated, so no timezone is being guessed."
-            error
-          />
-        )}
       </section>
 
       <div className="space-y-2" aria-live="polite">

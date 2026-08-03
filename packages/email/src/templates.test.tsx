@@ -206,7 +206,7 @@ describe("daily digest email", () => {
     const counts = createDailyDigestCounts(topMentions)
 
     expect(() => dailyDigestSubject("2026-02-30", 3)).toThrow(
-      "valid calendar date",
+      "Invalid ISO date",
     )
     await expect(
       renderDailyDigestEmail({

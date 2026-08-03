@@ -826,8 +826,8 @@ describe("customer frontend function inventory", () => {
     expect(deletionBillingSource).toContain(
       '"by_workspace_status_and_received_at"',
     )
-    expect(deletionBillingSource).toContain('["status", "pending"]')
-    expect(deletionBillingSource).toContain('["status", "leased"]')
+    expect(deletionBillingSource).toContain('.eq("status", "pending")')
+    expect(deletionBillingSource).toContain('.eq("status", "leased")')
     expect(deletionBillingSource).not.toContain(
       '.query("billingEvents")\n      .withIndex("by_workspace_and_received_at"',
     )

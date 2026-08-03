@@ -1,7 +1,7 @@
-import type { GenericId } from "convex/values"
+import type { Id } from "../_generated/dataModel"
 
 import { adjustSystemMetricGauge } from "../lib/systemMetricBuckets"
-import type { MutationCtx } from "../server"
+import type { MutationCtx } from "../_generated/server"
 
 export const CATEGORIZATION_STATUS_METRIC_PREFIX = "categorization_jobs_status:"
 export const CATEGORIZATION_JOB_STATUSES = [
@@ -14,7 +14,7 @@ export const CATEGORIZATION_JOB_STATUSES = [
 export type CategorizationJobStatus =
   (typeof CATEGORIZATION_JOB_STATUSES)[number]
 
-type WorkspaceId = GenericId<"workspaces">
+type WorkspaceId = Id<"workspaces">
 
 export function categorizationStatusMetric(
   status: CategorizationJobStatus,

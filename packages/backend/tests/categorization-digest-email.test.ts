@@ -40,7 +40,7 @@ import {
   engagementScore,
   rankMentionsDeterministically,
   type RankableMention,
-} from "../convex/lib/engagementRanking"
+} from "@astreex/domain"
 import { sendLeasedEmailWithResend } from "../convex/lib/resendDelivery"
 import {
   applyResendEmailEvent,

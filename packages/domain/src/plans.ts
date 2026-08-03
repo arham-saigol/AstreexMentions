@@ -41,25 +41,3 @@ export const PLAN_DEFINITIONS = Object.freeze(PLAN_IDS.map((id) => PLANS[id]))
 export function getPlanDefinition(planId: PlanId): PlanDefinition {
   return PLANS[planId]
 }
-
-export function isWithinPlanMentionLimit(
-  planId: PlanId,
-  monthlyMentions: number,
-): boolean {
-  return (
-    Number.isInteger(monthlyMentions) &&
-    monthlyMentions >= 0 &&
-    monthlyMentions <= PLANS[planId].monthlyMentionLimit
-  )
-}
-
-export function isWithinPlanKeywordLimit(
-  planId: PlanId,
-  keywordCount: number,
-): boolean {
-  return (
-    Number.isInteger(keywordCount) &&
-    keywordCount >= 0 &&
-    keywordCount <= PLANS[planId].keywordLimit
-  )
-}

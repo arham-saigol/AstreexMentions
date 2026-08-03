@@ -1,5 +1,6 @@
 "use client"
 
+import { api } from "@astreex/backend/api"
 import {
   ArrowCounterClockwiseIcon,
   CheckCircleIcon,
@@ -30,11 +31,9 @@ import {
   type RefObject,
 } from "react"
 
-import { customerConvex } from "@/lib/customer-convex"
 import {
   FEATURE_REQUEST_DESCRIPTION_MAX_LENGTH,
   FEATURE_REQUEST_TITLE_MAX_LENGTH,
-  featureRequestCreateResultSchema,
   featureRequestInputSchema,
   type FeatureRequestInput,
 } from "@/lib/feature-requests"
@@ -63,7 +62,7 @@ function FeatureRequestForm({
   onPendingChange: (pending: boolean) => void
 }) {
   const createFeatureRequest = useMutation(
-    customerConvex.featureRequests.create,
+    api.featureRequests.createFeatureRequest,
   )
   const titleId = useId()
   const titleHelpId = useId()
@@ -133,16 +132,7 @@ function FeatureRequestForm({
     onPendingChange(true)
 
     try {
-      const value = await createFeatureRequest(parsedInput.data)
-      const parsedResult = featureRequestCreateResultSchema.safeParse(value)
-
-      if (!parsedResult.success) {
-        setSubmissionError(
-          "Astreex received an unexpected confirmation. Wait a moment before submitting the same request again.",
-        )
-        setPhase("editing")
-        return
-      }
+      await createFeatureRequest(parsedInput.data)
 
       setTitle("")
       setDescription("")
