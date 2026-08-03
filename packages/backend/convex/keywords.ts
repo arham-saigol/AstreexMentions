@@ -886,14 +886,16 @@ export const listKeywords = authenticatedQuery({
 })
 
 export const getKeywordSummary = authenticatedQuery({
-  args: {},
+  args: { now: v.number() },
   returns: keywordSummaryValidator,
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
+    if (!Number.isSafeInteger(args.now) || args.now < 0) {
+      keywordError("INVALID_KEYWORD_INPUT", "Current time is invalid")
+    }
     const customer = await requireCurrentCustomer(ctx)
-    const now = Date.now()
     const [keywords, billing] = await Promise.all([
       configuredKeywords(ctx, customer.workspaceId),
-      readBillingKeywordState(ctx, customer.workspaceId, now),
+      readBillingKeywordState(ctx, customer.workspaceId, args.now),
     ])
     const activeCount = keywords.filter(
       (keyword) => keyword.status === "active",

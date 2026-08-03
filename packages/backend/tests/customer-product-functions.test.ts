@@ -17,6 +17,12 @@ const customerTestSchema = defineSchema({
       "normalizedName",
       "deletedAt",
     ])
+    .index("by_workspace_deleted_at_and_deletion_pending_at_and_sort_order", [
+      "workspaceId",
+      "deletedAt",
+      "deletionPendingAt",
+      "sortOrder",
+    ])
     .index("by_workspace_deleted_enabled_and_sort_order", [
       "workspaceId",
       "deletedAt",
@@ -515,6 +521,51 @@ describe("customer category functions", () => {
       }
     })
 
+    await expect(
+      customer.mutation(createCategory, {
+        colorToken: "cyan",
+        description: "One category too many",
+        name: "Overflow",
+      }),
+    ).rejects.toMatchObject({ data: { code: "CATEGORY_LIMIT_REACHED" } })
+  })
+
+  it("does not count pending category deletions against the read limit", async () => {
+    const { bootstrap, customer, t } = await bootstrappedCustomer()
+    await t.run(async (ctx) => {
+      const now = Date.now()
+      for (let index = 0; index < 43; index += 1) {
+        await ctx.db.insert("categories", {
+          colorToken: "blue",
+          createdAt: now + index,
+          description: `Custom category ${index}`,
+          enabled: true,
+          isSystem: false,
+          name: `Custom ${index}`,
+          normalizedName: `custom ${index}`,
+          sortOrder: 7 + index,
+          updatedAt: now + index,
+          workspaceId: bootstrap.workspaceId,
+        })
+      }
+      for (let index = 0; index < 2; index += 1) {
+        await ctx.db.insert("categories", {
+          colorToken: "blue",
+          createdAt: now + 100 + index,
+          deletionPendingAt: now,
+          description: `Deleting category ${index}`,
+          enabled: false,
+          isSystem: false,
+          name: `Deleting ${index}`,
+          normalizedName: `deleting ${index}`,
+          sortOrder: 100 + index,
+          updatedAt: now + 100 + index,
+          workspaceId: bootstrap.workspaceId,
+        })
+      }
+    })
+
+    await expect(customer.query(listCategories, {})).resolves.toHaveLength(50)
     await expect(
       customer.mutation(createCategory, {
         colorToken: "cyan",

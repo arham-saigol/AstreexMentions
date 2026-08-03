@@ -26,6 +26,10 @@ function parseRange(value: string | undefined): MetricsRangeDays {
     : 30
 }
 
+function currentMetricsEndAt(): number {
+  return Date.now()
+}
+
 export default async function MetricsPage({
   searchParams,
 }: {
@@ -33,7 +37,11 @@ export default async function MetricsPage({
 }) {
   const params = await searchParams
   const days = parseRange(params.days)
-  const result = await runAdminQuery(api.admin.getMetricsOverview, { days })
+  const endAt = currentMetricsEndAt()
+  const result = await runAdminQuery(api.admin.getMetricsOverview, {
+    days,
+    endAt,
+  })
 
   if (result.status === "access-denied") {
     return <AccessState {...result.access} />

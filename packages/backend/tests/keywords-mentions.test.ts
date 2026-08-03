@@ -96,7 +96,7 @@ const listKeywordsReference = makeFunctionReference<"query", object, unknown>(
 )
 const getKeywordSummaryReference = makeFunctionReference<
   "query",
-  object,
+  { now: number },
   unknown
 >("keywords:getKeywordSummary")
 const updateKeywordReference = makeFunctionReference<
@@ -330,10 +330,9 @@ describe("keyword Convex functions", () => {
       }),
     ).rejects.toMatchObject({ data: { code: "KEYWORD_ALREADY_EXISTS" } })
 
-    const summary = (await customer.client.query(
-      getKeywordSummaryReference,
-      {},
-    )) as Record<string, unknown>
+    const summary = (await customer.client.query(getKeywordSummaryReference, {
+      now: Date.now(),
+    })) as Record<string, unknown>
     expect(summary).toMatchObject({
       canCreate: true,
       count: 1,

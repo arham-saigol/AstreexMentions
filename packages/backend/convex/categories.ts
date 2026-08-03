@@ -191,20 +191,22 @@ async function currentCategories(
 ): Promise<CategoryRecord[]> {
   const rows = await ctx.db
     .query("categories")
-    .withIndex("by_workspace_deleted_enabled_and_sort_order", (q) =>
-      q.eq("workspaceId", workspaceId).eq("deletedAt", undefined),
+    .withIndex(
+      "by_workspace_deleted_at_and_deletion_pending_at_and_sort_order",
+      (q) =>
+        q
+          .eq("workspaceId", workspaceId)
+          .eq("deletedAt", undefined)
+          .eq("deletionPendingAt", undefined),
     )
     .take(MAX_ACTIVE_CATEGORIES + 1)
-  const availableRows = rows.filter(
-    (row) => row.deletionPendingAt === undefined,
-  )
-  if (availableRows.length > MAX_ACTIVE_CATEGORIES) {
+  if (rows.length > MAX_ACTIVE_CATEGORIES) {
     categoryError(
       "CATEGORY_LIMIT_REACHED",
       `A workspace can have at most ${MAX_ACTIVE_CATEGORIES} active categories`,
     )
   }
-  const categories = availableRows
+  const categories = rows
     .map(categoryRecord)
     .sort(
       (left, right) =>

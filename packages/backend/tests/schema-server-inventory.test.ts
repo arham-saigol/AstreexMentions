@@ -154,6 +154,11 @@ describe("complete Convex schema", () => {
       "normalizedName",
       "deletedAt",
     ])
+    expectIndex(
+      "categories",
+      "by_workspace_deleted_at_and_deletion_pending_at_and_sort_order",
+      ["workspaceId", "deletedAt", "deletionPendingAt", "sortOrder"],
+    )
     expectIndex("categories", "by_workspace_deleted_enabled_and_sort_order", [
       "workspaceId",
       "deletedAt",

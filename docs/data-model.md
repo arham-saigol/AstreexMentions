@@ -215,6 +215,7 @@ The canonical schema is `packages/backend/convex/schema.ts`. It defines 25 valid
 
 - `by_workspace_and_system_key` (`workspaceId`, `systemKey`) — bootstrap and required-system-category lookup.
 - `by_workspace_normalized_name_and_deleted_at` (`workspaceId`, `normalizedName`, `deletedAt`) — active tenant-local name uniqueness.
+- `by_workspace_deleted_at_and_deletion_pending_at_and_sort_order` (`workspaceId`, `deletedAt`, `deletionPendingAt`, `sortOrder`) — current category catalog reads without pending deletions.
 - `by_workspace_deleted_enabled_and_sort_order` (`workspaceId`, `deletedAt`, `enabled`, `sortOrder`) — active enabled catalog in display order.
 - `by_workspace_and_sort_order` (`workspaceId`, `sortOrder`) — complete workspace catalog ordering and invariant checks.
 

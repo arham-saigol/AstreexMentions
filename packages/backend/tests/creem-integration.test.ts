@@ -165,6 +165,28 @@ describe("Creem HTTP integration", () => {
     })
   })
 
+  it("rejects non-HTTPS billing portal redirects from the provider", async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            customer_portal_link: "javascript:alert(document.domain)",
+          }),
+          { status: 200 },
+        ),
+    )
+
+    await expect(
+      createCreemClient({
+        apiKey: "creem_test_fixture",
+        fetch: fetchMock as typeof fetch,
+        mode: "test",
+      }).createBillingPortal({ customerId: "cust_fixture_1" }),
+    ).rejects.toMatchObject({
+      code: "INVALID_RESPONSE",
+    })
+  })
+
   it("aborts timed-out fetches with a typed retryable error", async () => {
     const fetchMock = vi.fn(
       (_input: RequestInfo | URL, init?: RequestInit) =>

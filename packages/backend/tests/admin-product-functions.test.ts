@@ -733,6 +733,7 @@ describe("admin metrics", () => {
 
     const result = (await admin.query(getMetricsOverview, {
       days: 30,
+      endAt: now,
     })) as Record<string, any>
     expect(result.stats).toEqual({
       activeWorkspaces: 1,

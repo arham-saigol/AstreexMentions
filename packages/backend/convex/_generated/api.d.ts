@@ -139,7 +139,7 @@ export declare const api: {
     getMetricsOverview: FunctionReference<
       "query",
       "public",
-      { days: 7 | 30 | 90 },
+      { days: 7 | 30 | 90; endAt: number },
       {
         categorization: {
           completed: number;
@@ -735,7 +735,7 @@ export declare const api: {
     getKeywordSummary: FunctionReference<
       "query",
       "public",
-      {},
+      { now: number },
       {
         activeCount: number;
         canCreate: boolean;

@@ -26,6 +26,7 @@ import {
 } from "@/components/keywords/keyword-states"
 import { useProductContext } from "@/components/product/product-context"
 import { type KeywordItem, type Platform } from "@/lib/keywords"
+import { useQueryClock } from "@/lib/use-query-clock"
 
 function KeywordUsage({
   count,
@@ -85,6 +86,7 @@ function KeywordUsage({
 }
 
 export function KeywordsScreen() {
+  const now = useQueryClock()
   const { access, billing, workspace } = useProductContext()
   const monitoringActive = access.mode === "active"
   const [formOpen, setFormOpen] = useState(false)
@@ -95,7 +97,7 @@ export function KeywordsScreen() {
   } | null>(null)
 
   const listValue = useQuery(api.keywords.listKeywords, {})
-  const summaryValue = useQuery(api.keywords.getKeywordSummary, {})
+  const summaryValue = useQuery(api.keywords.getKeywordSummary, { now })
 
   const createKeyword = useMutation(api.keywords.createKeyword)
   const updateKeyword = useMutation(api.keywords.updateKeyword)

@@ -746,10 +746,18 @@ function digestDelivery(
 export const getMetricsOverview = adminQuery({
   args: {
     days: v.union(v.literal(7), v.literal(30), v.literal(90)),
+    endAt: v.number(),
   },
   returns: metricsResultValidator,
   handler: async (ctx, args) => {
-    const endAt = Date.now()
+    if (
+      !Number.isSafeInteger(args.endAt) ||
+      args.endAt < 0 ||
+      args.endAt > MAX_TIMESTAMP
+    ) {
+      adminError("INVALID_ADMIN_INPUT", "Metrics window end is invalid")
+    }
+    const endAt = args.endAt
     const todayStartAt = startOfUtcDay(endAt)
     const tomorrowStartAt = todayStartAt + DAY_MS
     const startAt = todayStartAt - (args.days - 1) * DAY_MS
