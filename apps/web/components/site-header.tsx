@@ -1,7 +1,6 @@
 import { Show, UserButton } from "@clerk/nextjs"
 import { AstreexWordmark } from "@astreex/ui/components/astreex-wordmark"
 import { Button } from "@astreex/ui/components/button"
-import { ThemeToggle } from "@astreex/ui/components/theme-toggle"
 import Link from "next/link"
 
 import { MobileNavigation } from "@/components/mobile-navigation"
@@ -53,8 +52,8 @@ export function SiteHeader() {
   const configuration = getRuntimeConfiguration()
 
   return (
-    <header className="border-border bg-background sticky top-0 z-40 border-b">
-      <div className="mx-auto flex h-16 w-full max-w-[1184px] items-center gap-3 px-4 sm:px-6 lg:px-8">
+    <header className="border-border bg-secondary sticky top-0 z-40 border-b">
+      <div className="relative mx-auto flex h-16 w-full max-w-[1184px] items-center gap-3 px-4 sm:px-6 lg:px-8">
         <Link href="/" aria-label="Astreex home" className="shrink-0">
           <AstreexWordmark
             className="text-base sm:text-lg"
@@ -64,7 +63,7 @@ export function SiteHeader() {
 
         <nav
           aria-label="Primary navigation"
-          className="ml-auto hidden items-center gap-7 lg:flex"
+          className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-7 lg:flex"
         >
           {publicNavigationLinks.map((link) => (
             <Link
@@ -77,8 +76,7 @@ export function SiteHeader() {
           ))}
         </nav>
 
-        <div className="ml-auto flex items-center gap-1 lg:ml-3">
-          <ThemeToggle />
+        <div className="ml-auto flex items-center gap-1">
           <MobileNavigation clerkEnabled={configuration.clerk.configured} />
           {configuration.clerk.configured ? (
             <ClerkNavigation />

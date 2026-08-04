@@ -11,7 +11,7 @@ const links = [
 
 export function SiteFooter() {
   return (
-    <footer className="border-t">
+    <footer className="bg-secondary border-t">
       <div className="mx-auto flex w-full max-w-[1184px] flex-col gap-8 px-4 py-10 sm:px-6 md:flex-row md:items-center md:justify-between lg:px-8">
         <div>
           <Link href="/" aria-label="Astreex home">

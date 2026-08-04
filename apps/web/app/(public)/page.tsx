@@ -57,7 +57,7 @@ const faqs = [
 
 export default function HomePage() {
   return (
-    <>
+    <div className="bg-secondary">
       <section className="overflow-hidden border-b">
         <div className="mx-auto grid min-h-[calc(100svh-4rem)] w-full max-w-[1184px] gap-12 px-4 py-16 sm:px-6 sm:py-20 lg:grid-cols-[minmax(0,0.88fr)_minmax(28rem,0.9fr)] lg:items-center lg:gap-16 lg:px-8 lg:py-24">
           <div className="relative">
@@ -130,10 +130,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section
-        id="how-it-works"
-        className="bg-foreground text-background scroll-mt-20"
-      >
+      <section id="how-it-works" className="scroll-mt-20">
         <div className="mx-auto w-full max-w-[1184px] px-4 py-20 sm:px-6 sm:py-24 lg:px-8">
           <div className="grid gap-10 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)] lg:items-end lg:gap-20">
             <h2 className="max-w-[12ch] text-4xl leading-[1.02] font-semibold tracking-[-0.04em] sm:text-5xl">
@@ -298,22 +295,18 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="bg-primary text-primary-foreground">
+      <section>
         <div className="mx-auto flex w-full max-w-[1184px] flex-col gap-8 px-4 py-16 sm:px-6 md:flex-row md:items-center md:justify-between lg:px-8">
           <h2 className="max-w-[16ch] text-3xl font-semibold tracking-[-0.035em] sm:text-4xl">
             Find the conversation worth joining.
           </h2>
-          <Button
-            asChild
-            size="lg"
-            className="bg-card text-foreground hover:bg-secondary"
-          >
+          <Button asChild size="lg">
             <Link href="/sign-up">
               Start monitoring <ArrowRightIcon aria-hidden="true" />
             </Link>
           </Button>
         </div>
       </section>
-    </>
+    </div>
   )
 }
