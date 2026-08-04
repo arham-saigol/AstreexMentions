@@ -132,7 +132,7 @@ function ProductNavigation() {
 
   return (
     <nav aria-label="Product navigation" className="min-w-0">
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 md:flex-col md:items-stretch md:gap-1">
         {productNavigation.map(({ href, icon: NavigationIcon, label }) => {
           const active = pathname === href || pathname.startsWith(`${href}/`)
 
@@ -142,10 +142,10 @@ function ProductNavigation() {
               href={href}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "relative inline-flex h-10 items-center gap-2 rounded-md px-2 text-sm font-medium transition-colors max-[380px]:gap-0 sm:px-3 max-[380px]:[&>svg]:hidden",
+                "relative inline-flex h-10 items-center gap-2 rounded-md px-2 text-[13px] font-medium transition-colors duration-[var(--motion-control)] max-[380px]:gap-0 sm:px-3 md:w-full md:px-3 max-[380px]:[&>svg]:hidden",
                 active
                   ? "text-foreground"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                  : "text-muted-foreground hover:bg-secondary hover:text-foreground",
               )}
             >
               <NavigationIcon
@@ -157,7 +157,7 @@ function ProductNavigation() {
               {active && (
                 <span
                   aria-hidden="true"
-                  className="bg-primary absolute inset-x-3 -bottom-2.5 h-0.5 rounded-full sm:-bottom-3"
+                  className="bg-primary absolute inset-x-3 -bottom-1 h-0.5 md:inset-y-2 md:right-auto md:-left-0.5 md:h-auto md:w-0.5"
                 />
               )}
             </Link>
@@ -259,7 +259,7 @@ function AccessNotice() {
   }
 
   return (
-    <div className="border-border bg-muted/35 border-b" role="status">
+    <div className="border-border bg-secondary border-b" role="status">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-1 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
         <p className="text-foreground text-sm font-medium">
           Preview mode — monitoring is not active.
@@ -277,41 +277,62 @@ function AccessNotice() {
 export function ProductShell({ children }: { children: ReactNode }) {
   return (
     <ProductDialogsProvider>
-      <div className="bg-background min-h-dvh">
+      <div className="bg-background min-h-dvh md:grid md:grid-cols-[224px_minmax(0,1fr)]">
         <a
           href="#product-main-content"
           className="bg-background text-foreground focus-visible:ring-ring fixed top-3 left-3 z-50 -translate-y-20 rounded-md border px-3 py-2 text-sm font-medium shadow-sm transition-transform focus-visible:translate-y-0 focus-visible:ring-2 focus-visible:outline-none"
         >
           Skip to main content
         </a>
-        <header className="border-border bg-background sticky top-0 z-40 border-b">
-          <div className="mx-auto flex h-14 w-full max-w-7xl items-center gap-1.5 px-2 sm:h-16 sm:gap-4 sm:px-6 lg:px-8">
-            <Link
-              href="/app"
-              aria-label="Astreex dashboard home"
-              className="shrink-0"
-            >
-              <AstreexWordmark
-                className="text-sm sm:text-lg"
-                markClassName="size-5 sm:size-7"
-              />
-            </Link>
-            <div className="ml-auto min-w-0 sm:ml-4">
-              <ProductNavigation />
-            </div>
-            <div className="ml-auto">
-              <ProductAvatarMenu />
-            </div>
+        <aside className="border-sidebar-border bg-sidebar sticky top-0 hidden h-dvh flex-col border-r px-4 py-5 md:flex">
+          <Link
+            href="/app"
+            aria-label="Astreex dashboard home"
+            className="px-2"
+          >
+            <AstreexWordmark className="text-base" markClassName="size-6" />
+          </Link>
+          <div className="mt-10">
+            <p className="text-muted-foreground mb-2 px-3 text-xs font-medium">
+              Listen
+            </p>
+            <ProductNavigation />
           </div>
-        </header>
-        <AccessNotice />
-        <main
-          id="product-main-content"
-          tabIndex={-1}
-          className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8"
-        >
-          {children}
-        </main>
+          <div className="mt-auto flex items-center justify-between border-t pt-4">
+            <span className="text-muted-foreground pl-2 text-xs">
+              Workspace
+            </span>
+            <ProductAvatarMenu />
+          </div>
+        </aside>
+
+        <div className="min-w-0">
+          <header className="border-border bg-background sticky top-0 z-40 border-b md:hidden">
+            <div className="flex h-14 items-center gap-2 px-3 sm:px-4">
+              <Link
+                href="/app"
+                aria-label="Astreex dashboard home"
+                className="shrink-0"
+              >
+                <AstreexWordmark className="text-sm" markClassName="size-5" />
+              </Link>
+              <div className="ml-auto min-w-0">
+                <ProductNavigation />
+              </div>
+              <div>
+                <ProductAvatarMenu />
+              </div>
+            </div>
+          </header>
+          <AccessNotice />
+          <main
+            id="product-main-content"
+            tabIndex={-1}
+            className="bg-card mx-auto min-h-dvh w-full max-w-[1280px] px-4 py-8 sm:px-8 sm:py-10 lg:px-12"
+          >
+            {children}
+          </main>
+        </div>
       </div>
     </ProductDialogsProvider>
   )

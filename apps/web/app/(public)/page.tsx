@@ -1,180 +1,161 @@
 import {
   ArrowRightIcon,
-  BellRingingIcon,
-  BroadcastIcon,
   CheckIcon,
-  EyeIcon,
   NewspaperClippingIcon,
   RedditLogoIcon,
-  SlidersHorizontalIcon,
   XLogoIcon,
 } from "@phosphor-icons/react/dist/ssr"
+import { PLAN_DEFINITIONS } from "@astreex/domain/plans"
 import { Badge } from "@astreex/ui/components/badge"
 import { Button } from "@astreex/ui/components/button"
 import Link from "next/link"
 
-import { ActivationPreview } from "@/components/marketing/activation-preview"
-import { CapabilityShowcase } from "@/components/marketing/capability-showcase"
-import { SectionHeading } from "@/components/marketing/section-heading"
 import { SignalPreview } from "@/components/marketing/signal-preview"
 
 const sources = [
-  {
-    name: "X",
-    description:
-      "Track public posts around your brand, product language, competitors, and the problems your customers describe.",
-    icon: XLogoIcon,
-  },
-  {
-    name: "Reddit",
-    description:
-      "Follow focused community conversations where people compare tools, ask for advice, and explain what is not working.",
-    icon: RedditLogoIcon,
-  },
-  {
-    name: "Hacker News",
-    description:
-      "Catch technical discussions, launch reactions, and candid product feedback without repeatedly searching each thread.",
-    icon: NewspaperClippingIcon,
-  },
+  ["X", "Public posts, product language, competitors", XLogoIcon],
+  ["Reddit", "Questions and candid community conversations", RedditLogoIcon],
+  [
+    "Hacker News",
+    "Technical discussions and launch reactions",
+    NewspaperClippingIcon,
+  ],
 ] as const
 
-const activationSteps = [
-  {
-    title: "Configure the listening scope",
-    description:
-      "Choose the sources, keywords, product terms, and competitor language that belong in your monitoring workflow.",
-    icon: SlidersHorizontalIcon,
-  },
-  {
-    title: "Review what will be collected",
-    description:
-      "Confirm the scope and exclusions before monitoring begins, so the queue starts useful instead of merely full.",
-    icon: EyeIcon,
-  },
-  {
-    title: "Activate the review rhythm",
-    description:
-      "Turn on monitoring, save the views you return to, and set a digest cadence that keeps review consistent.",
-    icon: BellRingingIcon,
-  },
-] as const
-
-const plans = [
-  { name: "Starter", price: "$19" },
-  { name: "Growth", price: "$99" },
-  { name: "Scale", price: "$199" },
-] as const
-
-const includedFeatures = [
-  "X, Reddit, and Hacker News monitoring",
-  "Configurable keywords and source scope",
-  "AI-assisted mention categorization",
-  "Reusable saved views",
-  "Daily email digests",
-  "The complete Astreex feature set",
+const workflow = [
+  [
+    "01",
+    "Choose what matters",
+    "Add your brand, products, competitors, and the problems customers describe.",
+  ],
+  [
+    "02",
+    "Review by intent",
+    "Questions, complaints, praise, bugs, and requests arrive in one calm queue.",
+  ],
+  [
+    "03",
+    "Act while it matters",
+    "Open the original conversation, save it for later, or clear it from view.",
+  ],
 ] as const
 
 const faqs = [
-  {
-    question: "Which conversations can Astreex monitor?",
-    answer:
-      "Astreex brings configured monitoring from X, Reddit, and Hacker News into one review workflow. You choose the keywords and source scope that are relevant to your product, market, or competitors.",
-  },
-  {
-    question: "What does configuration-first activation mean?",
-    answer:
-      "Monitoring does not begin from a vague default. You first configure sources, keywords, exclusions, and digest settings, review that scope, and then activate it. This creates a more deliberate signal from the start.",
-  },
-  {
-    question: "How does AI categorization help?",
-    answer:
-      "Astreex labels mentions by intent, including questions, complaints, praise, bugs, feature requests, competitor mentions, and other conversation. Categories make the queue easier to review; you still decide what deserves action.",
-  },
-  {
-    question: "What are saved views for?",
-    answer:
-      "Saved views preserve combinations of sources, keywords, and categories. They are useful for returning to launch feedback, a product area, competitor discussion, or any recurring research question without rebuilding the scope.",
-  },
-  {
-    question: "What is included in a digest?",
-    answer:
-      "Digests provide a concise review of recent categorized mentions with enough source context to understand the signal and follow the underlying conversations when more detail is needed.",
-  },
-  {
-    question: "Is Astreex a paid product?",
-    answer:
-      "Yes. Astreex plans are Starter at $19 per month, Growth at $99 per month, and Scale at $199 per month. Every plan includes every product feature.",
-  },
+  [
+    "Which conversations can Astreex monitor?",
+    "Astreex monitors configured keywords across X, Reddit, and Hacker News. Coverage and collection cadence depend on the source and your plan limits.",
+  ],
+  [
+    "How does categorization work?",
+    "Astreex categorizes collected mentions with AI into questions, complaints, praise, bugs, feature requests, competitor mentions, and your custom categories. The original post always stays visible.",
+  ],
+  [
+    "What do plans change?",
+    "Every plan includes the full product. Plans differ by monitored keywords and monthly mention volume.",
+  ],
 ] as const
 
 export default function HomePage() {
   return (
     <>
-      <section className="border-border relative overflow-hidden border-b">
-        <div className="mx-auto grid w-full max-w-6xl gap-12 px-6 py-16 sm:py-20 lg:grid-cols-[minmax(0,0.9fr)_minmax(25rem,0.78fr)] lg:items-center lg:gap-16 lg:py-24">
-          <div>
-            <Badge variant="outline" className="gap-1.5 px-3 py-1">
-              <BroadcastIcon aria-hidden="true" weight="fill" />
-              Monitor X, Reddit, and Hacker News
-            </Badge>
-            <h1 className="text-foreground mt-6 max-w-3xl text-4xl font-semibold tracking-[-0.04em] text-balance sm:text-5xl lg:text-6xl">
-              Find the conversations that should shape your next move.
-            </h1>
-            <p className="text-muted-foreground mt-6 max-w-2xl text-lg leading-8 text-pretty">
-              Astreex turns scattered posts and threads into a focused customer
-              signal—configured around your keywords, organized by intent, and
-              ready for you to review.
+      <section className="overflow-hidden border-b">
+        <div className="mx-auto grid min-h-[calc(100svh-4rem)] w-full max-w-[1184px] gap-12 px-4 py-16 sm:px-6 sm:py-20 lg:grid-cols-[minmax(0,0.88fr)_minmax(28rem,0.9fr)] lg:items-center lg:gap-16 lg:px-8 lg:py-24">
+          <div className="relative">
+            <span
+              aria-hidden="true"
+              className="bg-primary absolute top-1 bottom-1 -left-4 w-0.5 sm:-left-6"
+            />
+            <p className="text-primary text-[13px] font-semibold">
+              Customer conversations, made actionable
             </p>
-            <div className="mt-8 flex flex-wrap items-center gap-3">
+            <h1 className="font-display mt-5 max-w-[12ch] text-[clamp(3.25rem,6.5vw,5.4rem)] leading-[0.94] font-semibold tracking-[-0.055em] text-balance">
+              Hear what the market is telling you.
+            </h1>
+            <p className="text-muted-foreground mt-7 max-w-[58ch] text-lg leading-7">
+              Astreex finds the conversations around your keywords, organizes
+              them by intent, and keeps the original context close enough to act
+              with confidence.
+            </p>
+            <div className="mt-8 flex flex-wrap gap-3">
               <Button asChild size="lg">
                 <Link href="/sign-up">
-                  Get started
-                  <ArrowRightIcon aria-hidden="true" />
+                  Start monitoring <ArrowRightIcon aria-hidden="true" />
                 </Link>
               </Button>
-              <Button asChild size="lg" variant="outline">
-                <Link href="/sign-in">Sign in</Link>
+              <Button asChild size="lg" variant="ghost">
+                <Link href="#product">See how it works</Link>
               </Button>
             </div>
-            <p className="text-muted-foreground mt-4 text-xs leading-5">
-              Paid plans start at $19/month. Every plan includes every feature.
+            <p className="text-muted-foreground mt-4 text-xs">
+              Plans start at $19/month. Cancel any time.
             </p>
           </div>
 
-          <SignalPreview />
+          <div className="bg-primary -mx-4 px-4 py-8 sm:-mx-6 sm:px-8 sm:py-10 lg:m-0 lg:rounded-xl lg:p-8">
+            <SignalPreview />
+          </div>
         </div>
       </section>
 
-      <section id="product" className="scroll-mt-20">
-        <div className="mx-auto w-full max-w-6xl px-6 py-20 sm:py-24">
-          <SectionHeading
-            eyebrow="One cross-platform signal"
-            title="Listen where product conversations actually happen."
-            description="Search behavior changes from platform to platform. Astreex gives those conversations a shared structure without stripping away the source context that makes them useful."
-            aside={
-              <p className="border-primary text-muted-foreground border-l-2 pl-4 text-sm leading-6">
-                Configure each source intentionally, then review everything in
-                one consistent queue.
+      <section id="product" className="scroll-mt-20 border-b">
+        <div className="mx-auto w-full max-w-[1184px] px-4 py-20 sm:px-6 sm:py-24 lg:px-8">
+          <div className="grid gap-10 lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1fr)] lg:gap-20">
+            <div>
+              <p className="text-primary text-[13px] font-semibold">
+                The review loop
               </p>
-            }
-          />
+              <h2 className="mt-3 max-w-[13ch] text-4xl leading-[1.02] font-semibold tracking-[-0.04em] sm:text-5xl">
+                From scattered noise to a clear next move.
+              </h2>
+            </div>
+            <ol className="border-t">
+              {workflow.map(([number, title, description]) => (
+                <li
+                  key={number}
+                  className="grid grid-cols-[2.5rem_1fr] gap-4 border-b py-6"
+                >
+                  <span className="text-primary font-mono text-xs">
+                    {number}
+                  </span>
+                  <div>
+                    <h3 className="text-[15px] font-semibold">{title}</h3>
+                    <p className="text-muted-foreground mt-2 max-w-[58ch] text-sm leading-6">
+                      {description}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </div>
+      </section>
 
-          <div className="border-border mt-12 grid border-y md:grid-cols-3 md:divide-x">
-            {sources.map(({ name, description, icon: Icon }) => (
+      <section
+        id="how-it-works"
+        className="bg-foreground text-background scroll-mt-20"
+      >
+        <div className="mx-auto w-full max-w-[1184px] px-4 py-20 sm:px-6 sm:py-24 lg:px-8">
+          <div className="grid gap-10 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)] lg:items-end lg:gap-20">
+            <h2 className="max-w-[12ch] text-4xl leading-[1.02] font-semibold tracking-[-0.04em] sm:text-5xl">
+              Source context stays attached.
+            </h2>
+            <p className="max-w-[58ch] text-base leading-7 opacity-70">
+              A category is a clue, not an answer. Astreex keeps the author,
+              source, time, excerpt, engagement, and original link visible
+              before its interpretation.
+            </p>
+          </div>
+          <div className="mt-16 grid border-y border-current/20 md:grid-cols-3 md:divide-x md:divide-current/20">
+            {sources.map(([name, description, Icon]) => (
               <article
                 key={name}
-                className="border-border border-b py-7 last:border-b-0 md:border-b-0 md:px-7 md:first:pl-0 md:last:pr-0"
+                className="border-b border-current/20 py-7 last:border-b-0 md:border-b-0 md:px-7 md:first:pl-0 md:last:pr-0"
               >
                 <div className="flex items-center gap-3">
-                  <div className="border-border bg-muted text-foreground grid size-10 place-items-center rounded-lg border">
-                    <Icon aria-hidden="true" className="size-5" weight="bold" />
-                  </div>
-                  <h3 className="text-foreground text-lg font-semibold">
-                    {name}
-                  </h3>
+                  <Icon aria-hidden="true" className="size-5" />
+                  <h3 className="text-[15px] font-semibold">{name}</h3>
                 </div>
-                <p className="text-muted-foreground mt-4 text-sm leading-6">
+                <p className="mt-3 text-sm leading-6 opacity-65">
                   {description}
                 </p>
               </article>
@@ -183,161 +164,132 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section
-        id="how-it-works"
-        className="border-border bg-muted/30 scroll-mt-20 border-y"
-      >
-        <div className="mx-auto grid w-full max-w-6xl gap-12 px-6 py-20 sm:py-24 lg:grid-cols-[minmax(0,0.95fr)_minmax(22rem,0.75fr)] lg:items-center lg:gap-20">
+      <section id="features" className="scroll-mt-20 border-b">
+        <div className="mx-auto grid w-full max-w-[1184px] gap-12 px-4 py-20 sm:px-6 sm:py-24 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,0.72fr)] lg:gap-20 lg:px-8">
           <div>
-            <p className="text-primary text-sm font-semibold tracking-wide uppercase">
-              Configuration-first activation
+            <p className="text-primary text-[13px] font-semibold">
+              Built for a daily habit
             </p>
-            <h2 className="text-foreground mt-3 text-3xl font-semibold tracking-[-0.025em] text-balance sm:text-4xl">
-              Define a useful signal before you turn it on.
+            <h2 className="mt-3 max-w-[14ch] text-4xl leading-[1.02] font-semibold tracking-[-0.04em] sm:text-5xl">
+              Review less. Notice more.
             </h2>
-            <p className="text-muted-foreground mt-4 max-w-2xl text-base leading-7 sm:text-lg">
-              Astreex starts with deliberate setup, not an uncontrolled stream.
-              You can see what will be monitored and how it will be delivered
-              before activation.
-            </p>
-
-            <ol className="border-border mt-9 border-t">
-              {activationSteps.map(
-                ({ title, description, icon: Icon }, index) => (
-                  <li
-                    key={title}
-                    className="border-border grid grid-cols-[auto_1fr] gap-4 border-b py-5"
-                  >
-                    <div className="border-border bg-background text-primary grid size-9 place-items-center rounded-md border">
-                      <Icon aria-hidden="true" className="size-4" />
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
-                        Step {index + 1}
-                      </p>
-                      <h3 className="text-foreground mt-1 text-base font-semibold">
-                        {title}
-                      </h3>
-                      <p className="text-muted-foreground mt-2 text-sm leading-6">
-                        {description}
-                      </p>
-                    </div>
-                  </li>
-                ),
-              )}
-            </ol>
+            <div className="mt-10 grid gap-x-10 gap-y-8 sm:grid-cols-2">
+              {[
+                [
+                  "Saved views",
+                  "Keep launch feedback, competitor shifts, or product questions one click away.",
+                ],
+                [
+                  "Custom categories",
+                  "Organize conversations around the way your business actually works.",
+                ],
+                [
+                  "Daily digests",
+                  "Bring recent mentions into a concise email when you do not need the full queue.",
+                ],
+                [
+                  "Monitoring health",
+                  "See which source needs attention without reading provider diagnostics.",
+                ],
+              ].map(([title, description]) => (
+                <article key={title}>
+                  <h3 className="text-[15px] font-semibold">{title}</h3>
+                  <p className="text-muted-foreground mt-2 text-sm leading-6">
+                    {description}
+                  </p>
+                </article>
+              ))}
+            </div>
           </div>
-
-          <ActivationPreview />
+          <blockquote className="bg-primary text-primary-foreground flex min-h-80 flex-col justify-between rounded-xl p-8">
+            <p className="text-2xl leading-8 font-semibold tracking-[-0.025em]">
+              The useful conversation is usually already happening. The hard
+              part is finding it in time.
+            </p>
+            <p className="mt-10 text-sm opacity-80">
+              Astreex keeps the next one within reach.
+            </p>
+          </blockquote>
         </div>
       </section>
 
-      <section id="features" className="scroll-mt-20">
-        <div className="mx-auto w-full max-w-6xl px-6 py-20 sm:py-24">
-          <SectionHeading
-            eyebrow="Built for review"
-            title="Turn a noisy feed into a repeatable review habit."
-            description="Astreex helps you move from collection to understanding with practical structure at each step of the review."
-          />
-          <CapabilityShowcase />
-        </div>
-      </section>
-
-      <section
-        id="pricing"
-        className="border-border bg-muted/30 scroll-mt-20 border-y"
-      >
-        <div className="mx-auto w-full max-w-6xl px-6 py-20 sm:py-24">
-          <SectionHeading
-            eyebrow="Paid plans"
-            title="Straightforward pricing. The full product on every plan."
-            description="Choose Starter, Growth, or Scale. Astreex does not separate core monitoring, categorization, saved views, or digests into feature-gated tiers."
-            aside={
-              <div className="flex items-start gap-3">
-                <CheckIcon
-                  aria-hidden="true"
-                  weight="bold"
-                  className="text-primary mt-1 size-4 shrink-0"
-                />
-                <p className="text-muted-foreground text-sm leading-6">
-                  Every listed feature is included at every price point.
-                </p>
-              </div>
-            }
-          />
-
-          <div className="border-border bg-background mt-12 grid overflow-hidden rounded-xl border shadow-sm md:grid-cols-3 md:divide-x">
-            {plans.map((plan) => (
+      <section id="pricing" className="bg-secondary scroll-mt-20">
+        <div className="mx-auto w-full max-w-[1184px] px-4 py-20 sm:px-6 sm:py-24 lg:px-8">
+          <div className="max-w-2xl">
+            <p className="text-primary text-[13px] font-semibold">Pricing</p>
+            <h2 className="mt-3 text-4xl font-semibold tracking-[-0.04em] sm:text-5xl">
+              Choose by volume.
+            </h2>
+            <p className="text-muted-foreground mt-4 text-base leading-7">
+              Every plan includes every workflow. Only keywords and monthly
+              mention volume change.
+            </p>
+          </div>
+          <div className="bg-card mt-12 grid overflow-hidden rounded-xl border md:grid-cols-3 md:divide-x">
+            {PLAN_DEFINITIONS.map((plan, index) => (
               <article
-                key={plan.name}
-                className="border-border flex flex-col border-b p-6 last:border-b-0 md:border-b-0 lg:p-7"
+                key={plan.id}
+                className="flex flex-col border-b p-6 last:border-b-0 md:border-b-0 lg:p-8"
               >
-                <h3 className="text-foreground text-base font-semibold">
-                  {plan.name}
-                </h3>
-                <p className="mt-5 flex items-baseline gap-1">
-                  <span className="text-foreground text-4xl font-semibold tracking-[-0.03em]">
-                    {plan.price}
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="font-semibold">{plan.name}</h3>
+                  {index === 1 && (
+                    <Badge variant="secondary">Most room to grow</Badge>
+                  )}
+                </div>
+                <p className="mt-8">
+                  <span className="text-4xl font-semibold tracking-[-0.04em]">
+                    ${plan.priceUsd}
                   </span>
-                  <span className="text-muted-foreground text-sm">/ month</span>
+                  <span className="text-muted-foreground text-sm">
+                    {" "}
+                    / month
+                  </span>
                 </p>
-                <p className="text-muted-foreground mt-3 flex-1 text-sm leading-6">
-                  The complete Astreex feature set, including all supported
-                  sources and workflows.
-                </p>
-                <Button asChild className="mt-6 w-full" variant="outline">
+                <ul className="text-muted-foreground mt-6 flex-1 space-y-3 text-sm">
+                  <li>{plan.keywordLimit} monitored keywords</li>
+                  <li>
+                    {plan.monthlyMentionLimit.toLocaleString()} mentions / month
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckIcon
+                      aria-hidden="true"
+                      className="text-primary size-4"
+                    />{" "}
+                    All product features
+                  </li>
+                </ul>
+                <Button
+                  asChild
+                  className="mt-8 w-full"
+                  variant={index === 1 ? "default" : "outline"}
+                >
                   <Link href="/sign-up">Choose {plan.name}</Link>
                 </Button>
               </article>
             ))}
           </div>
-
-          <div className="mt-8 grid gap-x-8 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
-            {includedFeatures.map((feature) => (
-              <div
-                key={feature}
-                className="text-muted-foreground flex items-start gap-2.5 text-sm leading-6"
-              >
-                <CheckIcon
-                  aria-hidden="true"
-                  weight="bold"
-                  className="text-primary mt-1 size-4 shrink-0"
-                />
-                <span>{feature}</span>
-              </div>
-            ))}
-          </div>
         </div>
       </section>
 
-      <section id="faq" className="scroll-mt-20">
-        <div className="mx-auto grid w-full max-w-6xl gap-12 px-6 py-20 sm:py-24 lg:grid-cols-[minmax(16rem,0.55fr)_minmax(0,1fr)] lg:gap-20">
-          <div>
-            <p className="text-primary text-sm font-semibold tracking-wide uppercase">
-              Frequently asked questions
-            </p>
-            <h2 className="text-foreground mt-3 text-3xl font-semibold tracking-[-0.025em] text-balance sm:text-4xl">
-              Details before you get started.
-            </h2>
-            <p className="text-muted-foreground mt-4 text-base leading-7">
-              A clear monitoring workflow starts with clear expectations about
-              sources, setup, product behavior, and pricing.
-            </p>
-          </div>
-
-          <div className="border-border border-t">
-            {faqs.map(({ question, answer }) => (
-              <details key={question} className="group border-border border-b">
-                <summary className="text-foreground flex cursor-pointer list-none items-center justify-between gap-6 py-5 text-left text-sm font-semibold marker:hidden sm:text-base [&::-webkit-details-marker]:hidden">
+      <section id="faq" className="scroll-mt-20 border-t">
+        <div className="mx-auto grid w-full max-w-[1184px] gap-10 px-4 py-20 sm:px-6 sm:py-24 lg:grid-cols-[0.55fr_1fr] lg:gap-20 lg:px-8">
+          <h2 className="text-3xl font-semibold tracking-[-0.035em]">
+            Before you start
+          </h2>
+          <div className="border-t">
+            {faqs.map(([question, answer]) => (
+              <details key={question} className="group border-b">
+                <summary className="flex min-h-16 list-none items-center justify-between gap-6 py-4 text-[15px] font-semibold marker:hidden [&::-webkit-details-marker]:hidden">
                   {question}
                   <span
                     aria-hidden="true"
-                    className="border-border text-muted-foreground grid size-6 shrink-0 place-items-center rounded-full border text-base font-normal transition-transform group-open:rotate-45"
+                    className="text-muted-foreground text-xl font-normal transition-transform duration-[var(--motion-control)] group-open:rotate-45"
                   >
                     +
                   </span>
                 </summary>
-                <p className="text-muted-foreground max-w-3xl pr-10 pb-5 text-sm leading-6 sm:text-base sm:leading-7">
+                <p className="text-muted-foreground max-w-2xl pb-5 text-sm leading-6">
                   {answer}
                 </p>
               </details>
@@ -346,31 +298,20 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="border-border border-t">
-        <div className="mx-auto grid w-full max-w-6xl gap-8 px-6 py-16 sm:py-20 md:grid-cols-[1fr_auto] md:items-center">
-          <div>
-            <p className="text-primary text-sm font-semibold tracking-wide uppercase">
-              A clearer listening practice
-            </p>
-            <h2 className="text-foreground mt-3 max-w-2xl text-3xl font-semibold tracking-[-0.025em] text-balance sm:text-4xl">
-              Bring the conversations worth reviewing into one place.
-            </h2>
-            <p className="text-muted-foreground mt-4 max-w-2xl text-base leading-7">
-              Configure the signal you need, then build a consistent habit
-              around categorization, saved views, and digests.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-3 md:justify-end">
-            <Button asChild size="lg">
-              <Link href="/sign-up">
-                Get started
-                <ArrowRightIcon aria-hidden="true" />
-              </Link>
-            </Button>
-            <Button asChild size="lg" variant="outline">
-              <Link href="/sign-in">Sign in</Link>
-            </Button>
-          </div>
+      <section className="bg-primary text-primary-foreground">
+        <div className="mx-auto flex w-full max-w-[1184px] flex-col gap-8 px-4 py-16 sm:px-6 md:flex-row md:items-center md:justify-between lg:px-8">
+          <h2 className="max-w-[16ch] text-3xl font-semibold tracking-[-0.035em] sm:text-4xl">
+            Find the conversation worth joining.
+          </h2>
+          <Button
+            asChild
+            size="lg"
+            className="bg-card text-foreground hover:bg-secondary"
+          >
+            <Link href="/sign-up">
+              Start monitoring <ArrowRightIcon aria-hidden="true" />
+            </Link>
+          </Button>
         </div>
       </section>
     </>

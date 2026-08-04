@@ -56,14 +56,14 @@ function NavigationLinks({
             aria-current={active ? "page" : undefined}
             {...(onNavigate ? { onClick: onNavigate } : {})}
             className={cn(
-              "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+              "relative flex min-h-10 items-center gap-3 rounded-md px-3 py-2 text-[13px] font-medium transition-colors duration-[var(--motion-control)]",
               active
-                ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
+                ? "text-sidebar-accent-foreground before:bg-primary before:absolute before:inset-y-2 before:-left-0.5 before:w-0.5"
+                : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground",
               mobile && "py-3",
             )}
           >
-            <Icon className="size-5" weight={active ? "fill" : "regular"} />
+            <Icon className="size-4.5" />
             {label}
           </Link>
         )
@@ -142,7 +142,7 @@ function CurrentPageHeading() {
 export function AdminShell({ children }: { children: ReactNode }) {
   return (
     <div className="bg-background min-h-dvh lg:grid lg:grid-cols-[15rem_minmax(0,1fr)]">
-      <aside className="bg-sidebar hidden border-r lg:flex lg:min-h-dvh lg:flex-col">
+      <aside className="bg-sidebar sticky top-0 hidden h-dvh border-r lg:flex lg:flex-col">
         <div className="flex h-16 items-center border-b px-5">
           <AstreexWordmark />
           <span className="bg-background text-muted-foreground ml-2 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.16em] uppercase">
@@ -158,7 +158,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
       </aside>
 
       <div className="min-w-0">
-        <header className="bg-background sticky top-0 z-30 flex h-16 items-center gap-3 border-b px-4 sm:px-6 lg:px-8">
+        <header className="bg-card sticky top-0 z-30 flex h-16 items-center gap-3 border-b px-4 sm:px-6 lg:px-8">
           <MobileNavigation />
 
           <CurrentPageHeading />
@@ -173,7 +173,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
             />
           </div>
         </header>
-        <main className="mx-auto w-full max-w-[96rem] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+        <main className="bg-card mx-auto min-h-[calc(100dvh-4rem)] w-full max-w-[96rem] px-4 py-8 sm:px-8 lg:px-10 lg:py-10">
           {children}
         </main>
       </div>

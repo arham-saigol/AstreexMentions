@@ -1,18 +1,18 @@
 export const astreexClerkAppearance = {
   variables: {
-    colorPrimary: "var(--primary)",
-    colorBackground: "var(--card)",
-    colorText: "var(--foreground)",
-    colorTextSecondary: "var(--muted-foreground)",
-    colorInputBackground: "var(--background)",
-    colorInputText: "var(--foreground)",
-    borderRadius: "0.625rem",
+    colorPrimary: "var(--brand)",
+    colorBackground: "var(--surface)",
+    colorText: "var(--ink)",
+    colorTextSecondary: "var(--ink-tertiary)",
+    colorInputBackground: "var(--surface)",
+    colorInputText: "var(--ink)",
+    borderRadius: "6px",
     fontFamily: "var(--font-ui)",
   },
   elements: {
     rootBox: "w-full",
     cardBox: "w-full shadow-none",
-    card: "w-full border border-border bg-card shadow-xs",
+    card: "w-full border-0 bg-card shadow-none",
     footer: "bg-transparent",
     footerActionLink: "text-primary hover:text-primary/90",
     formButtonPrimary:

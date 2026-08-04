@@ -49,9 +49,9 @@ function categoryVariant(category: MentionItem["category"]) {
 }
 
 function StatusBadge({ status }: { status: MentionStatus }) {
-  const label =
-    status === "new" ? "New" : status === "saved" ? "Saved" : "Dismissed"
-  return <Badge variant={status === "new" ? "outline" : "muted"}>{label}</Badge>
+  if (status === "new") return null
+  const label = status === "saved" ? "Saved" : "Dismissed"
+  return <Badge variant="muted">{label}</Badge>
 }
 
 function Metric({
@@ -141,14 +141,12 @@ export function MentionCard({
   const dismissTarget = mention.status === "dismissed" ? "new" : "dismissed"
 
   return (
-    <article className="border-border bg-card p-4 sm:p-5">
-      <div className="flex items-start gap-3">
-        <div
-          className="border-border bg-muted text-foreground grid size-9 shrink-0 place-items-center rounded-md border"
-          title={platformLabel}
-        >
-          <PlatformIcon aria-hidden="true" className="size-4.5" weight="bold" />
-        </div>
+    <article className="group bg-card hover:bg-secondary px-4 py-5 transition-colors duration-[var(--motion-control)] sm:px-6 sm:py-6">
+      <div className="flex items-start gap-3 sm:gap-4">
+        <PlatformIcon
+          aria-hidden="true"
+          className="text-muted-foreground mt-0.5 size-4.5 shrink-0"
+        />
 
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -163,6 +161,12 @@ export function MentionCard({
             <span aria-hidden="true" className="text-muted-foreground text-xs">
               ·
             </span>
+            <span className="text-muted-foreground text-xs">
+              {platformLabel}
+            </span>
+            <span aria-hidden="true" className="text-muted-foreground text-xs">
+              ·
+            </span>
             <time
               dateTime={new Date(mention.publishedAt).toISOString()}
               title={timestamp}
@@ -173,13 +177,13 @@ export function MentionCard({
           </div>
 
           {mention.title && (
-            <h2 className="text-foreground mt-3 text-sm leading-6 font-semibold sm:text-base">
+            <h2 className="text-foreground mt-3 max-w-4xl text-[15px] leading-6 font-semibold">
               {mention.title}
             </h2>
           )}
           <p
             className={cn(
-              "text-foreground [display:-webkit-box] overflow-hidden text-sm leading-6 [-webkit-box-orient:vertical] [-webkit-line-clamp:3]",
+              "text-foreground max-w-4xl text-sm leading-6",
               mention.title ? "mt-1" : "mt-3",
             )}
           >
@@ -187,13 +191,18 @@ export function MentionCard({
           </p>
 
           <div className="mt-3 flex flex-wrap items-center gap-2">
+            {mention.category && (
+              <Badge variant={categoryVariant(mention.category)}>
+                {mention.category.name}
+              </Badge>
+            )}
             {mention.matchedKeywords.slice(0, 4).map((keyword, index) => (
               <Badge
                 key={
                   ("id" in keyword ? keyword.id : undefined) ??
                   `${keyword.phrase}-${index}`
                 }
-                variant="secondary"
+                variant="outline"
                 className="max-w-48"
               >
                 <span className="truncate">{keyword.phrase}</span>
@@ -204,29 +213,15 @@ export function MentionCard({
                 +{mention.matchedKeywords.length - 4}
               </Badge>
             )}
-            {mention.category && (
-              <Badge variant={categoryVariant(mention.category)}>
-                {mention.category.colorToken && (
-                  <span
-                    aria-hidden="true"
-                    className="size-2 rounded-full border border-current/20"
-                    style={{
-                      backgroundColor: `var(--category-token-${mention.category.colorToken})`,
-                    }}
-                  />
-                )}
-                {mention.category.name}
-              </Badge>
-            )}
             <StatusBadge status={mention.status} />
           </div>
 
-          <div className="border-border mt-4 flex flex-col gap-3 border-t pt-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-h-8 flex-wrap items-center gap-4">
               <MentionMetrics mention={mention} />
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1 transition-opacity duration-[var(--motion-control)] md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100">
               <Button
                 size="sm"
                 variant={mention.status === "saved" ? "secondary" : "ghost"}
@@ -253,7 +248,7 @@ export function MentionCard({
                 />
                 {mention.status === "dismissed" ? "Undo dismiss" : "Dismiss"}
               </Button>
-              <Button asChild size="sm" variant="outline">
+              <Button asChild size="sm">
                 <a
                   href={mention.canonicalUrl}
                   target="_blank"

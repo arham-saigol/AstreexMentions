@@ -485,7 +485,7 @@ function WelcomeStep({ workspaceName }: { workspaceName: string }) {
       <StatusState
         className="mt-6"
         title="Nothing is being monitored yet"
-        description="Saving this draft does not create mentions or imply an active subscription. Convex remains the authorization boundary for the configuration written at the review step."
+        description="Saving this draft does not start monitoring or create mentions. You will review the complete setup before choosing a plan."
       />
     </div>
   )
@@ -635,7 +635,7 @@ function PlatformsStep({
                       htmlFor={id}
                       className={cn(
                         "border-border flex items-start gap-3 rounded-md border p-3 transition-colors",
-                        checked && "border-primary bg-primary/5",
+                        checked && "border-primary bg-accent",
                         checked && keyword.platforms.length === 1
                           ? "cursor-not-allowed"
                           : "cursor-pointer",
@@ -918,7 +918,7 @@ function PlanStep({
               className={cn(
                 "border-border has-[:focus-visible]:ring-ring relative rounded-lg border p-4 transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-offset-2",
                 fits ? "cursor-pointer" : "cursor-not-allowed opacity-55",
-                checked && fits && "border-primary bg-primary/5",
+                checked && fits && "border-primary bg-accent",
               )}
             >
               <input
@@ -990,8 +990,7 @@ function PlanStep({
             </p>
             <p className="text-muted-foreground mt-1 text-xs leading-5">
               {keywordCount} configured of {selectedPlan.keywordLimit} allowed
-              keywords. Monitoring remains inactive until Convex reports an
-              active subscription.
+              keywords. Monitoring starts after your subscription is active.
             </p>
           </div>
           <span className="text-muted-foreground text-xs tabular-nums">
@@ -1057,8 +1056,8 @@ function PlanStep({
             : "Continue to secure checkout"}
         </Button>
         <p className="text-muted-foreground text-xs leading-5">
-          Checkout is handled by Creem. Activation is accepted only from the
-          subscription status returned by Convex.
+          Checkout is handled securely by Creem. Monitoring starts only after
+          the subscription is confirmed.
         </p>
       </div>
     </div>
@@ -1398,7 +1397,7 @@ export function OnboardingFlow() {
       return true
     } catch {
       setSaveError(
-        "Astreex could not save the complete configuration. No activation was attempted. Review the authenticated Convex connection and try again.",
+        "The configuration wasn't saved. Monitoring has not started. Try again.",
       )
       return false
     } finally {
@@ -1608,23 +1607,23 @@ export function OnboardingFlow() {
 
   return (
     <section
-      className="mx-auto max-w-5xl"
+      className="mx-auto grid max-w-6xl gap-10 lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-16"
       aria-labelledby="onboarding-current-step"
     >
-      <div className="border-border mb-7 border-b pb-5">
-        <div className="flex items-center justify-between gap-4">
+      <aside className="lg:sticky lg:top-8 lg:self-start">
+        <div className="flex items-start justify-between gap-4 lg:block">
           <div>
             <p className="text-muted-foreground text-xs font-medium">
               Step {draft.step} of {ONBOARDING_STEP_COUNT}
             </p>
             <p
               id="onboarding-current-step"
-              className="text-foreground mt-0.5 text-sm font-semibold"
+              className="text-foreground mt-1 text-[15px] font-semibold"
             >
               {currentStep.title}
             </p>
           </div>
-          <p className="text-muted-foreground text-right text-xs">
+          <p className="text-muted-foreground text-right text-xs lg:mt-3 lg:text-left">
             {draftOrigin === "stored" && draft.step > 1
               ? "Progress restored on this device"
               : "Draft saves on this device"}
@@ -1633,18 +1632,18 @@ export function OnboardingFlow() {
         <Progress
           value={progress}
           aria-label={`Onboarding progress: step ${draft.step} of ${ONBOARDING_STEP_COUNT}`}
-          className="mt-4 h-1.5"
+          className="mt-5 h-1"
         />
-        <ol className="mt-3 hidden grid-cols-7 gap-2 md:grid">
+        <ol className="mt-6 hidden space-y-1 lg:block">
           {steps.map((step, index) => {
             const number = index + 1
             return (
               <li
                 key={step.title}
                 className={cn(
-                  "text-xs",
+                  "relative min-h-9 rounded-md px-3 py-2 text-xs",
                   number === draft.step
-                    ? "text-foreground font-medium"
+                    ? "bg-secondary text-foreground before:bg-primary font-medium before:absolute before:inset-y-2 before:-left-px before:w-0.5"
                     : number < draft.step
                       ? "text-primary"
                       : "text-muted-foreground",
@@ -1662,51 +1661,55 @@ export function OnboardingFlow() {
             )
           })}
         </ol>
-      </div>
+      </aside>
 
-      {stepContent}
+      <div className="min-w-0">
+        {stepContent}
 
-      {(stepError || saveError) && (
-        <StatusState
-          className="mt-6"
-          variant="error"
-          title="This step needs attention"
-          description={
-            stepError ?? saveError ?? "Review this step before continuing."
-          }
-        />
-      )}
-
-      <div className="border-border mt-8 flex flex-col-reverse gap-3 border-t pt-5 sm:flex-row sm:items-center sm:justify-between">
-        <Button
-          variant="ghost"
-          onClick={goBack}
-          disabled={draft.step === 1 || savingConfiguration || checkoutPending}
-        >
-          <ArrowLeftIcon aria-hidden="true" />
-          Back
-        </Button>
-        {draft.step < 7 && (
-          <Button
-            onClick={() => void goForward()}
-            disabled={savingConfiguration}
-          >
-            {savingConfiguration ? (
-              <CircleNotchIcon aria-hidden="true" className="animate-spin" />
-            ) : draft.step === 5 ? (
-              <ShieldCheckIcon aria-hidden="true" />
-            ) : (
-              <ArrowRightIcon aria-hidden="true" />
-            )}
-            {draft.step === 1
-              ? "Start setup"
-              : draft.step === 5
-                ? "Save configuration"
-                : draft.step === 6
-                  ? "Choose a plan"
-                  : "Continue"}
-          </Button>
+        {(stepError || saveError) && (
+          <StatusState
+            className="mt-6"
+            variant="error"
+            title="This step needs attention"
+            description={
+              stepError ?? saveError ?? "Review this step before continuing."
+            }
+          />
         )}
+
+        <div className="border-border mt-10 flex flex-col-reverse gap-3 border-t pt-5 sm:flex-row sm:items-center sm:justify-between">
+          <Button
+            variant="ghost"
+            onClick={goBack}
+            disabled={
+              draft.step === 1 || savingConfiguration || checkoutPending
+            }
+          >
+            <ArrowLeftIcon aria-hidden="true" />
+            Back
+          </Button>
+          {draft.step < 7 && (
+            <Button
+              onClick={() => void goForward()}
+              disabled={savingConfiguration}
+            >
+              {savingConfiguration ? (
+                <CircleNotchIcon aria-hidden="true" className="animate-spin" />
+              ) : draft.step === 5 ? (
+                <ShieldCheckIcon aria-hidden="true" />
+              ) : (
+                <ArrowRightIcon aria-hidden="true" />
+              )}
+              {draft.step === 1
+                ? "Start setup"
+                : draft.step === 5
+                  ? "Save configuration"
+                  : draft.step === 6
+                    ? "Choose a plan"
+                    : "Continue"}
+            </Button>
+          )}
+        </div>
       </div>
     </section>
   )

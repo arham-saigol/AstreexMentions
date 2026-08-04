@@ -1,9 +1,5 @@
 export const publicNavigationLinks = [
-  { label: "Sources", href: "/#product" },
-  { label: "How it works", href: "/#how-it-works" },
-  { label: "Features", href: "/#features" },
+  { label: "Product", href: "/#product" },
   { label: "Pricing", href: "/#pricing" },
-  { label: "Field notes", href: "/blog" },
-  { label: "Changelog", href: "/changelog" },
-  { label: "FAQ", href: "/#faq" },
+  { label: "Notes", href: "/blog" },
 ] as const

@@ -20,7 +20,7 @@ function SignedOutNavigation() {
         <Link href="/sign-in">Sign in</Link>
       </Button>
       <Button asChild size="sm" className="hidden sm:inline-flex">
-        <Link href="/sign-up">Get started</Link>
+        <Link href="/sign-up">Start monitoring</Link>
       </Button>
     </>
   )
@@ -54,7 +54,7 @@ export function SiteHeader() {
 
   return (
     <header className="border-border bg-background sticky top-0 z-40 border-b">
-      <div className="mx-auto flex h-16 w-full max-w-6xl items-center gap-3 px-4 sm:px-6">
+      <div className="mx-auto flex h-16 w-full max-w-[1184px] items-center gap-3 px-4 sm:px-6 lg:px-8">
         <Link href="/" aria-label="Astreex home" className="shrink-0">
           <AstreexWordmark
             className="text-base sm:text-lg"
@@ -64,7 +64,7 @@ export function SiteHeader() {
 
         <nav
           aria-label="Primary navigation"
-          className="ml-auto hidden items-center gap-5 lg:flex"
+          className="ml-auto hidden items-center gap-7 lg:flex"
         >
           {publicNavigationLinks.map((link) => (
             <Link

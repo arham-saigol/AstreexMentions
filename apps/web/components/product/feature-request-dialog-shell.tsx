@@ -362,8 +362,7 @@ export function FeatureRequestDialogShell({
           </span>
           <DialogTitle>Feature Requests</DialogTitle>
           <DialogDescription className="leading-6">
-            Share a product idea or workflow improvement. The request is
-            submitted through the authenticated account data service.
+            Share a product idea or workflow improvement with the Astreex team.
           </DialogDescription>
         </DialogHeader>
         <FeatureRequestDialogBodySlot

@@ -201,8 +201,8 @@ export function KeywordRow({
   const sources = displaySources(keyword)
 
   return (
-    <article className="border-border bg-card overflow-hidden rounded-lg border">
-      <div className="flex flex-col gap-4 p-4 sm:p-5 lg:flex-row lg:items-start lg:justify-between">
+    <article className="border-border bg-card overflow-hidden border-b last:border-b-0">
+      <div className="flex flex-col gap-4 p-4 sm:p-6 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-foreground text-base font-semibold break-words">
@@ -217,7 +217,7 @@ export function KeywordRow({
             {keyword.platforms.map((platform) => (
               <span
                 key={platform}
-                className="border-border bg-muted/40 text-muted-foreground inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs"
+                className="text-muted-foreground inline-flex items-center gap-1.5 text-xs"
               >
                 <PlatformIcon platform={platform} />
                 {platform === "x"
@@ -258,15 +258,19 @@ export function KeywordRow({
         </div>
       </div>
 
-      <div className="border-border border-t">
-        <div className="bg-muted/25 border-border grid grid-cols-[minmax(0,1fr)_auto] gap-3 border-b px-4 py-2.5 sm:px-5">
-          <p className="text-foreground text-xs font-semibold">
-            Source schedule
-          </p>
-          <p className="text-muted-foreground text-xs">
+      <details className="group border-border border-t">
+        <summary className="text-muted-foreground hover:text-foreground flex min-h-10 list-none items-center justify-between gap-3 px-4 py-2 text-xs font-medium transition-colors marker:hidden sm:px-6 [&::-webkit-details-marker]:hidden">
+          <span>Source health</span>
+          <span>
             {sources.length} source{sources.length === 1 ? "" : "s"}
-          </p>
-        </div>
+            <span
+              aria-hidden="true"
+              className="ml-2 inline-block transition-transform group-open:rotate-45"
+            >
+              +
+            </span>
+          </span>
+        </summary>
         <ul className="divide-border divide-y">
           {sources.map((source) => {
             const state = sourceState(source, monitoringActive)
@@ -326,7 +330,7 @@ export function KeywordRow({
             )
           })}
         </ul>
-      </div>
+      </details>
     </article>
   )
 }
