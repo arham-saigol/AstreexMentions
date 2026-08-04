@@ -1,0 +1,1278 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Astreex — Design System</title>
+<meta name="description" content="The visual system for Astreex: warm monochrome, editorial typography, and signal-first product surfaces." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+/* ============================================================
+   ASTREEX DESIGN SYSTEM
+   Warm monochrome · editorial · signal-first
+   ============================================================ */
+
+:root {
+  /* Canvas & surfaces (warm bone / off-white) */
+  --canvas:        #F7F6F3;
+  --canvas-soft:   #FBFBFA;
+  --surface:       #FFFFFF;
+  --surface-soft:  #F9F9F8;
+  --surface-sunk:  #F2F1ED;
+
+  /* Ink — never pure black */
+  --ink:           #1B1A18;
+  --ink-2:         #4A4843;   /* secondary */
+  --ink-3:         #787774;   /* muted */
+  --ink-4:         #A8A69F;   /* faint */
+
+  /* Structure */
+  --line:          #EAEAEA;
+  --line-2:        #E2E1DC;
+  --line-strong:   #D6D4CE;
+
+  /* Brand — restrained, warm */
+  --brand:         #1B1A18;
+  --brand-hover:   #3A3733;
+  --signal:        #B7793A;   /* warm ochre, used sparingly */
+  --signal-soft:   #F4EADB;
+
+  /* Category pastels — semantic meaning only, desaturated & warm */
+  --cat-question-bg:    #E4EFF7;  --cat-question-fg:    #2C5F82;
+  --cat-complaint-bg:   #FDEBEC;  --cat-complaint-fg:   #9F2F2D;
+  --cat-praise-bg:      #EDF3EC;  --cat-praise-fg:      #346538;
+  --cat-bug-bg:         #FCEFE3;  --cat-bug-fg:         #9A4B16;
+  --cat-feature-bg:     #FBF3DB;  --cat-feature-fg:     #956400;
+  --cat-competitor-bg:  #F0EDF7;  --cat-competitor-fg:  #5A4B8A;
+  --cat-other-bg:       #EFEDE8;  --cat-other-fg:       #6B665F;
+
+  /* Platform tokens — monochrome ink */
+  --plat-x-bg:    #1B1A18;  --plat-x-fg:    #FFFFFF;
+  --plat-reddit-bg: #EFEDE8; --plat-reddit-fg: #1B1A18;
+  --plat-hn-bg:   #FCEFE3;  --plat-hn-fg:   #9A4B16;
+
+  /* Typography */
+  --sans:  "Geist", "SF Pro Display", "Helvetica Neue", system-ui, sans-serif;
+  --serif: "Newsreader", "Lyon Text", Georgia, serif;
+  --mono:  "JetBrains Mono", "SF Mono", "Geist Mono", Consolas, monospace;
+
+  /* Radius */
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+
+  /* Shadow — nearly absent, ultra-diffuse */
+  --shadow-lift: 0 2px 8px rgba(27,26,24,0.04);
+  --shadow-soft: 0 1px 2px rgba(27,26,24,0.03);
+
+  /* Motion */
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur:  600ms;
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+::selection { background: var(--signal-soft); color: var(--ink); }
+
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: var(--r-xs); }
+
+a { color: inherit; text-decoration: none; }
+
+h1, h2, h3, h4 { font-weight: 600; letter-spacing: -0.01em; }
+
+/* ---------- Layout shell ---------- */
+.shell { display: grid; grid-template-columns: 264px 1fr; min-height: 100vh; }
+
+.toc {
+  position: sticky; top: 0; align-self: start;
+  height: 100vh; overflow-y: auto;
+  border-right: 1px solid var(--line);
+  background: var(--canvas-soft);
+  padding: 28px 22px;
+}
+.toc-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 36px; }
+.toc-brand .mark { color: var(--ink); }
+.toc-brand .word { font-family: var(--serif); font-size: 22px; font-weight: 500; letter-spacing: -0.02em; }
+.toc-brand .ver { font-family: var(--mono); font-size: 10px; color: var(--ink-3); margin-left: auto; letter-spacing: 0.04em; }
+
+.toc nav { font-size: 13px; }
+.toc-group { margin-bottom: 22px; }
+.toc-label { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--ink-4); margin: 0 0 10px; }
+.toc nav a { display: block; padding: 5px 10px; border-radius: var(--r-xs); color: var(--ink-2); line-height: 1.4; transition: color 140ms, background 140ms; }
+.toc nav a:hover { color: var(--ink); background: var(--surface-sunk); }
+.toc nav a.active { color: var(--ink); background: var(--surface); box-shadow: var(--shadow-soft); }
+
+.main { min-width: 0; }
+
+.section {
+  border-bottom: 1px solid var(--line);
+  padding: 88px 64px;
+}
+.section-tight { padding: 56px 64px; }
+.section:first-child { padding-top: 72px; }
+
+.eyebrow {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--ink-3); margin: 0 0 14px; display: inline-flex; align-items: center; gap: 8px;
+}
+.eyebrow::before { content: ""; width: 18px; height: 1px; background: var(--ink-4); }
+
+.h-display { font-family: var(--serif); font-weight: 500; letter-spacing: -0.03em; line-height: 1.04; }
+.lead { color: var(--ink-2); font-size: 17px; line-height: 1.6; max-width: 62ch; }
+.mono { font-family: var(--mono); }
+.muted { color: var(--ink-3); }
+
+.wrap { max-width: 980px; }
+
+/* ---------- Reveal motion ---------- */
+[data-reveal] { opacity: 0; transform: translateY(12px); transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease); transition-delay: calc(var(--index, 0) * 70ms); }
+[data-reveal].in { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal] { opacity: 1; transform: none; transition: none; }
+  html { scroll-behavior: auto; }
+}
+
+/* ---------- Brand mark (signal asterisk) ---------- */
+.ax { display: inline-block; width: 1em; height: 1em; }
+.ax svg { width: 100%; height: 100%; display: block; }
+
+/* ============================================================
+   SECTION: Principles
+   ============================================================ */
+.principles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; margin-top: 40px; }
+.principle { background: var(--surface); padding: 30px 28px; }
+.principle .num { font-family: var(--mono); font-size: 11px; color: var(--ink-4); letter-spacing: 0.1em; }
+.principle h3 { font-family: var(--serif); font-weight: 500; font-size: 21px; margin: 14px 0 10px; letter-spacing: -0.02em; }
+.principle p { margin: 0; color: var(--ink-2); font-size: 14px; }
+
+/* ============================================================
+   FOUNDATIONS: color
+   ============================================================ */
+.swatch-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 32px; }
+.swatch { border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; background: var(--surface); }
+.swatch .chip { height: 76px; }
+.swatch .meta { padding: 12px 14px; }
+.swatch .meta .name { font-size: 13px; font-weight: 500; }
+.swatch .meta .hex { font-family: var(--mono); font-size: 11px; color: var(--ink-3); margin-top: 2px; }
+
+.subhead { font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); margin: 40px 0 0; }
+
+.cat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 24px; }
+
+/* ============================================================
+   FOUNDATIONS: type
+   ============================================================ */
+.type-spec { border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); margin-top: 32px; overflow: hidden; }
+.type-row { display: grid; grid-template-columns: 170px 1fr; gap: 24px; padding: 28px 32px; border-bottom: 1px solid var(--line); align-items: baseline; }
+.type-row:last-child { border-bottom: 0; }
+.type-row .label { font-family: var(--mono); font-size: 11px; color: var(--ink-3); letter-spacing: 0.08em; text-transform: uppercase; }
+.type-row .label small { display: block; color: var(--ink-4); text-transform: none; letter-spacing: 0; margin-top: 4px; font-family: var(--sans); font-size: 11px; }
+.spec-serif-d { font-family: var(--serif); font-weight: 500; font-size: 56px; line-height: 1.02; letter-spacing: -0.035em; }
+.spec-serif-h { font-family: var(--serif); font-weight: 500; font-size: 34px; line-height: 1.1; letter-spacing: -0.025em; }
+.spec-sans-h { font-family: var(--sans); font-weight: 600; font-size: 20px; letter-spacing: -0.01em; }
+.spec-sans-b { font-family: var(--sans); font-size: 15px; line-height: 1.6; color: var(--ink-2); }
+.spec-mono { font-family: var(--mono); font-size: 13px; color: var(--ink); }
+
+.scale { display: flex; align-items: baseline; gap: 18px; flex-wrap: wrap; margin-top: 8px; }
+.scale span { font-family: var(--serif); font-weight: 500; letter-spacing: -0.02em; line-height: 1; color: var(--ink); }
+
+/* ============================================================
+   FOUNDATIONS: tokens
+   ============================================================ */
+.token-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; margin-top: 32px; }
+.token-cell { background: var(--surface); padding: 24px 28px; }
+.token-cell h4 { font-size: 14px; margin: 0 0 14px; }
+.kv { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 12px; padding: 4px 0; color: var(--ink-2); border-bottom: 1px solid var(--line); }
+.kv:last-child { border-bottom: 0; }
+.kv b { font-weight: 500; color: var(--ink); }
+
+.radius-row { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+.radius-demo { width: 52px; height: 52px; background: var(--surface-sunk); border: 1px solid var(--line-2); }
+.kbd-demo { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ============================================================
+   COMPONENTS: buttons
+   ============================================================ */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  font-family: var(--sans); font-weight: 500; font-size: 14px; line-height: 1;
+  padding: 11px 18px; border-radius: var(--r-sm); border: 1px solid transparent;
+  cursor: pointer; transition: background 140ms var(--ease), transform 90ms var(--ease), color 140ms var(--ease), border-color 140ms var(--ease);
+  text-decoration: none; white-space: nowrap;
+}
+.btn:active { transform: scale(0.98); }
+.btn-primary { background: var(--ink); color: #fff; }
+.btn-primary:hover { background: var(--brand-hover); }
+.btn-secondary { background: var(--surface); color: var(--ink); border-color: var(--line-strong); }
+.btn-secondary:hover { border-color: var(--ink-3); }
+.btn-ghost { background: transparent; color: var(--ink-2); }
+.btn-ghost:hover { color: var(--ink); background: var(--surface-sunk); }
+.btn-danger { background: var(--cat-complaint-fg); color: #fff; }
+.btn-danger:hover { filter: brightness(1.08); }
+.btn-lg { padding: 14px 22px; font-size: 15px; }
+.btn-sm { padding: 8px 12px; font-size: 13px; }
+.btn[disabled] { opacity: 0.45; cursor: not-allowed; }
+
+.btn-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+.demo-card { border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); padding: 32px; }
+.demo-card + .demo-card { margin-top: 16px; }
+.demo-card .cap { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ink-4); margin: 0 0 18px; }
+
+/* ============================================================
+   COMPONENTS: tags & badges
+   ============================================================ */
+.tag {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 500; line-height: 1;
+  padding: 5px 10px; border-radius: 9999px;
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.tag .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: 0.7; }
+
+.tag-question   { background: var(--cat-question-bg);   color: var(--cat-question-fg); }
+.tag-complaint  { background: var(--cat-complaint-bg);  color: var(--cat-complaint-fg); }
+.tag-praise     { background: var(--cat-praise-bg);     color: var(--cat-praise-fg); }
+.tag-bug        { background: var(--cat-bug-bg);        color: var(--cat-bug-fg); }
+.tag-feature    { background: var(--cat-feature-bg);    color: var(--cat-feature-fg); }
+.tag-competitor { background: var(--cat-competitor-bg); color: var(--cat-competitor-fg); }
+.tag-other      { background: var(--cat-other-bg);      color: var(--cat-other-fg); }
+
+.tag-neutral { background: var(--surface-sunk); color: var(--ink-2); }
+.tag-signal  { background: var(--signal-soft);  color: #8a5a23; }
+
+.platform {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 12px; font-weight: 500; color: var(--ink-2);
+}
+.platform .glyph {
+  width: 18px; height: 18px; border-radius: var(--r-xs);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 600; flex-shrink: 0;
+}
+.glyph-x { background: var(--plat-x-bg); color: var(--plat-x-fg); }
+.glyph-reddit { background: var(--plat-reddit-bg); color: var(--plat-reddit-fg); }
+.glyph-hn { background: var(--plat-hn-bg); color: var(--plat-hn-fg); }
+
+.status-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+.status-live { background: var(--cat-praise-fg); }
+.status-paused { background: var(--ink-4); }
+
+kbd {
+  font-family: var(--mono); font-size: 12px;
+  background: var(--surface-sunk); color: var(--ink-2);
+  border: 1px solid var(--line); border-bottom-width: 2px;
+  border-radius: var(--r-xs); padding: 3px 7px; line-height: 1;
+}
+
+/* ============================================================
+   COMPONENTS: cards / bento
+   ============================================================ */
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: 28px; transition: box-shadow 220ms var(--ease); }
+.card.hoverable:hover { box-shadow: var(--shadow-lift); }
+.bento { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 24px; }
+.bento .span-2 { grid-column: span 2; }
+.bento .span-3 { grid-column: span 3; }
+
+/* ============================================================
+   COMPONENTS: inputs
+   ============================================================ */
+.field { display: flex; flex-direction: column; gap: 7px; }
+.field label { font-size: 13px; font-weight: 500; color: var(--ink-2); }
+.input, .select, .textarea {
+  font-family: var(--sans); font-size: 14px; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm); padding: 10px 12px; width: 100%;
+  transition: border-color 140ms var(--ease), box-shadow 140ms var(--ease);
+}
+.input:focus, .select:focus, .textarea:focus { outline: none; border-color: var(--ink); box-shadow: 0 0 0 3px rgba(27,26,24,0.06); }
+.textarea { resize: vertical; min-height: 88px; line-height: 1.6; }
+.hint { font-size: 12px; color: var(--ink-3); }
+
+.switch { position: relative; width: 38px; height: 22px; border-radius: 9999px; background: var(--line-strong); cursor: pointer; transition: background 160ms var(--ease); flex-shrink: 0; }
+.switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform 160ms var(--ease); box-shadow: var(--shadow-soft); }
+.switch[aria-checked="true"] { background: var(--ink); }
+.switch[aria-checked="true"]::after { transform: translateX(16px); }
+
+/* ============================================================
+   COMPONENTS: mention card (the core product unit)
+   ============================================================ */
+.mention {
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md);
+  padding: 20px 22px; transition: box-shadow 220ms var(--ease), border-color 220ms var(--ease);
+}
+.mention:hover { box-shadow: var(--shadow-lift); border-color: var(--line-2); }
+.mention-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+.mention-author { font-size: 14px; font-weight: 500; }
+.mention-handle { font-family: var(--mono); font-size: 12px; color: var(--ink-3); }
+.mention-time { font-family: var(--mono); font-size: 11px; color: var(--ink-4); margin-left: auto; }
+.mention-body { font-size: 14.5px; line-height: 1.62; color: var(--ink); margin: 0 0 14px; }
+.mention-foot { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding-top: 12px; border-top: 1px solid var(--line); }
+.mention-stat { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 12px; color: var(--ink-3); }
+.mention-stat svg { width: 14px; height: 14px; opacity: 0.7; }
+.mention-actions { margin-left: auto; display: flex; gap: 8px; }
+.eng-bar { display: inline-flex; align-items: center; gap: 8px; }
+.eng-bar .track { width: 56px; height: 4px; background: var(--line); border-radius: 9999px; overflow: hidden; }
+.eng-bar .fill { height: 100%; background: var(--ink-3); border-radius: 9999px; }
+
+/* keyword row */
+.kw-row { display: flex; align-items: center; gap: 16px; padding: 16px 0; border-bottom: 1px solid var(--line); }
+.kw-row:last-child { border-bottom: 0; }
+.kw-term { font-family: var(--serif); font-size: 19px; font-weight: 500; letter-spacing: -0.01em; }
+.kw-plats { display: flex; gap: 6px; }
+.kw-meta { font-family: var(--mono); font-size: 12px; color: var(--ink-3); margin-left: auto; }
+
+/* ============================================================
+   COMPONENTS: accordion
+   ============================================================ */
+.acc { border-top: 1px solid var(--line); }
+.acc-item { border-bottom: 1px solid var(--line); }
+.acc-trigger { display: flex; align-items: center; gap: 16px; width: 100%; padding: 22px 4px; background: none; border: 0; text-align: left; cursor: pointer; font-family: var(--serif); font-size: 19px; font-weight: 500; letter-spacing: -0.01em; color: var(--ink); }
+.acc-trigger .acc-icon { margin-left: auto; font-family: var(--mono); font-size: 22px; color: var(--ink-3); transition: transform 200ms var(--ease); }
+.acc-item.open .acc-icon { transform: rotate(45deg); }
+.acc-panel { overflow: hidden; max-height: 0; transition: max-height 320ms var(--ease); }
+.acc-panel-inner { padding: 0 4px 24px; color: var(--ink-2); font-size: 15px; max-width: 70ch; }
+
+/* ============================================================
+   PRODUCT: marketing hero
+   ============================================================ */
+.hero {
+  position: relative; overflow: hidden;
+  background: var(--canvas-soft);
+  border-bottom: 1px solid var(--line);
+}
+.hero-blob {
+  position: absolute; inset: -20% -10% auto auto; width: 60vw; height: 60vw; max-width: 760px; max-height: 760px;
+  background: radial-gradient(circle at 60% 40%, rgba(183,121,58,0.10), transparent 62%);
+  filter: blur(8px); pointer-events: none; animation: drift 24s var(--ease) infinite alternate;
+}
+@keyframes drift { from { transform: translate3d(0,0,0); } to { transform: translate3d(-40px, 30px, 0); } }
+.hero-inner { position: relative; max-width: 1180px; margin: 0 auto; padding: 96px 64px; display: grid; grid-template-columns: 1.05fr 1fr; gap: 64px; align-items: center; }
+.hero h1 { font-family: var(--serif); font-weight: 500; font-size: clamp(2.8rem, 5.4vw, 4.6rem); line-height: 0.98; letter-spacing: -0.04em; margin: 18px 0 0; max-width: 14ch; }
+.hero .sub { margin-top: 26px; font-size: 18px; line-height: 1.6; color: var(--ink-2); max-width: 52ch; }
+.hero-cta { display: flex; gap: 12px; margin-top: 34px; align-items: center; flex-wrap: wrap; }
+.hero-note { margin-top: 16px; font-family: var(--mono); font-size: 12px; color: var(--ink-3); }
+
+/* faux OS chrome mock */
+.window { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; box-shadow: 0 12px 40px rgba(27,26,24,0.06); }
+.window-bar { display: flex; align-items: center; gap: 7px; padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--canvas-soft); }
+.window-bar .dot { width: 11px; height: 11px; border-radius: 50%; background: var(--line-strong); }
+.window-bar .addr { margin-left: 12px; font-family: var(--mono); font-size: 11px; color: var(--ink-3); }
+.window-body { padding: 18px; }
+
+/* ============================================================
+   PRODUCT: app shell + dashboard
+   ============================================================ */
+.app-shell { display: grid; grid-template-columns: 232px 1fr; border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; background: var(--surface); }
+.app-side { border-right: 1px solid var(--line); background: var(--canvas-soft); padding: 20px 16px; }
+.app-side .ws { font-family: var(--serif); font-size: 16px; font-weight: 500; padding: 4px 8px 18px; letter-spacing: -0.01em; }
+.nav-section { margin-bottom: 22px; }
+.nav-section .nl { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ink-4); padding: 0 8px 8px; }
+.nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--r-sm); font-size: 14px; color: var(--ink-2); cursor: pointer; transition: background 140ms, color 140ms; }
+.nav-item:hover { color: var(--ink); background: var(--surface-sunk); }
+.nav-item.active { color: var(--ink); background: var(--surface); box-shadow: var(--shadow-soft); font-weight: 500; }
+.nav-item .nav-icon { width: 16px; height: 16px; opacity: 0.8; flex-shrink: 0; }
+.nav-item .count { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--ink-4); }
+
+.app-main { padding: 28px 30px; }
+.app-topbar { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
+.app-topbar h2 { font-family: var(--serif); font-weight: 500; font-size: 26px; letter-spacing: -0.02em; margin: 0; }
+.search { flex: 1; max-width: 320px; display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: var(--r-sm); padding: 8px 12px; background: var(--surface); }
+.search input { border: 0; outline: 0; background: none; font-size: 13px; flex: 1; color: var(--ink); }
+.search svg { width: 15px; height: 15px; color: var(--ink-3); }
+
+.filter-pills { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+
+.stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 24px; }
+.stat { border: 1px solid var(--line); border-radius: var(--r-md); padding: 18px 20px; background: var(--surface); }
+.stat .label { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-3); }
+.stat .val { font-family: var(--serif); font-size: 32px; font-weight: 500; letter-spacing: -0.02em; margin-top: 6px; line-height: 1; }
+.stat .delta { font-family: var(--mono); font-size: 11px; color: var(--ink-3); margin-top: 6px; }
+.stat .delta.up { color: var(--cat-praise-fg); }
+
+.feed { display: flex; flex-direction: column; gap: 12px; }
+
+/* ============================================================
+   PRODUCT: pricing
+   ============================================================ */
+.price-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 32px; }
+.price-card { border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); padding: 30px 28px; display: flex; flex-direction: column; }
+.price-card.featured { border-color: var(--ink); box-shadow: var(--shadow-lift); }
+.price-card .plan { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ink-3); }
+.price-card .price { font-family: var(--serif); font-size: 44px; font-weight: 500; letter-spacing: -0.03em; margin-top: 12px; line-height: 1; }
+.price-card .price .per { font-family: var(--sans); font-size: 14px; color: var(--ink-3); font-weight: 400; }
+.price-card .desc { color: var(--ink-2); font-size: 14px; margin: 14px 0 22px; min-height: 42px; }
+.price-card ul { list-style: none; padding: 0; margin: 0 0 26px; flex: 1; }
+.price-card li { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; color: var(--ink-2); padding: 7px 0; border-bottom: 1px solid var(--line); }
+.price-card li:last-child { border-bottom: 0; }
+.price-card li svg { width: 15px; height: 15px; margin-top: 3px; color: var(--ink); flex-shrink: 0; }
+.price-card .tag-pop { align-self: flex-start; margin-bottom: 14px; }
+
+/* digest */
+.digest-card { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; }
+.digest-cell { background: var(--surface); padding: 26px 28px; }
+.set-row { display: flex; align-items: center; gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.set-row:last-child { border-bottom: 0; }
+.set-row .lbl { font-size: 14px; }
+.set-row .lbl small { display: block; color: var(--ink-3); font-size: 12px; margin-top: 2px; }
+.set-row .val { margin-left: auto; }
+
+/* email preview */
+.email { border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); overflow: hidden; }
+.email-head { padding: 22px 28px; border-bottom: 1px solid var(--line); }
+.email-head .subj { font-family: var(--serif); font-size: 22px; font-weight: 500; letter-spacing: -0.01em; }
+.email-head .meta { font-family: var(--mono); font-size: 11px; color: var(--ink-3); margin-top: 8px; }
+.email-body { padding: 24px 28px; }
+.email-body p { color: var(--ink-2); font-size: 14px; margin: 0 0 14px; }
+.email-item { display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.email-item:last-child { border-bottom: 0; }
+.email-item .body { font-size: 13px; color: var(--ink-2); }
+
+/* footer */
+.foot { padding: 64px; border-top: 1px solid var(--line); background: var(--canvas-soft); display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+.foot .mark-line { display: flex; align-items: center; gap: 10px; }
+.foot small { font-family: var(--mono); font-size: 11px; color: var(--ink-3); }
+
+/* ---------- Responsive ---------- */
+@media (max-width: 1080px) {
+  .shell { grid-template-columns: 1fr; }
+  .toc { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+  .section { padding: 56px 28px; }
+  .hero-inner { grid-template-columns: 1fr; padding: 56px 28px; }
+  .principles, .swatch-grid, .cat-grid, .token-grid, .bento, .price-grid, .stat-row, .digest-card { grid-template-columns: 1fr; }
+  .type-row { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- Brand mark SVG (reused) — a six-point signal asterisk -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="ax-mark" viewBox="0 0 24 24">
+    <g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <path d="M12 3v18" />
+      <path d="M12 3v18" transform="rotate(60 12 12)" />
+      <path d="M12 3v18" transform="rotate(120 12 12)" />
+    </g>
+    <circle cx="12" cy="12" r="2.4" fill="var(--signal)" stroke="none" />
+  </symbol>
+  <symbol id="i-reply" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M9 17l-5-5 5-5M4 12h11a5 5 0 0 1 5 5v1"/></symbol>
+  <symbol id="i-bookmark" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M6 4h12v17l-6-4-6 4z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M5 12l5 5 9-10"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10z"/></symbol>
+  <symbol id="i-msg" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 5h16v11H9l-5 4z"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6" fill="none" stroke="currentColor" stroke-width="2"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M20 20l-4-4"/></symbol>
+  <symbol id="i-dashboard" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/></g></symbol>
+  <symbol id="i-mention" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M4 6h16M4 12h16M4 18h10"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="8" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M10 10l9 9M16 16l2-2M14 14l2-2"/></symbol>
+  <symbol id="i-digest" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M8 9h8M8 13h8M8 17h5"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M6 9a6 6 0 1 1 12 0c0 5 2 6 2 6H4s2-1 2-6M10 20a2 2 0 0 0 4 0"/></symbol>
+</svg>
+
+<div class="shell">
+  <!-- ============================== TOC ============================== -->
+  <aside class="toc">
+    <div class="toc-brand">
+      <span class="ax mark" style="font-size:26px"><svg><use href="#ax-mark"/></svg></span>
+      <span class="word">Astreex</span>
+      <span class="ver">v1.0</span>
+    </div>
+    <nav>
+      <div class="toc-group">
+        <p class="toc-label">Foundations</p>
+        <a href="#principles">Principles</a>
+        <a href="#color">Color</a>
+        <a href="#type">Typography</a>
+        <a href="#tokens">Tokens &amp; motion</a>
+      </div>
+      <div class="toc-group">
+        <p class="toc-label">Components</p>
+        <a href="#buttons">Buttons</a>
+        <a href="#tags">Tags &amp; badges</a>
+        <a href="#cards">Cards &amp; bento</a>
+        <a href="#inputs">Inputs &amp; keys</a>
+        <a href="#mention">Mention unit</a>
+        <a href="#keywords">Keyword row</a>
+        <a href="#accordion">Accordion</a>
+      </div>
+      <div class="toc-group">
+        <p class="toc-label">Surfaces</p>
+        <a href="#hero">Marketing hero</a>
+        <a href="#dashboard">Dashboard</a>
+        <a href="#pricing">Pricing</a>
+        <a href="#digest">Digest &amp; email</a>
+      </div>
+    </nav>
+  </aside>
+
+  <!-- ============================== MAIN ============================== -->
+  <main class="main">
+
+    <!-- ===== Intro ===== -->
+    <section class="section">
+      <p class="eyebrow" data-reveal>Design system · 2025</p>
+      <h1 class="h-display" data-reveal style="font-size:clamp(2.4rem,5vw,4rem);max-width:16ch" data-reveal>The signal-first visual language for Astreex.</h1>
+      <p class="lead" data-reveal style="--index:1;margin-top:24px">A warm monochrome foundation with editorial typography and muted pastels reserved for meaning. Built so the conversations Astreex collects stay the loudest thing on the page &mdash; never the chrome around them.</p>
+
+      <div class="principles" data-reveal style="--index:2">
+        <div class="principle">
+          <p class="num">01</p>
+          <h3>Signal over chrome</h3>
+          <p>Color, weight, and motion are spent on the mention, the category, and the action &mdash; not on container decoration. The product reads like a well-set page of journalism, not a SaaS dashboard.</p>
+        </div>
+        <div class="principle">
+          <p class="num">02</p>
+          <h3>Warm monochrome</h3>
+          <p>A bone canvas, off-black ink, and a single hairline rule carry the whole interface. Pastels appear only to classify intent. One warm ochre marks the brand and the active state.</p>
+        </div>
+        <div class="principle">
+          <p class="num">03</p>
+          <h3>Editorial restraint</h3>
+          <p>A serif display face gives headlines weight; a geometric sans handles interface; mono carries metadata, counts, and keystrokes. Generous macro-whitespace sets the rhythm.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Color ===== -->
+    <section class="section" id="color">
+      <p class="eyebrow" data-reveal>Foundations</p>
+      <h2 class="h-display" data-reveal style="font-size:40px">Color</h2>
+      <p class="lead" data-reveal style="--index:1;margin-top:14px">A narrow warm monochrome canvas. Off-black ink, never pure black. Hairline rules at 6% opacity. Pastels are semantic &mdash; each maps to one category of conversation.</p>
+
+      <p class="subhead" data-reveal style="--index:2">Canvas &amp; ink</p>
+      <div class="swatch-grid" data-reveal style="--index:2">
+        <div class="swatch"><div class="chip" style="background:var(--canvas)"></div><div class="meta"><div class="name">Canvas</div><div class="hex">#F7F6F3</div></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--surface)"></div><div class="meta"><div class="name">Surface</div><div class="hex">#FFFFFF</div></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--ink)"></div><div class="meta"><div class="name">Ink</div><div class="hex">#1B1A18</div></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--ink-3)"></div><div class="meta"><div class="name">Ink muted</div><div class="hex">#787774</div></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--line)"></div><div class="meta"><div class="name">Line</div><div class="hex">#EAEAEA</div></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--signal)"></div><div class="meta"><div class="name">Signal ochre</div><div class="hex">#B7793A</div></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--signal-soft)"></div><div class="meta"><div class="name">Signal soft</div><div class="hex">#F4EADB</div></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--surface-sunk)"></div><div class="meta"><div class="name">Surface sunk</div><div class="hex">#F2F1ED</div></div></div>
+      </div>
+
+      <p class="subhead" data-reveal style="--index:3">Category pastels &mdash; semantic only</p>
+      <div class="cat-grid" data-reveal style="--index:3">
+        <div class="swatch"><div class="chip" style="background:var(--cat-question-bg)"></div><div class="meta"><div class="name">Question</div><div class="hex">#E4EFF7 / #2C5F82</div></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--cat-complaint-bg)"></div><div class="meta"><div class="name">Complaint</div><div class="hex">#FDEBEC / #9F2F2D</div></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--cat-praise-bg)"></div><div class="meta"><div class="name">Praise</div><div class="hex">#EDF3EC / #346538</div></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--cat-bug-bg)"></div><div class="meta"><div class="name">Bug</div><div class="hex">#FCEFE3 / #9A4B16</div></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--cat-feature-bg)"></div><div class="meta"><div class="name">Feature Request</div><div class="hex">#FBF3DB / #956400</div></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--cat-competitor-bg)"></div><div class="meta"><div class="name">Competitor</div><div class="hex">#F0EDF7 / #5A4B8A</div></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--cat-other-bg)"></div><div class="meta"><div class="name">Other</div><div class="hex">#EFEDE8 / #6B665F</div></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--surface-sunk);display:flex;align-items:center;justify-content:center;color:var(--ink-3);font-family:var(--mono);font-size:11px">reserved</div><div class="meta"><div class="name">Custom</div><div class="hex">user-defined, warm-muted</div></div></div>
+      </div>
+    </section>
+
+    <!-- ===== Typography ===== -->
+    <section class="section" id="type">
+      <p class="eyebrow" data-reveal>Foundations</p>
+      <h2 class="h-display" data-reveal style="font-size:40px">Typography</h2>
+      <p class="lead" data-reveal style="--index:1;margin-top:14px">Three families, one rhythm. Newsreader for editorial display, Geist for interface, JetBrains Mono for metadata and keystrokes. Tight tracking on display; relaxed 1.6 leading on body.</p>
+
+      <div class="type-spec" data-reveal style="--index:2">
+        <div class="type-row">
+          <div class="label">Display Serif<small>Newsreader · 500 · −0.035em</small></div>
+          <div class="spec-serif-d">Hear what the market is telling you.</div>
+        </div>
+        <div class="type-row">
+          <div class="label">Section Serif<small>Newsreader · 500 · −0.025em</small></div>
+          <div class="spec-serif-h">Mentions, organized by intent.</div>
+        </div>
+        <div class="type-row">
+          <div class="label">UI Heading<small>Geist · 600 · −0.01em</small></div>
+          <div class="spec-sans-h">Keywords &amp; tracking sources</div>
+        </div>
+        <div class="type-row">
+          <div class="label">Body Sans<small>Geist · 400 · 1.6</small></div>
+          <div class="spec-sans-b">Astreex finds the conversations around your keywords, organizes them by intent, and keeps the original context close enough to act with confidence.</div>
+        </div>
+        <div class="type-row">
+          <div class="label">Mono Meta<small>JetBrains Mono · 400</small></div>
+          <div class="spec-mono">r/SaaS &middot; 2h ago &middot; 142 upvotes &middot; eng 0.68</div>
+        </div>
+      </div>
+
+      <p class="subhead" data-reveal style="--index:3">Display scale</p>
+      <div class="scale" data-reveal style="--index:3">
+        <span style="font-size:48px">Aa</span>
+        <span style="font-size:34px">Aa</span>
+        <span style="font-size:24px">Aa</span>
+        <span style="font-size:18px">Aa</span>
+        <span style="font-size:15px;color:var(--ink-2);font-family:var(--sans);font-weight:500;letter-spacing:0">Aa</span>
+      </div>
+    </section>
+
+    <!-- ===== Tokens ===== -->
+    <section class="section" id="tokens">
+      <p class="eyebrow" data-reveal>Foundations</p>
+      <h2 class="h-display" data-reveal style="font-size:40px">Tokens &amp; motion</h2>
+      <p class="lead" data-reveal style="--index:1;margin-top:14px">Boring, explicit, shared. Every border is one hairline; every radius is small and crisp; motion is transform and opacity only.</p>
+
+      <div class="token-grid" data-reveal style="--index:2">
+        <div class="token-cell">
+          <h4>Radius</h4>
+          <div class="radius-row">
+            <div class="text-center"><div class="radius-demo" style="border-radius:var(--r-xs)"></div><div class="hint" style="margin-top:8px">4 · xs</div></div>
+            <div class="text-center"><div class="radius-demo" style="border-radius:var(--r-sm)"></div><div class="hint" style="margin-top:8px">6 · sm</div></div>
+            <div class="text-center"><div class="radius-demo" style="border-radius:var(--r-md)"></div><div class="hint" style="margin-top:8px">8 · md</div></div>
+            <div class="text-center"><div class="radius-demo" style="border-radius:var(--r-lg)"></div><div class="hint" style="margin-top:8px">12 · lg</div></div>
+          </div>
+        </div>
+        <div class="token-cell">
+          <h4>Border &amp; shadow</h4>
+          <div class="kv"><span>border</span><b>1px solid #EAEAEA</b></div>
+          <div class="kv"><span>border strong</span><b>1px solid #D6D4CE</b></div>
+          <div class="kv"><span>shadow lift</span><b>0 2px 8px / 0.04</b></div>
+          <div class="kv"><span>shadow soft</span><b>0 1px 2px / 0.03</b></div>
+        </div>
+        <div class="token-cell">
+          <h4>Motion</h4>
+          <div class="kv"><span>ease</span><b>cubic-bezier(.16,1,.3,1)</b></div>
+          <div class="kv"><span>reveal</span><b>translateY(12px) · 600ms</b></div>
+          <div class="kv"><span>hover</span><b>shadow 200ms</b></div>
+          <div class="kv"><span>active</span><b>scale(0.98) · 90ms</b></div>
+          <div class="kv"><span>stagger</span><b>calc(index × 70ms)</b></div>
+        </div>
+        <div class="token-cell">
+          <h4>Keystrokes</h4>
+          <div class="kbd-demo" style="margin-top:6px">
+            <kbd>⌘</kbd><kbd>K</kbd><span class="hint" style="align-self:center">command palette</span>
+          </div>
+          <div class="kbd-demo" style="margin-top:14px">
+            <kbd>J</kbd><kbd>K</kbd><span class="hint" style="align-self:center">navigate mentions</span>
+          </div>
+          <div class="kbd-demo" style="margin-top:14px">
+            <kbd>E</kbd><span class="hint" style="align-self:center">open original conversation</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Buttons ===== -->
+    <section class="section" id="buttons">
+      <p class="eyebrow" data-reveal>Components</p>
+      <h2 class="h-display" data-reveal style="font-size:40px">Buttons</h2>
+      <p class="lead" data-reveal style="--index:1;margin-top:14px">Solid ink for the primary action. Bordered for secondary. Ghost for in-line navigation. No shadows; a micro-scale press confirms every click.</p>
+
+      <div class="demo-card" data-reveal style="--index:2">
+        <p class="cap">Variants</p>
+        <div class="btn-row">
+          <button class="btn btn-primary btn-lg">Start monitoring <svg width="15" height="15"><use href="#i-arrow"/></svg></button>
+          <button class="btn btn-secondary btn-lg">See how it works</button>
+          <button class="btn btn-ghost btn-lg">Sign in</button>
+          <button class="btn btn-danger">Delete account</button>
+        </div>
+      </div>
+      <div class="demo-card" data-reveal style="--index:3">
+        <p class="cap">Sizes &amp; states</p>
+        <div class="btn-row">
+          <button class="btn btn-primary btn-sm">Small</button>
+          <button class="btn btn-primary">Default</button>
+          <button class="btn btn-primary btn-lg">Large</button>
+          <button class="btn btn-primary" disabled>Disabled</button>
+          <button class="btn btn-secondary btn-sm">Cancel</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Tags ===== -->
+    <section class="section" id="tags">
+      <p class="eyebrow" data-reveal>Components</p>
+      <h2 class="h-display" data-reveal style="font-size:40px">Tags &amp; badges</h2>
+      <p class="lead" data-reveal style="--index:1;margin-top:14px">Pill-shaped, uppercase, wide tracking, muted pastel fills. Categories carry meaning; platforms carry origin; status carries lifecycle.</p>
+
+      <div class="demo-card" data-reveal style="--index:2">
+        <p class="cap">Category tags</p>
+        <div class="btn-row" style="gap:10px">
+          <span class="tag tag-question"><span class="dot"></span>Question</span>
+          <span class="tag tag-complaint"><span class="dot"></span>Complaint</span>
+          <span class="tag tag-praise"><span class="dot"></span>Praise</span>
+          <span class="tag tag-bug"><span class="dot"></span>Bug</span>
+          <span class="tag tag-feature"><span class="dot"></span>Feature Request</span>
+          <span class="tag tag-competitor"><span class="dot"></span>Competitor</span>
+          <span class="tag tag-other"><span class="dot"></span>Other</span>
+        </div>
+      </div>
+      <div class="demo-card" data-reveal style="--index:3">
+        <p class="cap">Platforms &amp; status</p>
+        <div class="btn-row" style="gap:24px">
+          <span class="platform"><span class="glyph glyph-x">X</span>X</span>
+          <span class="platform"><span class="glyph glyph-reddit">R</span>Reddit</span>
+          <span class="platform"><span class="glyph glyph-hn">Y</span>Hacker News</span>
+          <span style="display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-2)"><span class="status-dot status-live"></span>Tracking</span>
+          <span style="display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-2)"><span class="status-dot status-paused"></span>Paused</span>
+          <span class="tag tag-signal">Most popular</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Cards / bento ===== -->
+    <section class="section" id="cards">
+      <p class="eyebrow" data-reveal>Components</p>
+      <h2 class="h-display" data-reveal style="font-size:40px">Cards &amp; bento</h2>
+      <p class="lead" data-reveal style="--index:1;margin-top:14px">Asymmetrical grids, one hairline border, 8px corners, generous internal padding. Depth arrives only on hover, as a whisper of shadow.</p>
+
+      <div class="bento" data-reveal style="--index:2">
+        <div class="card hoverable span-2">
+          <p class="cap" style="margin:0 0 12px">Feature</p>
+          <h3 class="spec-serif-h" style="font-size:26px">Intent-first queue</h3>
+          <p style="color:var(--ink-2);margin:10px 0 0;font-size:14px">Questions, complaints, praise, bugs, and requests arrive in one calm queue instead of a raw feed. Sort by intent so the work that matters surfaces first.</p>
+        </div>
+        <div class="card hoverable">
+          <p class="cap" style="margin:0 0 12px">Sources</p>
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <span class="platform"><span class="glyph glyph-x">X</span>X</span>
+            <span class="platform"><span class="glyph glyph-reddit">R</span>Reddit</span>
+            <span class="platform"><span class="glyph glyph-hn">Y</span>Hacker News</span>
+          </div>
+        </div>
+        <div class="card hoverable">
+          <p class="cap" style="margin:0 0 8px">Daily digest</p>
+          <div class="spec-serif-h" style="font-size:30px">09:00</div>
+          <p class="hint" style="margin:6px 0 0">UTC, in your timezone</p>
+        </div>
+        <div class="card hoverable span-2">
+          <p class="cap" style="margin:0 0 12px">Custom categories</p>
+          <h3 class="spec-serif-h" style="font-size:22px">Shape the catalog to your business</h3>
+          <p style="color:var(--ink-2);margin:10px 0 14px;font-size:14px">Beyond the seven defaults, add categories for the conversations only you care about &mdash; “onboarding friction”, “pricing objection”, “integration request”.</p>
+          <div class="btn-row" style="gap:8px">
+            <span class="tag tag-neutral">Onboarding friction</span>
+            <span class="tag tag-neutral">Pricing objection</span>
+            <span class="tag tag-neutral">Integration request</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Inputs ===== -->
+    <section class="section" id="inputs">
+      <p class="eyebrow" data-reveal>Components</p>
+      <h2 class="h-display" data-reveal style="font-size:40px">Inputs &amp; keys</h2>
+
+      <div class="bento" data-reveal style="--index:1;grid-template-columns:1fr 1fr">
+        <div class="card">
+          <div class="field" style="margin-bottom:18px">
+            <label>Keyword</label>
+            <input class="input" value="Bramble" />
+            <span class="hint">Add a brand, product, competitor, or problem phrase.</span>
+          </div>
+          <div class="field" style="margin-bottom:18px">
+            <label>Platforms</label>
+            <div class="btn-row" style="gap:10px">
+              <span class="platform"><span class="glyph glyph-x">X</span>X</span>
+              <span class="platform"><span class="glyph glyph-reddit">R</span>Reddit</span>
+              <span class="platform"><span class="glyph glyph-hn">Y</span>Hacker News</span>
+            </div>
+            <span class="hint">Pick one or more sources to track.</span>
+          </div>
+        </div>
+        <div class="card">
+          <div class="field" style="margin-bottom:18px">
+            <label>Custom category</label>
+            <input class="input" placeholder="e.g. Onboarding friction" />
+          </div>
+          <div class="field" style="margin-bottom:18px">
+            <label>Digest time</label>
+            <div class="btn-row" style="gap:12px;align-items:center">
+              <select class="select" style="width:auto"><option>09:00</option><option>13:00</option><option>17:00</option></select>
+              <span class="hint">in Europe/London</span>
+            </div>
+          </div>
+          <div class="set-row" style="border:0;padding:8px 0 0">
+            <div class="lbl">Enabled<small>Send me a daily summary</small></div>
+            <div class="switch" aria-checked="true" role="switch" tabindex="0" data-switch></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Mention unit ===== -->
+    <section class="section" id="mention">
+      <p class="eyebrow" data-reveal>Components</p>
+      <h2 class="h-display" data-reveal style="font-size:40px">The mention unit</h2>
+      <p class="lead" data-reveal style="--index:1;margin-top:14px">The atom of the product. Platform and author, the original post in full, a category, engagement, and two actions: reply and save. Nothing else competes.</p>
+
+      <div class="feed" data-reveal style="--index:2;margin-top:32px;max-width:720px">
+        <article class="mention">
+          <div class="mention-head">
+            <span class="platform"><span class="glyph glyph-reddit">R</span>r/SaaS</span>
+            <span class="mention-author">u/indie_builds</span>
+            <span class="tag tag-question"><span class="dot"></span>Question</span>
+            <span class="mention-time">2h ago</span>
+          </div>
+          <p class="mention-body">Anyone using Bramble for customer monitoring? Trying to figure out if it catches Reddit comments or just posts, and whether the digest respects my timezone. Considering it against just running Google Alerts.</p>
+          <div class="mention-foot">
+            <span class="mention-stat"><svg><use href="#i-heart"/></svg>142</span>
+            <span class="mention-stat"><svg><use href="#i-msg"/></svg>38</span>
+            <span class="eng-bar"><span class="track"><span class="fill" style="width:68%"></span></span><span class="mention-stat" style="margin:0">eng 0.68</span></span>
+            <span class="mention-actions">
+              <button class="btn btn-secondary btn-sm"><svg width="13" height="13"><use href="#i-reply"/></svg>Reply</button>
+              <button class="btn btn-ghost btn-sm"><svg width="13" height="13"><use href="#i-bookmark"/></svg>Save</button>
+            </span>
+          </div>
+        </article>
+
+        <article class="mention">
+          <div class="mention-head">
+            <span class="platform"><span class="glyph glyph-x">X</span>@devops_dan</span>
+            <span class="tag tag-bug"><span class="dot"></span>Bug</span>
+            <span class="mention-time">5h ago</span>
+          </div>
+          <p class="mention-body">Bramble dashboard has been showing zero new mentions since the billing cycle rolled over, even though tracking sources say “active”. Usage counter is stuck at 0/2000. Anyone else?</p>
+          <div class="mention-foot">
+            <span class="mention-stat"><svg><use href="#i-heart"/></svg>27</span>
+            <span class="mention-stat"><svg><use href="#i-msg"/></svg>11</span>
+            <span class="eng-bar"><span class="track"><span class="fill" style="width:31%"></span></span><span class="mention-stat" style="margin:0">eng 0.31</span></span>
+            <span class="mention-actions">
+              <button class="btn btn-secondary btn-sm"><svg width="13" height="13"><use href="#i-reply"/></svg>Reply</button>
+              <button class="btn btn-ghost btn-sm"><svg width="13" height="13"><use href="#i-bookmark"/></svg>Save</button>
+            </span>
+          </div>
+        </article>
+
+        <article class="mention">
+          <div class="mention-head">
+            <span class="platform"><span class="glyph glyph-hn">Y</span>Hacker News</span>
+            <span class="mention-author">todd的一半</span>
+            <span class="tag tag-praise"><span class="dot"></span>Praise</span>
+            <span class="mention-time">yesterday</span>
+          </div>
+          <p class="mention-body">Genuinely impressed by how Bramble organizes mentions by intent rather than dumping a feed. Caught a complaint on Reddit two hours after it was posted and replied before it spread. That alone is worth it.</p>
+          <div class="mention-foot">
+            <span class="mention-stat"><svg><use href="#i-heart"/></svg>318</span>
+            <span class="mention-stat"><svg><use href="#i-msg"/></svg>64</span>
+            <span class="eng-bar"><span class="track"><span class="fill" style="width:84%"></span></span><span class="mention-stat" style="margin:0">eng 0.84</span></span>
+            <span class="mention-actions">
+              <button class="btn btn-secondary btn-sm"><svg width="13" height="13"><use href="#i-reply"/></svg>Reply</button>
+              <button class="btn btn-ghost btn-sm"><svg width="13" height="13"><use href="#i-bookmark"/></svg>Save</button>
+            </span>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- ===== Keywords ===== -->
+    <section class="section" id="keywords">
+      <p class="eyebrow" data-reveal>Components</p>
+      <h2 class="h-display" data-reveal style="font-size:40px">Keyword rows</h2>
+      <p class="lead" data-reveal style="--index:1;margin-top:14px">The term set in editorial serif; sources as compact platform chips; lifecycle as a quiet dot and a count in mono. Separated by hairlines, never boxed.</p>
+
+      <div class="card" data-reveal style="--index:2;margin-top:32px">
+        <div class="kw-row">
+          <div>
+            <div class="kw-term">Bramble</div>
+            <div class="hint" style="margin-top:4px">Brand &middot; created Jul 14</div>
+          </div>
+          <div class="kw-plats">
+            <span class="platform"><span class="glyph glyph-x">X</span></span>
+            <span class="platform"><span class="glyph glyph-reddit">R</span></span>
+            <span class="platform"><span class="glyph glyph-hn">Y</span></span>
+          </div>
+          <span class="kw-meta"><span class="status-dot status-live" style="margin-right:8px"></span>1,284 mentions</span>
+        </div>
+        <div class="kw-row">
+          <div>
+            <div class="kw-term">Fern</div>
+            <div class="hint" style="margin-top:4px">Competitor &middot; created Jul 14</div>
+          </div>
+          <div class="kw-plats">
+            <span class="platform"><span class="glyph glyph-x">X</span></span>
+            <span class="platform"><span class="glyph glyph-reddit">R</span></span>
+          </div>
+          <span class="kw-meta"><span class="status-dot status-live" style="margin-right:8px"></span>512 mentions</span>
+        </div>
+        <div class="kw-row">
+          <div>
+            <div class="kw-term">“cron not firing”</div>
+            <div class="hint" style="margin-top:4px">Problem phrase &middot; created Aug 02</div>
+          </div>
+          <div class="kw-plats">
+            <span class="platform"><span class="glyph glyph-hn">Y</span></span>
+          </div>
+          <span class="kw-meta"><span class="status-dot status-paused" style="margin-right:8px"></span>Paused &middot; 47 mentions</span>
+        </div>
+        <div class="kw-row">
+          <div>
+            <div class="kw-term">Thicket</div>
+            <div class="hint" style="margin-top:4px">Competitor &middot; created Aug 02</div>
+          </div>
+          <div class="kw-plats">
+            <span class="platform"><span class="glyph glyph-reddit">R</span></span>
+            <span class="platform"><span class="glyph glyph-hn">Y</span></span>
+          </div>
+          <span class="kw-meta"><span class="status-dot status-live" style="margin-right:8px"></span>203 mentions</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Accordion ===== -->
+    <section class="section" id="accordion">
+      <p class="eyebrow" data-reveal>Components</p>
+      <h2 class="h-display" data-reveal style="font-size:40px">Accordion</h2>
+      <p class="lead" data-reveal style="--index:1;margin-top:14px">No boxes. A hairline between items, a serif question, and a sharp <span class="mono">+</span> that rotates to close. The editorial way to answer questions.</p>
+
+      <div class="acc" data-reveal style="--index:2;margin-top:32px;max-width:760px">
+        <div class="acc-item open">
+          <button class="acc-trigger">Which conversations can Astreex monitor?<span class="acc-icon">+</span></button>
+          <div class="acc-panel"><div class="acc-panel-inner">Astreex monitors configured keywords across X, Reddit, and Hacker News. Coverage and collection cadence depend on the source and your plan limits.</div></div>
+        </div>
+        <div class="acc-item">
+          <button class="acc-trigger">How does categorization work?<span class="acc-icon">+</span></button>
+          <div class="acc-panel"><div class="acc-panel-inner">Astreex categorizes collected mentions with AI into questions, complaints, praise, bugs, feature requests, competitor mentions, and your custom categories. The original post always stays visible.</div></div>
+        </div>
+        <div class="acc-item">
+          <button class="acc-trigger">What do plans change?<span class="acc-icon">+</span></button>
+          <div class="acc-panel"><div class="acc-panel-inner">Every plan includes the full product. Plans differ by monitored keywords and monthly mention volume.</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Marketing hero ===== -->
+    <section class="section" id="hero" style="padding:0">
+      <div class="hero">
+        <div class="hero-blob" aria-hidden="true"></div>
+        <div class="hero-inner">
+          <div data-reveal>
+            <p class="eyebrow">Customer conversations, made actionable</p>
+            <h1>Hear what the market is telling you.</h1>
+            <p class="sub">Astreex finds the conversations around your keywords across X, Reddit, and Hacker News, organizes them by intent, and keeps the original context close enough to act with confidence.</p>
+            <div class="hero-cta">
+              <button class="btn btn-primary btn-lg">Start monitoring <svg width="15" height="15"><use href="#i-arrow"/></svg></button>
+              <button class="btn btn-ghost btn-lg">See how it works</button>
+            </div>
+            <p class="hero-note">Plans start at $19 / month. Cancel any time.</p>
+          </div>
+          <div data-reveal style="--index:1">
+            <div class="window">
+              <div class="window-bar">
+                <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+                <span class="addr">astreex.com / app / mentions</span>
+              </div>
+              <div class="window-body">
+                <div class="filter-pills" style="margin-bottom:14px">
+                  <span class="tag tag-question"><span class="dot"></span>Question</span>
+                  <span class="tag tag-bug"><span class="dot"></span>Bug</span>
+                  <span class="tag tag-praise"><span class="dot"></span>Praise</span>
+                </div>
+                <article class="mention" style="padding:16px">
+                  <div class="mention-head"><span class="platform"><span class="glyph glyph-reddit">R</span>r/SaaS</span><span class="tag tag-question"><span class="dot"></span>Question</span><span class="mention-time">2h</span></div>
+                  <p class="mention-body" style="font-size:13.5px">Anyone using Bramble for customer monitoring? Trying to figure out if it catches Reddit comments or just posts…</p>
+                </article>
+                <article class="mention" style="padding:16px;margin-top:10px">
+                  <div class="mention-head"><span class="platform"><span class="glyph glyph-hn">Y</span>Hacker News</span><span class="tag tag-praise"><span class="dot"></span>Praise</span><span class="mention-time">1d</span></div>
+                  <p class="mention-body" style="font-size:13.5px">Caught a complaint on Reddit two hours after it was posted and replied before it spread. That alone is worth it.</p>
+                </article>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Dashboard ===== -->
+    <section class="section" id="dashboard">
+      <p class="eyebrow" data-reveal>Surface</p>
+      <h2 class="h-display" data-reveal style="font-size:40px">Dashboard</h2>
+      <p class="lead" data-reveal style="--index:1;margin-top:14px">One workspace, one owner. Saved views on the left, intent filters across the top, the mention queue in the middle. The serif term in the nav is the only ornament.</p>
+
+      <div class="app-shell" data-reveal style="--index:2;margin-top:32px">
+        <aside class="app-side">
+          <div class="ws">Bramble</div>
+          <div class="nav-section">
+            <p class="nl">Views</p>
+            <div class="nav-item active"><svg class="nav-icon"><use href="#i-mention"/></svg>All Mentions<span class="count">2,046</span></div>
+            <div class="nav-item"><svg class="nav-icon"><use href="#i-reply"/></svg>Needs reply<span class="count">23</span></div>
+            <div class="nav-item"><svg class="nav-icon"><use href="#i-heart"/></svg>High engagement<span class="count">88</span></div>
+            <div class="nav-item"><svg class="nav-icon"><use href="#i-key"/></svg>Competitor watch<span class="count">715</span></div>
+          </div>
+          <div class="nav-section">
+            <p class="nl">Configure</p>
+            <div class="nav-item"><svg class="nav-icon"><use href="#i-key"/></svg>Keywords<span class="count">4</span></div>
+            <div class="nav-item"><svg class="nav-icon"><use href="#i-digest"/></svg>Digest</div>
+            <div class="nav-item"><svg class="nav-icon"><use href="#i-dashboard"/></svg>Categories</div>
+          </div>
+          <div class="nav-section">
+            <p class="nl">Account</p>
+            <div class="nav-item"><svg class="nav-icon"><use href="#i-bell"/></svg>Billing</div>
+          </div>
+        </aside>
+        <div class="app-main">
+          <div class="app-topbar">
+            <h2>Mentions</h2>
+            <div class="search"><svg><use href="#i-search"/></svg><input placeholder="Search mentions…"><kbd style="margin-left:auto">⌘K</kbd></div>
+            <button class="btn btn-secondary btn-sm">Today ▾</button>
+          </div>
+
+          <div class="stat-row">
+            <div class="stat"><div class="label">Mentions today</div><div class="val">87</div><div class="delta up">+14 vs yesterday</div></div>
+            <div class="stat"><div class="label">Needs reply</div><div class="val">23</div><div class="delta">8 questions · 12 complaints</div></div>
+            <div class="stat"><div class="label">Usage</div><div class="val">2,046</div><div class="delta">of 20,000 / Growth</div></div>
+            <div class="stat"><div class="label">Keywords</div><div class="val">4</div><div class="delta">of 6 / Growth</div></div>
+          </div>
+
+          <div class="filter-pills">
+            <span class="tag tag-neutral">All</span>
+            <span class="tag tag-question"><span class="dot"></span>Question</span>
+            <span class="tag tag-complaint"><span class="dot"></span>Complaint</span>
+            <span class="tag tag-bug"><span class="dot"></span>Bug</span>
+            <span class="tag tag-praise"><span class="dot"></span>Praise</span>
+            <span class="tag tag-feature"><span class="dot"></span>Feature Request</span>
+            <span class="tag tag-competitor"><span class="dot"></span>Competitor</span>
+          </div>
+
+          <div class="feed">
+            <article class="mention">
+              <div class="mention-head">
+                <span class="platform"><span class="glyph glyph-reddit">R</span>r/SaaS</span>
+                <span class="mention-author">u/indie_builds</span>
+                <span class="tag tag-question"><span class="dot"></span>Question</span>
+                <span class="mention-time">2h ago</span>
+              </div>
+              <p class="mention-body">Anyone using Bramble for customer monitoring? Trying to figure out if it catches Reddit comments or just posts, and whether the digest respects my timezone.</p>
+              <div class="mention-foot">
+                <span class="mention-stat"><svg><use href="#i-heart"/></svg>142</span>
+                <span class="mention-stat"><svg><use href="#i-msg"/></svg>38</span>
+                <span class="eng-bar"><span class="track"><span class="fill" style="width:68%"></span></span><span class="mention-stat" style="margin:0">eng 0.68</span></span>
+                <span class="mention-actions">
+                  <button class="btn btn-secondary btn-sm"><svg width="13" height="13"><use href="#i-reply"/></svg>Reply</button>
+                  <button class="btn btn-ghost btn-sm"><svg width="13" height="13"><use href="#i-bookmark"/></svg>Save</button>
+                </span>
+              </div>
+            </article>
+            <article class="mention">
+              <div class="mention-head">
+                <span class="platform"><span class="glyph glyph-x">X</span>@devops_dan</span>
+                <span class="tag tag-complaint"><span class="dot"></span>Complaint</span>
+                <span class="mention-time">4h ago</span>
+              </div>
+              <p class="mention-body">Bramble charged me for Growth but my dashboard still shows Starter limits. No response from support in two days. About to dispute the charge.</p>
+              <div class="mention-foot">
+                <span class="mention-stat"><svg><use href="#i-heart"/></svg>61</span>
+                <span class="mention-stat"><svg><use href="#i-msg"/></svg>22</span>
+                <span class="eng-bar"><span class="track"><span class="fill" style="width:52%"></span></span><span class="mention-stat" style="margin:0">eng 0.52</span></span>
+                <span class="mention-actions">
+                  <button class="btn btn-secondary btn-sm"><svg width="13" height="13"><use href="#i-reply"/></svg>Reply</button>
+                  <button class="btn btn-ghost btn-sm"><svg width="13" height="13"><use href="#i-bookmark"/></svg>Save</button>
+                </span>
+              </div>
+            </article>
+            <article class="mention">
+              <div class="mention-head">
+                <span class="platform"><span class="glyph glyph-hn">Y</span>Hacker News</span>
+                <span class="mention-author">patio_fan</span>
+                <span class="tag tag-feature"><span class="dot"></span>Feature Request</span>
+                <span class="mention-time">7h ago</span>
+              </div>
+              <p class="mention-body">Bramble is close to perfect for us. The one thing keeping us on a spreadsheet alongside it: exporting mentions by category to CSV for our weekly review. Any chance that’s on the roadmap?</p>
+              <div class="mention-foot">
+                <span class="mention-stat"><svg><use href="#i-heart"/></svg>96</span>
+                <span class="mention-stat"><svg><use href="#i-msg"/></svg>19</span>
+                <span class="eng-bar"><span class="track"><span class="fill" style="width:47%"></span></span><span class="mention-stat" style="margin:0">eng 0.47</span></span>
+                <span class="mention-actions">
+                  <button class="btn btn-secondary btn-sm"><svg width="13" height="13"><use href="#i-reply"/></svg>Reply</button>
+                  <button class="btn btn-ghost btn-sm"><svg width="13" height="13"><use href="#i-bookmark"/></svg>Save</button>
+                </span>
+              </div>
+            </article>
+            <article class="mention">
+              <div class="mention-head">
+                <span class="platform"><span class="glyph glyph-reddit">R</span>r/Entrepreneur</span>
+                <span class="mention-author">u/founder_notes</span>
+                <span class="tag tag-competitor"><span class="dot"></span>Competitor</span>
+                <span class="mention-time">11h ago</span>
+              </div>
+              <p class="mention-body">Switched from Fern to Thicket last month. Thicket’s keyword limits are tighter but the categorization feels less noisy. Anyone compared both for monitoring brand mentions on X?</p>
+              <div class="mention-foot">
+                <span class="mention-stat"><svg><use href="#i-heart"/></svg>54</span>
+                <span class="mention-stat"><svg><use href="#i-msg"/></svg>15</span>
+                <span class="eng-bar"><span class="track"><span class="fill" style="width:39%"></span></span><span class="mention-stat" style="margin:0">eng 0.39</span></span>
+                <span class="mention-actions">
+                  <button class="btn btn-secondary btn-sm"><svg width="13" height="13"><use href="#i-reply"/></svg>Reply</button>
+                  <button class="btn btn-ghost btn-sm"><svg width="13" height="13"><use href="#i-bookmark"/></svg>Save</button>
+                </span>
+              </div>
+            </article>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Pricing ===== -->
+    <section class="section" id="pricing">
+      <p class="eyebrow" data-reveal>Surface</p>
+      <h2 class="h-display" data-reveal style="font-size:40px">Pricing</h2>
+      <p class="lead" data-reveal style="--index:1;margin-top:14px">Every plan includes the full product. Plans differ only by monitored keywords and monthly mention volume. The middle plan carries the only accent of weight.</p>
+
+      <div class="price-grid" data-reveal style="--index:2">
+        <div class="price-card">
+          <span class="plan">Starter</span>
+          <div class="price">$19<span class="per"> / month</span></div>
+          <p class="desc">For a single brand finding its first conversations.</p>
+          <ul>
+            <li><svg><use href="#i-check"/></svg>3 monitored keywords</li>
+            <li><svg><use href="#i-check"/></svg>2,000 mentions / month</li>
+            <li><svg><use href="#i-check"/></svg>X, Reddit, Hacker News</li>
+            <li><svg><use href="#i-check"/></svg>All categories &amp; custom</li>
+            <li><svg><use href="#i-check"/></svg>Daily digest</li>
+          </ul>
+          <button class="btn btn-secondary">Start with Starter</button>
+        </div>
+        <div class="price-card featured">
+          <span class="tag tag-signal tag-pop">Most popular</span>
+          <span class="plan">Growth</span>
+          <div class="price">$99<span class="per"> / month</span></div>
+          <p class="desc">For teams tracking their brand and a few competitors.</p>
+          <ul>
+            <li><svg><use href="#i-check"/></svg>6 monitored keywords</li>
+            <li><svg><use href="#i-check"/></svg>20,000 mentions / month</li>
+            <li><svg><use href="#i-check"/></svg>X, Reddit, Hacker News</li>
+            <li><svg><use href="#i-check"/></svg>All categories &amp; custom</li>
+            <li><svg><use href="#i-check"/></svg>Daily digest &amp; saved views</li>
+          </ul>
+          <button class="btn btn-primary">Start with Growth</button>
+        </div>
+        <div class="price-card">
+          <span class="plan">Scale</span>
+          <div class="price">$199<span class="per"> / month</span></div>
+          <p class="desc">For monitoring a brand, competitors, and problem phrases.</p>
+          <ul>
+            <li><svg><use href="#i-check"/></svg>10 monitored keywords</li>
+            <li><svg><use href="#i-check"/></svg>50,000 mentions / month</li>
+            <li><svg><use href="#i-check"/></svg>X, Reddit, Hacker News</li>
+            <li><svg><use href="#i-check"/></svg>All categories &amp; custom</li>
+            <li><svg><use href="#i-check"/></svg>Priority digest windows</li>
+          </ul>
+          <button class="btn btn-secondary">Start with Scale</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Digest & email ===== -->
+    <section class="section" id="digest">
+      <p class="eyebrow" data-reveal>Surface</p>
+      <h2 class="h-display" data-reveal style="font-size:40px">Digest &amp; email</h2>
+      <p class="lead" data-reveal style="--index:1;margin-top:14px">Settings on the left, the rendered daily summary on the right. The email inherits the system: serif subject, mono meta, hairline-separated mentions.</p>
+
+      <div class="digest-card" data-reveal style="--index:2;margin-top:32px">
+        <div class="digest-cell">
+          <h3 class="spec-sans-h" style="margin:0 0 18px">Daily digest</h3>
+          <div class="set-row">
+            <div class="lbl">Enabled<small>Send a daily summary</small></div>
+            <div class="switch" aria-checked="true" role="switch" tabindex="0" data-switch></div>
+          </div>
+          <div class="set-row">
+            <div class="lbl">Time<small>In your local timezone</small></div>
+            <span class="val mono" style="font-size:14px">09:00</span>
+          </div>
+          <div class="set-row">
+            <div class="lbl">Timezone<small>Detected from browser</small></div>
+            <span class="val mono" style="font-size:13px">Europe/London</span>
+          </div>
+          <div class="set-row">
+            <div class="lbl">Mention limit<small>Top mentions by engagement</small></div>
+            <span class="val mono" style="font-size:14px">25</span>
+          </div>
+        </div>
+        <div class="digest-cell" style="padding:0;background:var(--canvas)">
+          <div class="email" style="border:0;border-radius:0">
+            <div class="email-head">
+              <div class="subj">Your Astreex digest — 87 mentions today</div>
+              <div class="meta">09:00 GMT &middot; Aug 05 &middot; Bramble</div>
+            </div>
+            <div class="email-body">
+              <p>Here are the conversations worth your attention from the last 24 hours, organized by intent.</p>
+              <div class="email-item">
+                <span class="tag tag-question" style="flex-shrink:0;align-self:flex-start;margin-top:2px">Q</span>
+                <div><div style="font-size:13px;font-weight:500;margin-bottom:3px">u/indie_builds · r/SaaS</div><div class="body">Anyone using Bramble for customer monitoring? Trying to figure out if it catches Reddit comments or just posts…</div></div>
+              </div>
+              <div class="email-item">
+                <span class="tag tag-complaint" style="flex-shrink:0;align-self:flex-start;margin-top:2px">C</span>
+                <div><div style="font-size:13px;font-weight:500;margin-bottom:3px">@devops_dan · X</div><div class="body">Charged for Growth but dashboard still shows Starter limits. No response from support in two days.</div></div>
+              </div>
+              <div class="email-item">
+                <span class="tag tag-feature" style="flex-shrink:0;align-self:flex-start;margin-top:2px">F</span>
+                <div><div style="font-size:13px;font-weight:500;margin-bottom:3px">patio_fan · Hacker News</div><div class="body">The one thing keeping us on a spreadsheet: exporting mentions by category to CSV for our weekly review.</div></div>
+              </div>
+              <div style="margin-top:18px"><button class="btn btn-primary btn-sm">Open all mentions <svg width="13" height="13"><use href="#i-arrow"/></svg></button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Footer ===== -->
+    <footer class="foot">
+      <div class="mark-line">
+        <span class="ax" style="font-size:22px;color:var(--ink)"><svg><use href="#ax-mark"/></svg></span>
+        <span class="word" style="font-family:var(--serif);font-size:18px;font-weight:500;letter-spacing:-0.02em">Astreex</span>
+      </div>
+      <small>Design system v1.0 &middot; warm monochrome, editorial, signal-first</small>
+      <small style="margin-left:auto">Built as DESIGN.html</small>
+    </footer>
+
+  </main>
+</div>
+
+<script>
+  // Scroll-entry reveals via IntersectionObserver
+  const reveals = document.querySelectorAll('[data-reveal]');
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+  }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+  reveals.forEach((el) => io.observe(el));
+
+  // Accordion
+  document.querySelectorAll('.acc-trigger').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const item = btn.closest('.acc-item');
+      const panel = item.querySelector('.acc-panel');
+      const open = item.classList.toggle('open');
+      panel.style.maxHeight = open ? panel.querySelector('.acc-panel-inner').offsetHeight + 48 + 'px' : '0px';
+    });
+  });
+  // init open panel heights
+  document.querySelectorAll('.acc-item.open .acc-panel').forEach((p) => {
+    p.style.maxHeight = p.querySelector('.acc-panel-inner').offsetHeight + 48 + 'px';
+  });
+
+  // Switches
+  document.querySelectorAll('[data-switch]').forEach((s) => {
+    s.addEventListener('click', () => { const on = s.getAttribute('aria-checked') === 'true'; s.setAttribute('aria-checked', String(!on)); });
+    s.addEventListener('keydown', (e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); s.click(); } });
+  });
+
+  // TOC active link tracking
+  const links = Array.from(document.querySelectorAll('.toc nav a'));
+  const map = new Map(links.map((a) => [a.getAttribute('href').slice(1), a]));
+  const targets = [...map.keys()].map((id) => document.getElementById(id)).filter(Boolean);
+  const tocIO = new IntersectionObserver((entries) => {
+    entries.forEach((e) => {
+      if (e.isIntersecting) {
+        links.forEach((l) => l.classList.remove('active'));
+        const a = map.get(e.target.id);
+        if (a) a.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-30% 0px -60% 0px' });
+  targets.forEach((t) => tocIO.observe(t));
+</script>
+</body>
+</html>
