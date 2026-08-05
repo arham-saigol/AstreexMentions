@@ -165,8 +165,10 @@ export default async function DeletionsPage({
         <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {stats.map((stat) => (
             <div key={stat.label} className="admin-panel min-w-0 p-4">
-              <dt className="text-muted-foreground text-sm">{stat.label}</dt>
-              <dd className="mt-2 text-2xl font-semibold tracking-tight">
+              <dt className="text-muted-foreground font-mono text-[11px] tracking-[0.1em] uppercase">
+                {stat.label}
+              </dt>
+              <dd className="font-display mt-2 text-3xl font-medium tracking-[-0.02em]">
                 {stat.value}
               </dd>
               <p className="text-muted-foreground mt-1 text-xs">
@@ -195,7 +197,7 @@ export default async function DeletionsPage({
             id="deletion-status"
             name="status"
             defaultValue={status ?? ""}
-            className="border-input bg-background focus-visible:ring-ring h-9 min-w-48 rounded-md border px-3 text-sm shadow-xs outline-none focus-visible:ring-2"
+            className="border-input bg-background focus-visible:border-foreground h-10 min-w-48 rounded-md border px-3 text-sm outline-none focus-visible:shadow-[0_0_0_3px_rgba(27,26,24,0.06)]"
           >
             <option value="">All statuses</option>
             {deletionJobStatuses.map((value) => (

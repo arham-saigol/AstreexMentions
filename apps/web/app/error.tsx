@@ -20,10 +20,8 @@ export default function ErrorPage({
   return (
     <main className="mx-auto grid min-h-[70dvh] w-full max-w-2xl place-items-center px-6 py-16">
       <div className="w-full">
-        <p className="text-primary text-sm font-semibold tracking-wide uppercase">
-          Astreex
-        </p>
-        <h1 className="text-foreground mt-3 text-3xl font-semibold tracking-tight">
+        <p className="editorial-eyebrow">Astreex</p>
+        <h1 className="font-display text-foreground mt-3 text-4xl font-medium tracking-[-0.03em]">
           This page could not be loaded.
         </h1>
         <p className="text-muted-foreground mt-3 text-sm leading-6 sm:text-base">

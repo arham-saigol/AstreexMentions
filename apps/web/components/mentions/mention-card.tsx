@@ -26,14 +26,24 @@ const timestampFormatter = new Intl.DateTimeFormat("en", {
 
 function platformDetails(platform: MentionItem["platform"]) {
   if (platform === "x") {
-    return { label: "X", Icon: XLogoIcon }
+    return {
+      label: "X",
+      Icon: XLogoIcon,
+      glyph: "bg-foreground text-white",
+    }
   }
-
   if (platform === "reddit") {
-    return { label: "Reddit", Icon: RedditLogoIcon }
+    return {
+      label: "Reddit",
+      Icon: RedditLogoIcon,
+      glyph: "bg-other text-other-foreground",
+    }
   }
-
-  return { label: "Hacker News", Icon: NewspaperClippingIcon }
+  return {
+    label: "Hacker News",
+    Icon: NewspaperClippingIcon,
+    glyph: "bg-bug text-bug-foreground",
+  }
 }
 
 function categoryVariant(category: MentionItem["category"]) {
@@ -45,13 +55,32 @@ function categoryVariant(category: MentionItem["category"]) {
   if (key.includes("bug")) return "bug" as const
   if (key.includes("feature")) return "feature" as const
   if (key.includes("competitor")) return "competitor" as const
-  return "other" as const
+
+  switch (category?.colorToken) {
+    case "blue":
+    case "cyan":
+      return "question" as const
+    case "red":
+    case "pink":
+      return "complaint" as const
+    case "green":
+      return "praise" as const
+    case "orange":
+      return "bug" as const
+    case "yellow":
+      return "feature" as const
+    case "purple":
+      return "competitor" as const
+    default:
+      return "other" as const
+  }
 }
 
 function StatusBadge({ status }: { status: MentionStatus }) {
   if (status === "new") return null
-  const label = status === "saved" ? "Saved" : "Dismissed"
-  return <Badge variant="muted">{label}</Badge>
+  return (
+    <Badge variant="muted">{status === "saved" ? "Saved" : "Dismissed"}</Badge>
+  )
 }
 
 function Metric({
@@ -63,13 +92,10 @@ function Metric({
   label: string
   value: number | undefined
 }) {
-  if (value === undefined) {
-    return null
-  }
-
+  if (value === undefined) return null
   return (
-    <span className="text-muted-foreground inline-flex items-center gap-1.5 text-xs">
-      <Icon aria-hidden="true" className="size-3.5" />
+    <span className="text-muted-foreground inline-flex items-center gap-1.5 font-mono text-xs">
+      <Icon aria-hidden="true" className="size-3.5 opacity-70" />
       <span>{numberFormatter.format(value)}</span>
       <span className="sr-only">{label}</span>
     </span>
@@ -85,27 +111,13 @@ function MentionMetrics({ mention }: { mention: MentionItem }) {
       </>
     )
   }
-
-  if (mention.platform === "reddit") {
-    return (
-      <>
-        <Metric
-          icon={ArrowFatUpIcon}
-          label="upvotes"
-          value={mention.pointCount}
-        />
-        <Metric
-          icon={ChatCircleIcon}
-          label="comments"
-          value={mention.commentCount}
-        />
-      </>
-    )
-  }
-
   return (
     <>
-      <Metric icon={ArrowFatUpIcon} label="points" value={mention.pointCount} />
+      <Metric
+        icon={ArrowFatUpIcon}
+        label={mention.platform === "reddit" ? "upvotes" : "points"}
+        value={mention.pointCount}
+      />
       <Metric
         icon={ChatCircleIcon}
         label="comments"
@@ -126,9 +138,11 @@ export function MentionCard({
   onStatusChange: (mentionId: MentionItem["id"], status: MentionStatus) => void
   pending: boolean
 }) {
-  const { Icon: PlatformIcon, label: platformLabel } = platformDetails(
-    mention.platform,
-  )
+  const {
+    Icon: PlatformIcon,
+    label: platformLabel,
+    glyph,
+  } = platformDetails(mention.platform)
   const author =
     mention.authorDisplayName ?? mention.authorHandle ?? "Author unavailable"
   const handle = mention.authorHandle
@@ -136,139 +150,129 @@ export function MentionCard({
       ? mention.authorHandle
       : `@${mention.authorHandle}`
     : null
-  const timestamp = timestampFormatter.format(new Date(mention.publishedAt))
+  const publishedAt = new Date(mention.publishedAt)
+  const timestamp = timestampFormatter.format(publishedAt)
   const saveTarget = mention.status === "saved" ? "new" : "saved"
   const dismissTarget = mention.status === "dismissed" ? "new" : "dismissed"
 
   return (
-    <article className="group bg-card hover:bg-secondary px-4 py-5 transition-colors duration-[var(--motion-control)] sm:px-6 sm:py-6">
-      <div className="flex items-start gap-3 sm:gap-4">
-        <PlatformIcon
-          aria-hidden="true"
-          className="text-muted-foreground mt-0.5 size-4.5 shrink-0"
-        />
-
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <p className="text-foreground min-w-0 truncate text-sm font-semibold">
-              {author}
-            </p>
-            {handle && mention.authorDisplayName && (
-              <span className="text-muted-foreground truncate text-xs">
-                {handle}
-              </span>
-            )}
-            <span aria-hidden="true" className="text-muted-foreground text-xs">
-              ·
-            </span>
-            <span className="text-muted-foreground text-xs">
-              {platformLabel}
-            </span>
-            <span aria-hidden="true" className="text-muted-foreground text-xs">
-              ·
-            </span>
-            <time
-              dateTime={new Date(mention.publishedAt).toISOString()}
-              title={timestamp}
-              className="text-muted-foreground text-xs"
-            >
-              {timestamp}
-            </time>
-          </div>
-
-          {mention.title && (
-            <h2 className="text-foreground mt-3 max-w-4xl text-[15px] leading-6 font-semibold">
-              {mention.title}
-            </h2>
-          )}
-          <p
+    <article className="surface-hover bg-card rounded-lg border px-5 py-5 sm:px-[22px]">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <span className="inline-flex items-center gap-2 text-sm font-medium">
+          <span
             className={cn(
-              "text-foreground max-w-4xl text-sm leading-6",
-              mention.title ? "mt-1" : "mt-3",
+              "grid size-[18px] place-items-center rounded-sm",
+              glyph,
             )}
           >
-            {mention.body}
-          </p>
+            <PlatformIcon aria-hidden="true" className="size-3" weight="bold" />
+          </span>
+          {platformLabel}
+        </span>
+        <span className="text-sm font-medium">{author}</span>
+        {handle && mention.authorDisplayName && (
+          <span className="text-muted-foreground font-mono text-xs">
+            {handle}
+          </span>
+        )}
+        {mention.category && (
+          <Badge variant={categoryVariant(mention.category)}>
+            {mention.category.name}
+          </Badge>
+        )}
+        <StatusBadge status={mention.status} />
+        <time
+          dateTime={publishedAt.toISOString()}
+          title={timestamp}
+          className="ml-auto font-mono text-[11px] text-[var(--ink-faint)]"
+        >
+          {timestamp}
+        </time>
+      </div>
 
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            {mention.category && (
-              <Badge variant={categoryVariant(mention.category)}>
-                {mention.category.name}
-              </Badge>
-            )}
-            {mention.matchedKeywords.slice(0, 4).map((keyword, index) => (
-              <Badge
-                key={
-                  ("id" in keyword ? keyword.id : undefined) ??
-                  `${keyword.phrase}-${index}`
-                }
-                variant="outline"
-                className="max-w-48"
-              >
-                <span className="truncate">{keyword.phrase}</span>
-              </Badge>
-            ))}
-            {mention.matchedKeywords.length > 4 && (
-              <Badge variant="muted">
-                +{mention.matchedKeywords.length - 4}
-              </Badge>
-            )}
-            <StatusBadge status={mention.status} />
-          </div>
+      {mention.title && (
+        <h2 className="font-display mt-3 max-w-4xl text-lg leading-6 font-medium tracking-[-0.01em]">
+          {mention.title}
+        </h2>
+      )}
+      <p
+        className={cn(
+          "max-w-4xl text-[14.5px] leading-[1.62]",
+          mention.title ? "mt-1" : "mt-3",
+        )}
+      >
+        {mention.body}
+      </p>
 
-          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex min-h-8 flex-wrap items-center gap-4">
-              <MentionMetrics mention={mention} />
-            </div>
-
-            <div className="flex flex-wrap items-center gap-1 transition-opacity duration-[var(--motion-control)] md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100">
-              <Button
-                size="sm"
-                variant={mention.status === "saved" ? "secondary" : "ghost"}
-                aria-pressed={mention.status === "saved"}
-                disabled={pending}
-                onClick={() => onStatusChange(mention.id, saveTarget)}
-              >
-                <BookmarkSimpleIcon
-                  aria-hidden="true"
-                  weight={mention.status === "saved" ? "fill" : "regular"}
-                />
-                {mention.status === "saved" ? "Unsave" : "Save"}
-              </Button>
-              <Button
-                size="sm"
-                variant={mention.status === "dismissed" ? "secondary" : "ghost"}
-                aria-pressed={mention.status === "dismissed"}
-                disabled={pending}
-                onClick={() => onStatusChange(mention.id, dismissTarget)}
-              >
-                <XCircleIcon
-                  aria-hidden="true"
-                  weight={mention.status === "dismissed" ? "fill" : "regular"}
-                />
-                {mention.status === "dismissed" ? "Undo dismiss" : "Dismiss"}
-              </Button>
-              <Button asChild size="sm">
-                <a
-                  href={mention.canonicalUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  aria-label={`Open mention on ${platformLabel}`}
-                >
-                  Open
-                  <ArrowSquareOutIcon aria-hidden="true" />
-                </a>
-              </Button>
-            </div>
-          </div>
-
-          {actionError && (
-            <p className="text-destructive mt-2 text-xs" role="alert">
-              {actionError}
-            </p>
+      {mention.matchedKeywords.length > 0 && (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {mention.matchedKeywords.slice(0, 4).map((keyword, index) => (
+            <Badge
+              key={
+                ("id" in keyword ? keyword.id : undefined) ??
+                `${keyword.phrase}-${index}`
+              }
+              variant="outline"
+              className="max-w-48 normal-case"
+            >
+              <span className="truncate">{keyword.phrase}</span>
+            </Badge>
+          ))}
+          {mention.matchedKeywords.length > 4 && (
+            <Badge variant="muted">+{mention.matchedKeywords.length - 4}</Badge>
           )}
         </div>
+      )}
+
+      <div className="mt-4 flex flex-col gap-3 border-t pt-3 sm:flex-row sm:items-center">
+        <div className="flex min-h-8 flex-wrap items-center gap-4">
+          <MentionMetrics mention={mention} />
+        </div>
+        <div className="flex flex-wrap items-center gap-1 sm:ml-auto">
+          <Button
+            size="sm"
+            variant={mention.status === "saved" ? "secondary" : "ghost"}
+            aria-pressed={mention.status === "saved"}
+            disabled={pending}
+            onClick={() => onStatusChange(mention.id, saveTarget)}
+          >
+            <BookmarkSimpleIcon
+              aria-hidden="true"
+              weight={mention.status === "saved" ? "fill" : "regular"}
+            />
+            {mention.status === "saved" ? "Unsave" : "Save"}
+          </Button>
+          <Button
+            size="sm"
+            variant={mention.status === "dismissed" ? "secondary" : "ghost"}
+            aria-pressed={mention.status === "dismissed"}
+            disabled={pending}
+            onClick={() => onStatusChange(mention.id, dismissTarget)}
+          >
+            <XCircleIcon
+              aria-hidden="true"
+              weight={mention.status === "dismissed" ? "fill" : "regular"}
+            />
+            {mention.status === "dismissed" ? "Undo dismiss" : "Dismiss"}
+          </Button>
+          <Button asChild size="sm" variant="outline">
+            <a
+              href={mention.canonicalUrl}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={`Open mention on ${platformLabel}`}
+            >
+              Open <ArrowSquareOutIcon aria-hidden="true" />
+            </a>
+          </Button>
+        </div>
       </div>
+
+      {actionError && (
+        <p className="text-destructive mt-2 text-xs" role="alert">
+          {actionError}
+        </p>
+      )}
     </article>
   )
 }

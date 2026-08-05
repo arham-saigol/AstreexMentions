@@ -21,7 +21,7 @@ describe("Button", () => {
 
     const link = screen.getByRole("link", { name: "View mentions" })
     expect(link).toHaveAttribute("href", "/mentions")
-    expect(link).toHaveClass("border-input")
+    expect(link).toHaveClass("border-[var(--line-strong)]")
     expect(link).not.toHaveAttribute("type")
   })
 })

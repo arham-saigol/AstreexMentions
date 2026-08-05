@@ -1,7 +1,6 @@
 @import "tailwindcss";
 
 @source "../**/*.{ts,tsx}";
-@custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --color-background: var(--canvas);
@@ -23,9 +22,9 @@
   --color-border: var(--line);
   --color-input: var(--line-strong);
   --color-ring: var(--focus);
-  --color-sidebar: var(--canvas);
+  --color-sidebar: var(--canvas-soft);
   --color-sidebar-foreground: var(--ink-secondary);
-  --color-sidebar-accent: var(--surface-subtle);
+  --color-sidebar-accent: var(--surface-sunk);
   --color-sidebar-accent-foreground: var(--ink);
   --color-sidebar-border: var(--line);
   --color-question: var(--category-question);
@@ -43,14 +42,15 @@
   --color-other: var(--category-other);
   --color-other-foreground: var(--category-other-foreground);
   --font-sans: var(--font-ui);
+  --font-serif: var(--font-display-face);
   --font-mono: var(--font-code);
   --radius-sm: 4px;
   --radius-md: 6px;
-  --radius-lg: 10px;
-  --radius-xl: 14px;
-  --shadow-xs: none;
-  --shadow-sm: 0 2px 8px rgb(17 24 39 / 0.08);
-  --shadow-md: 0 12px 32px rgb(17 24 39 / 0.14), 0 2px 8px rgb(17 24 39 / 0.08);
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --shadow-xs: var(--shadow-soft);
+  --shadow-sm: var(--shadow-lift);
+  --shadow-md: var(--shadow-lift);
 }
 
 :root {
@@ -59,141 +59,161 @@
   --motion-feedback: 90ms;
   --motion-control: 140ms;
   --motion-overlay: 200ms;
-  --motion-layout: 260ms;
-  --motion-emphasis: 360ms;
-  --font-ui:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-    "Segoe UI", sans-serif;
-  --font-code: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  --canvas: #f6f7f9;
-  --surface: #ffffff;
-  --surface-subtle: #eef1f5;
-  --surface-strong: #e4e8ef;
-  --ink: #151821;
-  --ink-secondary: #4b5362;
-  --ink-tertiary: #6b7380;
-  --line: #dde1e8;
-  --line-strong: #c8ced8;
-  --brand: #3157f6;
-  --brand-hover: #2747d8;
-  --brand-pressed: #2038ae;
-  --brand-soft: #edf0ff;
-  --brand-soft-ink: #2441ba;
-  --brand-contrast: #ffffff;
-  --focus: #5474ff;
-  --danger: #b42318;
-  --danger-contrast: #ffffff;
-  --background: var(--canvas);
-  --foreground: var(--ink);
-  --card: var(--surface);
-  --primary: var(--brand);
-  --muted: var(--surface-subtle);
-  --muted-foreground: var(--ink-tertiary);
-  --input: var(--line-strong);
-  --ring: var(--focus);
-  --category-question: #edf0ff;
-  --category-question-foreground: #2441ba;
-  --category-complaint: #fff0e6;
-  --category-complaint-foreground: #a34411;
-  --category-praise: #eaf8f1;
-  --category-praise-foreground: #18794e;
-  --category-bug: #feeceb;
-  --category-bug-foreground: #b42318;
-  --category-feature: #f2ecff;
-  --category-feature-foreground: #6941c6;
-  --category-competitor: #fff4d6;
-  --category-competitor-foreground: #8a5a00;
-  --category-other: #eef1f5;
-  --category-other-foreground: #536072;
-  --category-token-blue: #3157f6;
-  --category-token-orange: #a34411;
-  --category-token-cyan: #18794e;
-  --category-token-yellow: #8a5a00;
-  --category-token-pink: #a23b72;
-  --category-token-green: #18794e;
-  --category-token-purple: #6941c6;
-  --category-token-red: #b42318;
-  --category-token-gray: #6b7380;
-  --category-token-slate: #536072;
-}
+  --motion-layout: 320ms;
+  --motion-emphasis: 600ms;
+  --ease-editorial: cubic-bezier(0.16, 1, 0.3, 1);
 
-.dark {
-  color-scheme: dark;
-  --canvas: #0d1016;
-  --surface: #141821;
-  --surface-subtle: #1b202b;
-  --surface-strong: #232a37;
-  --ink: #f5f7fa;
-  --ink-secondary: #b3bac6;
-  --ink-tertiary: #8a93a3;
-  --line: #29313e;
-  --line-strong: #3a4453;
-  --brand: #7288ff;
-  --brand-hover: #8296ff;
-  --brand-pressed: #5f78f5;
-  --brand-soft: #20294e;
-  --brand-soft-ink: #b8c3ff;
-  --brand-contrast: #0d1016;
-  --focus: #8ca0ff;
-  --danger: #ff9c94;
-  --danger-contrast: #0d1016;
+  --font-ui:
+    var(--font-geist, "Geist"), "SF Pro Display", "Helvetica Neue", system-ui,
+    sans-serif;
+  --font-display-face:
+    var(--font-newsreader, "Newsreader"), "Lyon Text", Georgia, serif;
+  --font-code:
+    var(--font-jetbrains-mono, "JetBrains Mono"), "SF Mono", Consolas, monospace;
+
+  --canvas: #f7f6f3;
+  --canvas-soft: #fbfbfa;
+  --surface: #ffffff;
+  --surface-soft: #f9f9f8;
+  --surface-sunk: #f2f1ed;
+  --surface-subtle: var(--surface-sunk);
+  --surface-strong: #e2e1dc;
+
+  --ink: #1b1a18;
+  --ink-secondary: #4a4843;
+  --ink-tertiary: #787774;
+  --ink-faint: #a8a69f;
+
+  --line: #eaeaea;
+  --line-2: #e2e1dc;
+  --line-strong: #d6d4ce;
+  --brand: #1b1a18;
+  --brand-hover: #3a3733;
+  --brand-pressed: #4a4843;
+  --brand-soft: #f4eadb;
+  --brand-soft-ink: #8a5a23;
+  --signal-soft: #f4eadb;
+  --brand-contrast: #ffffff;
+  --signal: #b7793a;
+  --focus: #1b1a18;
+  --danger: #9f2f2d;
+  --danger-contrast: #ffffff;
+
   --background: var(--canvas);
   --foreground: var(--ink);
   --card: var(--surface);
+  --popover: var(--surface);
+  --popover-foreground: var(--ink);
   --primary: var(--brand);
   --muted: var(--surface-subtle);
   --muted-foreground: var(--ink-tertiary);
+  --border: var(--line);
   --input: var(--line-strong);
   --ring: var(--focus);
-  --category-question: #1d274a;
-  --category-question-foreground: #a9b8ff;
-  --category-complaint: #45271a;
-  --category-complaint-foreground: #ffb184;
-  --category-praise: #153a2b;
-  --category-praise-foreground: #76d3a7;
-  --category-bug: #481f1d;
-  --category-bug-foreground: #ff9c94;
-  --category-feature: #322453;
-  --category-feature-foreground: #c6aeff;
-  --category-competitor: #443516;
-  --category-competitor-foreground: #f0c36a;
-  --category-other: #252c37;
-  --category-other-foreground: #b6bfcd;
-  --category-token-blue: #a9b8ff;
-  --category-token-orange: #ffb184;
-  --category-token-cyan: #76d3a7;
-  --category-token-yellow: #f0c36a;
-  --category-token-pink: #f0a5c8;
-  --category-token-green: #76d3a7;
-  --category-token-purple: #c6aeff;
-  --category-token-red: #ff9c94;
-  --category-token-gray: #b6bfcd;
-  --category-token-slate: #b3bac6;
+
+  --category-question: #e4eff7;
+  --category-question-foreground: #2c5f82;
+  --category-complaint: #fdebec;
+  --category-complaint-foreground: #9f2f2d;
+  --category-praise: #edf3ec;
+  --category-praise-foreground: #346538;
+  --category-bug: #fcefe3;
+  --category-bug-foreground: #9a4b16;
+  --category-feature: #fbf3db;
+  --category-feature-foreground: #956400;
+  --category-competitor: #f0edf7;
+  --category-competitor-foreground: #5a4b8a;
+  --category-other: #efede8;
+  --category-other-foreground: #6b665f;
+
+  --category-token-blue: #2c5f82;
+  --category-token-orange: #9a4b16;
+  --category-token-cyan: #3f6c73;
+  --category-token-yellow: #956400;
+  --category-token-pink: #8c506a;
+  --category-token-green: #346538;
+  --category-token-purple: #5a4b8a;
+  --category-token-red: #9f2f2d;
+  --category-token-gray: #787774;
+  --category-token-slate: #6b665f;
+
+  --shadow-soft: 0 1px 2px rgb(27 26 24 / 0.03);
+  --shadow-lift: 0 2px 8px rgb(27 26 24 / 0.04);
 }
 
 @layer base {
   * {
     @apply border-border;
   }
+
   html {
     @apply bg-background;
+    scroll-behavior: smooth;
   }
+
   body {
     @apply bg-background text-foreground min-h-dvh overflow-x-hidden font-sans antialiased;
+    font-size: 15px;
+    line-height: 1.6;
     text-rendering: optimizeLegibility;
   }
+
   ::selection {
     background: var(--brand-soft);
     color: var(--ink);
   }
+
   button:not(:disabled),
   [role="button"]:not([aria-disabled="true"]),
   summary {
     cursor: pointer;
   }
+
   :focus-visible {
     outline: 2px solid var(--focus);
     outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: var(--font-display-face);
+  }
+
+  .editorial-heading {
+    font-family: var(--font-display-face);
+    font-weight: 500;
+    letter-spacing: -0.03em;
+  }
+
+  .editorial-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--ink-tertiary);
+    font-family: var(--font-code);
+    font-size: 0.6875rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .editorial-eyebrow::before {
+    width: 1.125rem;
+    height: 1px;
+    background: var(--ink-faint);
+    content: "";
+  }
+
+  .surface-hover {
+    transition:
+      border-color 220ms var(--ease-editorial),
+      box-shadow 220ms var(--ease-editorial);
+  }
+
+  .surface-hover:hover {
+    border-color: var(--line-2);
+    box-shadow: var(--shadow-lift);
   }
 }
 

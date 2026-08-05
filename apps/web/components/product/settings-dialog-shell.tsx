@@ -40,7 +40,7 @@ export function SettingsDialogBodySlot({
     <section aria-labelledby="settings-section-title" className="min-w-0">
       <h3
         id="settings-section-title"
-        className="text-foreground text-lg font-semibold tracking-tight"
+        className="font-display text-foreground text-2xl font-medium tracking-[-0.02em]"
       >
         {title}
       </h3>

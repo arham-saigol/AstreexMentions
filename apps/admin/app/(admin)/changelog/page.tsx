@@ -130,13 +130,13 @@ function EntryCard({ entry }: { entry: ChangelogEntry }) {
         </div>
       ) : (
         <details className="group border-t">
-          <summary className="hover:bg-muted/40 flex list-none items-center justify-between gap-4 px-4 py-3 text-sm font-medium marker:content-none sm:px-5 [&::-webkit-details-marker]:hidden">
+          <summary className="font-display flex list-none items-center justify-between gap-4 px-4 py-4 text-lg font-medium tracking-[-0.01em] marker:content-none sm:px-5 [&::-webkit-details-marker]:hidden">
             <span>Edit and preview draft</span>
             <span
-              className="text-muted-foreground transition-transform group-open:rotate-180"
+              className="text-muted-foreground font-mono text-xl transition-transform group-open:rotate-45"
               aria-hidden="true"
             >
-              ↓
+              +
             </span>
           </summary>
           <EditChangelogDraft entry={entry} />

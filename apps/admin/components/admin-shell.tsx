@@ -8,7 +8,6 @@ import {
   NewspaperIcon,
 } from "@phosphor-icons/react/dist/ssr"
 import { AstreexWordmark } from "@astreex/ui/components/astreex-wordmark"
-import { ThemeToggle } from "@astreex/ui/components/theme-toggle"
 import { cn } from "@astreex/ui/lib/utils"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -58,7 +57,7 @@ function NavigationLinks({
             className={cn(
               "relative flex min-h-10 items-center gap-3 rounded-md px-3 py-2 text-[13px] font-medium transition-colors duration-[var(--motion-control)]",
               active
-                ? "text-sidebar-accent-foreground before:bg-primary before:absolute before:inset-y-2 before:-left-0.5 before:w-0.5"
+                ? "bg-card text-sidebar-accent-foreground shadow-xs"
                 : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground",
               mobile && "py-3",
             )}
@@ -101,7 +100,7 @@ function MobileNavigation() {
         <ListIcon className="size-5" aria-hidden="true" />
         <span className="sr-only">Toggle navigation</span>
       </summary>
-      <div className="bg-popover text-popover-foreground absolute top-11 left-0 w-64 rounded-lg border p-2 shadow-md">
+      <div className="bg-popover text-popover-foreground absolute top-11 left-0 w-64 rounded-lg border p-2 shadow-sm">
         <NavigationLinks mobile onNavigate={closeNavigation} />
       </div>
     </details>
@@ -113,7 +112,7 @@ function CurrentPageHeading() {
   if (pathname === "/deletions" || pathname.startsWith("/deletions/")) {
     return (
       <div className="min-w-0">
-        <h1 className="truncate text-base font-semibold sm:text-lg">
+        <h1 className="font-display truncate text-lg font-medium tracking-[-0.01em] sm:text-xl">
           Account deletion operations
         </h1>
         <p className="text-muted-foreground hidden text-sm sm:block">
@@ -129,7 +128,7 @@ function CurrentPageHeading() {
 
   return (
     <div className="min-w-0">
-      <h1 className="truncate text-base font-semibold sm:text-lg">
+      <h1 className="font-display truncate text-lg font-medium tracking-[-0.01em] sm:text-xl">
         {current.label}
       </h1>
       <p className="text-muted-foreground hidden text-sm sm:block">
@@ -141,8 +140,8 @@ function CurrentPageHeading() {
 
 export function AdminShell({ children }: { children: ReactNode }) {
   return (
-    <div className="bg-background min-h-dvh lg:grid lg:grid-cols-[15rem_minmax(0,1fr)]">
-      <aside className="bg-sidebar sticky top-0 hidden h-dvh border-r lg:flex lg:flex-col">
+    <div className="bg-background min-h-dvh lg:grid lg:grid-cols-[232px_minmax(0,1fr)]">
+      <aside className="sticky top-0 hidden h-dvh border-r bg-[var(--canvas-soft)] lg:flex lg:flex-col">
         <div className="flex h-16 items-center border-b px-5">
           <AstreexWordmark />
           <span className="bg-background text-muted-foreground ml-2 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold tracking-[0.16em] uppercase">
@@ -158,12 +157,11 @@ export function AdminShell({ children }: { children: ReactNode }) {
       </aside>
 
       <div className="min-w-0">
-        <header className="bg-card sticky top-0 z-30 flex h-16 items-center gap-3 border-b px-4 sm:px-6 lg:px-8">
+        <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b bg-[var(--canvas-soft)] px-4 sm:px-6 lg:px-8">
           <MobileNavigation />
 
           <CurrentPageHeading />
           <div className="ml-auto flex items-center gap-1">
-            <ThemeToggle />
             <UserButton
               appearance={{
                 elements: {

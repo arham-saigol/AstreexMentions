@@ -70,23 +70,23 @@ export default async function ChangelogPage({
               <MegaphoneSimpleIcon aria-hidden="true" />
               Product changelog
             </Badge>
-            <h1 className="text-foreground mt-5 text-4xl font-semibold tracking-[-0.03em] text-balance sm:text-5xl">
+            <h1 className="font-display text-foreground mt-5 text-5xl font-medium tracking-[-0.03em] text-balance sm:text-6xl">
               Astreex changes, published with context.
             </h1>
-            <p className="text-muted-foreground mt-5 max-w-2xl text-lg leading-8 text-pretty">
+            <p className="mt-5 max-w-2xl text-lg leading-8 text-pretty text-[var(--ink-secondary)]">
               A chronological record of shipped improvements and product
               changes, drawn only from entries that have been deliberately
               published.
             </p>
           </div>
 
-          <div className="border-border border-l pl-6">
+          <div className="border-border lg:border-l lg:pl-6">
             <p className="text-foreground text-sm font-semibold">
               Public entries only
             </p>
-            <p className="text-muted-foreground mt-2 text-sm leading-6">
-              This page uses the public published-entry query. Drafts and
-              archived entries are never requested for display.
+            <p className="mt-2 text-sm leading-6 text-[var(--ink-secondary)]">
+              Only deliberately published updates appear here. Drafts and
+              archived entries remain private.
             </p>
           </div>
         </div>
@@ -112,7 +112,7 @@ export default async function ChangelogPage({
                 </p>
                 <h2
                   id="published-updates-title"
-                  className="text-foreground mt-2 text-2xl font-semibold tracking-tight sm:text-3xl"
+                  className="font-display text-foreground mt-2 text-3xl font-medium tracking-[-0.02em] sm:text-4xl"
                 >
                   What has changed.
                 </h2>
@@ -143,15 +143,15 @@ export default async function ChangelogPage({
                       </time>
 
                       <div>
-                        <h3 className="text-foreground group-hover:text-primary text-xl font-semibold tracking-tight text-balance transition-colors sm:text-2xl">
+                        <h3 className="font-display text-foreground text-xl font-medium tracking-[-0.02em] text-balance transition-colors group-hover:text-[var(--ink-secondary)] sm:text-2xl">
                           {entry.title}
                         </h3>
-                        <p className="text-muted-foreground mt-3 max-w-3xl text-sm leading-6 sm:text-base sm:leading-7">
+                        <p className="mt-3 max-w-3xl text-sm leading-6 text-[var(--ink-secondary)] sm:text-base sm:leading-7">
                           {entry.summary}
                         </p>
                       </div>
 
-                      <span className="border-border text-muted-foreground group-hover:border-primary/40 group-hover:text-primary grid size-9 place-items-center rounded-full border transition-colors md:mt-1">
+                      <span className="border-border text-muted-foreground group-hover:border-primary/40 group-hover:text-primary grid size-9 place-items-center rounded-md border transition-colors md:mt-1">
                         <ArrowRightIcon aria-hidden="true" className="size-4" />
                         <span className="sr-only">Read {entry.title}</span>
                       </span>

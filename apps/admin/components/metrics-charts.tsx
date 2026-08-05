@@ -52,7 +52,7 @@ const tooltipStyle = {
   border: "1px solid var(--border)",
   borderRadius: "var(--radius-md)",
   color: "var(--popover-foreground)",
-  boxShadow: "var(--shadow-sm)",
+  boxShadow: "var(--shadow-lift)",
 } as const
 
 function providerColor(provider: string): string {

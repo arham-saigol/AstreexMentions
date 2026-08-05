@@ -152,7 +152,7 @@ export function KeywordsScreen() {
     <div>
       <div className="flex flex-col gap-4 pb-6 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-foreground text-[28px] leading-[34px] font-semibold tracking-[-0.02em]">
+          <h1 className="font-display text-foreground text-[28px] leading-[34px] font-medium tracking-[-0.02em]">
             Keywords
           </h1>
           <p className="text-muted-foreground mt-1 text-xs">
@@ -207,7 +207,7 @@ export function KeywordsScreen() {
                 {keywords.length === 1 ? "" : "s"}
               </p>
             </div>
-            <div className="border-border mt-3 overflow-hidden rounded-xl border">
+            <div className="border-border mt-3 overflow-hidden rounded-lg border">
               {keywords.map((keyword) => (
                 <KeywordRow
                   key={keyword.id}

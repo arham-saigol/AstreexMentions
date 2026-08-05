@@ -4,13 +4,13 @@ import { SignOutButton, useUser } from "@clerk/nextjs"
 import {
   AtIcon,
   CaretDownIcon,
-  DesktopIcon,
+  CreditCardIcon,
+  EnvelopeSimpleIcon,
   GearSixIcon,
+  GridFourIcon,
   KeyIcon,
   LightbulbIcon,
-  MoonIcon,
   SignOutIcon,
-  SunIcon,
 } from "@phosphor-icons/react"
 import { AstreexWordmark } from "@astreex/ui/components/astreex-wordmark"
 import {
@@ -24,96 +24,25 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@astreex/ui/components/dropdown-menu"
 import { cn } from "@astreex/ui/lib/utils"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { useEffect, useRef, useSyncExternalStore, type ReactNode } from "react"
+import { useRef, type ReactNode } from "react"
 
 import {
   ProductDialogsProvider,
   useProductDialogs,
 } from "@/components/product/product-dialogs"
 import { useProductContext } from "@/components/product/product-context"
+import type { SettingsSectionId } from "@/components/product/settings-dialog-shell"
 
 const productNavigation = [
   { href: "/app/mentions", label: "Mentions", icon: AtIcon },
   { href: "/app/keywords", label: "Keywords", icon: KeyIcon },
 ] as const
-
-const appearanceOptions = [
-  { value: "light", label: "Light", icon: SunIcon },
-  { value: "dark", label: "Dark", icon: MoonIcon },
-  { value: "system", label: "System", icon: DesktopIcon },
-] as const
-
-type AppearanceTheme = (typeof appearanceOptions)[number]["value"]
-
-function isAppearanceTheme(value: string | null): value is AppearanceTheme {
-  return appearanceOptions.some((option) => option.value === value)
-}
-
-function appearanceSnapshot(): AppearanceTheme {
-  try {
-    const stored = window.localStorage.getItem("theme")
-    return isAppearanceTheme(stored) ? stored : "system"
-  } catch {
-    return "system"
-  }
-}
-
-function subscribeToAppearance(onStoreChange: () => void) {
-  const onStorage = (event: StorageEvent) => {
-    if (event.key === "theme") {
-      onStoreChange()
-    }
-  }
-
-  window.addEventListener("storage", onStorage)
-  return () => window.removeEventListener("storage", onStorage)
-}
-
-function useAppearanceTheme() {
-  const theme = useSyncExternalStore(
-    subscribeToAppearance,
-    appearanceSnapshot,
-    () => "system",
-  )
-
-  useEffect(() => {
-    const media = window.matchMedia("(prefers-color-scheme: dark)")
-    const applyTheme = () => {
-      const dark = theme === "dark" || (theme === "system" && media.matches)
-      document.documentElement.classList.toggle("dark", dark)
-      document.documentElement.style.colorScheme = dark ? "dark" : "light"
-    }
-
-    applyTheme()
-    media.addEventListener("change", applyTheme)
-    return () => media.removeEventListener("change", applyTheme)
-  }, [theme])
-
-  const changeTheme = (value: string) => {
-    if (!isAppearanceTheme(value)) {
-      return
-    }
-
-    try {
-      window.localStorage.setItem("theme", value)
-    } catch {
-      // The current page can still apply the selected theme without persistence.
-    }
-    window.dispatchEvent(
-      new StorageEvent("storage", { key: "theme", newValue: value }),
-    )
-  }
-
-  return { changeTheme, theme }
-}
 
 function initials(
   name: string | null | undefined,
@@ -144,7 +73,7 @@ function ProductNavigation() {
               className={cn(
                 "relative inline-flex h-10 items-center gap-2 rounded-md px-2 text-[13px] font-medium transition-colors duration-[var(--motion-control)] max-[380px]:gap-0 sm:px-3 md:w-full md:px-3 max-[380px]:[&>svg]:hidden",
                 active
-                  ? "text-foreground"
+                  ? "bg-card text-foreground shadow-xs"
                   : "text-muted-foreground hover:bg-secondary hover:text-foreground",
               )}
             >
@@ -154,12 +83,6 @@ function ProductNavigation() {
                 weight={active ? "bold" : "regular"}
               />
               {label}
-              {active && (
-                <span
-                  aria-hidden="true"
-                  className="bg-primary absolute inset-x-3 -bottom-1 h-0.5 md:inset-y-2 md:right-auto md:-left-0.5 md:h-auto md:w-0.5"
-                />
-              )}
             </Link>
           )
         })}
@@ -168,10 +91,39 @@ function ProductNavigation() {
   )
 }
 
+const configurationNavigation = [
+  { label: "Categories", section: "categories", icon: GridFourIcon },
+  { label: "Digest", section: "digest", icon: EnvelopeSimpleIcon },
+  { label: "Billing", section: "billing", icon: CreditCardIcon },
+] as const satisfies ReadonlyArray<{
+  label: string
+  section: SettingsSectionId
+  icon: typeof GridFourIcon
+}>
+
+function ConfigurationNavigation() {
+  const { openSettings } = useProductDialogs()
+
+  return (
+    <nav aria-label="Product configuration" className="space-y-1">
+      {configurationNavigation.map(({ icon: Icon, label, section }) => (
+        <button
+          key={section}
+          type="button"
+          className="text-muted-foreground hover:bg-secondary hover:text-foreground flex h-10 w-full items-center gap-2 rounded-md px-3 text-left text-[13px] font-medium transition-colors"
+          onClick={(event) => openSettings(section, event.currentTarget)}
+        >
+          <Icon aria-hidden="true" className="size-4" />
+          {label}
+        </button>
+      ))}
+    </nav>
+  )
+}
+
 function ProductAvatarMenu() {
   const { user } = useUser()
   const { openFeatureRequests, openSettings } = useProductDialogs()
-  const { changeTheme, theme } = useAppearanceTheme()
   const accountMenuTriggerRef = useRef<HTMLButtonElement>(null)
   const primaryEmail = user?.primaryEmailAddress?.emailAddress
   const displayName = user?.fullName || user?.username || "Astreex user"
@@ -182,7 +134,7 @@ function ProductAvatarMenu() {
         <Button
           ref={accountMenuTriggerRef}
           variant="ghost"
-          className="h-10 gap-1.5 rounded-full px-1.5 sm:gap-2 sm:pr-2"
+          className="h-10 gap-1.5 rounded-md px-1.5 sm:gap-2 sm:pr-2"
           aria-label="Open account menu"
         >
           <Avatar className="size-7">
@@ -214,16 +166,6 @@ function ProductAvatarMenu() {
             </span>
           )}
         </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuLabel>Appearance</DropdownMenuLabel>
-        <DropdownMenuRadioGroup value={theme} onValueChange={changeTheme}>
-          {appearanceOptions.map(({ icon: AppearanceIcon, label, value }) => (
-            <DropdownMenuRadioItem key={value} value={value}>
-              <AppearanceIcon aria-hidden="true" className="size-4" />
-              {label}
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onSelect={() =>
@@ -277,14 +219,14 @@ function AccessNotice() {
 export function ProductShell({ children }: { children: ReactNode }) {
   return (
     <ProductDialogsProvider>
-      <div className="bg-background min-h-dvh md:grid md:grid-cols-[224px_minmax(0,1fr)]">
+      <div className="bg-background min-h-dvh md:grid md:grid-cols-[232px_minmax(0,1fr)]">
         <a
           href="#product-main-content"
           className="bg-background text-foreground focus-visible:ring-ring fixed top-3 left-3 z-50 -translate-y-20 rounded-md border px-3 py-2 text-sm font-medium shadow-sm transition-transform focus-visible:translate-y-0 focus-visible:ring-2 focus-visible:outline-none"
         >
           Skip to main content
         </a>
-        <aside className="border-sidebar-border bg-sidebar sticky top-0 hidden h-dvh flex-col border-r px-4 py-5 md:flex">
+        <aside className="border-sidebar-border sticky top-0 hidden h-dvh flex-col border-r bg-[var(--canvas-soft)] px-4 py-5 md:flex">
           <Link
             href="/app"
             aria-label="Astreex dashboard home"
@@ -293,10 +235,16 @@ export function ProductShell({ children }: { children: ReactNode }) {
             <AstreexWordmark className="text-base" markClassName="size-6" />
           </Link>
           <div className="mt-10">
-            <p className="text-muted-foreground mb-2 px-3 text-xs font-medium">
+            <p className="mb-2 px-3 font-mono text-[10px] tracking-[0.12em] text-[var(--ink-faint)] uppercase">
               Listen
             </p>
             <ProductNavigation />
+          </div>
+          <div className="mt-6">
+            <p className="mb-2 px-3 font-mono text-[10px] tracking-[0.12em] text-[var(--ink-faint)] uppercase">
+              Configure
+            </p>
+            <ConfigurationNavigation />
           </div>
           <div className="mt-auto flex items-center justify-between border-t pt-4">
             <span className="text-muted-foreground pl-2 text-xs">

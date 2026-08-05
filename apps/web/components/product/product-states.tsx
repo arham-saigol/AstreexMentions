@@ -51,7 +51,7 @@ export function ProductErrorState({
           />
           <h1
             id="product-error-title"
-            className="text-foreground mt-4 text-2xl font-semibold tracking-tight"
+            className="font-display text-foreground mt-4 text-3xl font-medium tracking-[-0.025em]"
           >
             {title}
           </h1>

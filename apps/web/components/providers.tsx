@@ -1,7 +1,6 @@
 "use client"
 
 import { ClerkProvider, useAuth } from "@clerk/nextjs"
-import { ThemeProvider } from "@astreex/ui/components/theme-provider"
 import { ConvexReactClient, ConvexProvider } from "convex/react"
 import { ConvexProviderWithClerk } from "convex/react-clerk"
 import { useMemo, type ReactNode } from "react"
@@ -50,20 +49,16 @@ export function Providers({
     children
   )
 
-  return (
-    <ThemeProvider>
-      {clerkPublishableKey ? (
-        <ClerkProvider
-          publishableKey={clerkPublishableKey}
-          signInUrl="/sign-in"
-          signUpUrl="/sign-up"
-          afterSignOutUrl="/"
-        >
-          {content}
-        </ClerkProvider>
-      ) : (
-        content
-      )}
-    </ThemeProvider>
+  return clerkPublishableKey ? (
+    <ClerkProvider
+      publishableKey={clerkPublishableKey}
+      signInUrl="/sign-in"
+      signUpUrl="/sign-up"
+      afterSignOutUrl="/"
+    >
+      {content}
+    </ClerkProvider>
+  ) : (
+    content
   )
 }

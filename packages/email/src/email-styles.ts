@@ -29,7 +29,7 @@ export const emailPrimaryButtonStyle: CSSProperties = {
   display: "inline-block",
   fontFamily,
   fontSize: "15px",
-  fontWeight: 600,
+  fontWeight: 500,
   lineHeight: "20px",
   padding: "12px 18px",
   textDecoration: "none",

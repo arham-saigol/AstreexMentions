@@ -27,8 +27,8 @@ export type LimitReachedEmailProps = {
 }
 
 const detailsStyle: CSSProperties = {
-  backgroundColor: "#fef2f2",
-  border: "1px solid #fca5a5",
+  backgroundColor: "#fdebec",
+  border: "1px solid #eaeaea",
   borderRadius: "6px",
   margin: "24px 0",
   padding: "16px 20px",

@@ -28,7 +28,7 @@ export type UsageWarningEmailProps = {
 }
 
 const detailsStyle: CSSProperties = {
-  backgroundColor: "#eff6ff",
+  backgroundColor: "#fbf3db",
   border: `1px solid ${colors.border}`,
   borderRadius: "6px",
   margin: "24px 0",

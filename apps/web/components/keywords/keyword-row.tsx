@@ -202,10 +202,10 @@ export function KeywordRow({
 
   return (
     <article className="border-border bg-card overflow-hidden border-b last:border-b-0">
-      <div className="flex flex-col gap-4 p-4 sm:p-6 lg:flex-row lg:items-start lg:justify-between">
+      <div className="flex flex-col gap-4 px-4 py-4 sm:px-6 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-foreground text-base font-semibold break-words">
+            <h2 className="font-display text-foreground text-xl font-medium tracking-[-0.01em] break-words">
               {keyword.phrase}
             </h2>
             <KeywordStatus

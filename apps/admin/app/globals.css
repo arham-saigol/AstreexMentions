@@ -3,8 +3,12 @@
 @source "../**/*.{ts,tsx}";
 @source "../../../packages/ui/src/**/*.{ts,tsx}";
 
+@theme inline {
+  --font-display: var(--font-display-face);
+}
+
 @layer utilities {
   .admin-panel {
-    @apply bg-card text-card-foreground rounded-lg border;
+    @apply border-border bg-card text-card-foreground rounded-lg border;
   }
 }

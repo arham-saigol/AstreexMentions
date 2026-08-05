@@ -113,16 +113,16 @@ const platformOptions = [
 }[]
 
 const colorOptions = [
-  { label: "Blue", value: "blue", dot: "bg-blue-600" },
-  { label: "Orange", value: "orange", dot: "bg-orange-600" },
-  { label: "Green", value: "green", dot: "bg-green-600" },
-  { label: "Red", value: "red", dot: "bg-red-600" },
-  { label: "Purple", value: "purple", dot: "bg-purple-600" },
-  { label: "Yellow", value: "yellow", dot: "bg-yellow-500" },
-  { label: "Gray", value: "gray", dot: "bg-gray-500" },
-  { label: "Pink", value: "pink", dot: "bg-pink-600" },
-  { label: "Cyan", value: "cyan", dot: "bg-cyan-600" },
-  { label: "Slate", value: "slate", dot: "bg-slate-600" },
+  { label: "Blue", value: "blue", dot: "bg-[#2c5f82]" },
+  { label: "Orange", value: "orange", dot: "bg-[#9a4b16]" },
+  { label: "Green", value: "green", dot: "bg-[#346538]" },
+  { label: "Red", value: "red", dot: "bg-[#9f2f2d]" },
+  { label: "Purple", value: "purple", dot: "bg-[#5a4b8a]" },
+  { label: "Yellow", value: "yellow", dot: "bg-[#956400]" },
+  { label: "Gray", value: "gray", dot: "bg-[#787774]" },
+  { label: "Pink", value: "pink", dot: "bg-[#8c506a]" },
+  { label: "Cyan", value: "cyan", dot: "bg-[#3f6c73]" },
+  { label: "Slate", value: "slate", dot: "bg-[#6b665f]" },
 ] as const satisfies readonly {
   dot: string
   label: string
@@ -319,10 +319,8 @@ function StepHeading({
 }) {
   return (
     <div className="border-border border-b pb-5">
-      <p className="text-primary text-xs font-semibold tracking-wide uppercase">
-        {eyebrow}
-      </p>
-      <h1 className="text-foreground mt-2 text-2xl font-semibold tracking-tight text-balance sm:text-3xl">
+      <p className="editorial-eyebrow">{eyebrow}</p>
+      <h1 className="font-display text-foreground mt-3 text-3xl font-medium tracking-[-0.025em] text-balance sm:text-4xl">
         {title}
       </h1>
       <div className="text-muted-foreground mt-3 max-w-2xl text-sm leading-6">
@@ -451,7 +449,7 @@ function WelcomeStep({ workspaceName }: { workspaceName: string }) {
         title={`Build a focused customer signal for ${workspaceName}.`}
         description="Configuration comes first. You will define what matters, where Astreex should look, and how conversations should be organized before a plan can activate collection."
       />
-      <ul className="border-border bg-border mt-7 grid gap-px overflow-hidden rounded-lg border sm:grid-cols-3">
+      <ul className="border-border bg-border mt-7 grid gap-px overflow-hidden rounded-xl border min-[1081px]:grid-cols-3">
         {[
           {
             description:
@@ -473,7 +471,7 @@ function WelcomeStep({ workspaceName }: { workspaceName: string }) {
         ].map(({ description, icon: Icon, title }) => (
           <li key={title} className="bg-background p-5">
             <Icon aria-hidden="true" className="text-primary size-5" />
-            <h2 className="text-foreground mt-4 text-sm font-semibold">
+            <h2 className="font-display text-foreground mt-4 text-lg font-medium tracking-[-0.01em]">
               {title}
             </h2>
             <p className="text-muted-foreground mt-1.5 text-sm leading-6">
@@ -624,7 +622,7 @@ function PlatformsStep({
                 {keyword.kind === "own" ? "Brand signal" : "Market signal"}
               </span>
             </div>
-            <div className="mt-4 grid gap-2 sm:grid-cols-3">
+            <div className="mt-4 grid gap-2 min-[1081px]:grid-cols-3">
               {platformOptions.map(
                 ({ description, icon: Icon, label, value }) => {
                   const checked = keyword.platforms.includes(value)
@@ -816,10 +814,8 @@ function WorkspacePreviewStep({ draft }: { draft: OnboardingDraft }) {
         </div>
         <div className="px-5 py-6 sm:px-7">
           <div className="border-border border-b pb-4">
-            <p className="text-primary text-xs font-semibold tracking-wide uppercase">
-              {draft.workspaceName}
-            </p>
-            <h2 className="text-foreground mt-1 text-xl font-semibold">
+            <p className="editorial-eyebrow">{draft.workspaceName}</p>
+            <h2 className="font-display text-foreground mt-1 text-2xl font-medium tracking-[-0.02em]">
               Mentions
             </h2>
             <p className="text-muted-foreground mt-1 text-sm">
@@ -907,7 +903,7 @@ function PlanStep({
       <div
         role="radiogroup"
         aria-label="Subscription plan"
-        className="mt-6 grid gap-3 sm:grid-cols-3"
+        className="mt-6 grid gap-3 min-[1081px]:grid-cols-3"
       >
         {PLAN_DEFINITIONS.map((plan) => {
           const fits = keywordCount <= plan.keywordLimit
@@ -954,7 +950,7 @@ function PlanStep({
                   )}
                 </span>
               </span>
-              <span className="text-foreground mt-5 block text-2xl font-semibold tabular-nums">
+              <span className="font-display text-foreground mt-5 block text-3xl font-medium tracking-[-0.02em] tabular-nums">
                 ${plan.priceUsd}
                 <span className="text-muted-foreground text-xs font-normal">
                   {" "}
@@ -1618,7 +1614,7 @@ export function OnboardingFlow() {
             </p>
             <p
               id="onboarding-current-step"
-              className="text-foreground mt-1 text-[15px] font-semibold"
+              className="font-display text-foreground mt-1 text-lg font-medium tracking-[-0.01em]"
             >
               {currentStep.title}
             </p>
@@ -1643,7 +1639,7 @@ export function OnboardingFlow() {
                 className={cn(
                   "relative min-h-9 rounded-md px-3 py-2 text-xs",
                   number === draft.step
-                    ? "bg-secondary text-foreground before:bg-primary font-medium before:absolute before:inset-y-2 before:-left-px before:w-0.5"
+                    ? "bg-card text-foreground font-medium shadow-xs"
                     : number < draft.step
                       ? "text-primary"
                       : "text-muted-foreground",

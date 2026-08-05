@@ -16,9 +16,7 @@ export default function NotFound() {
         <EmptyStateIcon>
           <MagnifyingGlassIcon aria-hidden="true" />
         </EmptyStateIcon>
-        <p className="text-primary mb-2 text-xs font-semibold tracking-wide uppercase">
-          404 · No matching page
-        </p>
+        <p className="editorial-eyebrow mb-2">404 · No matching page</p>
         <EmptyStateTitle id="not-found-title">
           Nothing is published here.
         </EmptyStateTitle>

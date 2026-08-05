@@ -1,10 +1,30 @@
 import type { Metadata, Viewport } from "next"
+import { Geist, JetBrains_Mono, Newsreader } from "next/font/google"
 import type { ReactNode } from "react"
 
 import { Providers } from "@/components/providers"
 import { readAdminPublicEnv } from "@/lib/env"
 
 import "./globals.css"
+
+const geist = Geist({
+  subsets: ["latin"],
+  variable: "--font-geist",
+  display: "swap",
+})
+
+const newsreader = Newsreader({
+  subsets: ["latin"],
+  variable: "--font-newsreader",
+  display: "swap",
+  style: ["normal", "italic"],
+})
+
+const jetBrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-jetbrains-mono",
+  display: "swap",
+})
 
 export const metadata: Metadata = {
   title: {
@@ -25,18 +45,19 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  colorScheme: "light dark",
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f8f9fb" },
-    { media: "(prefers-color-scheme: dark)", color: "#1d2026" },
-  ],
+  colorScheme: "light",
+  themeColor: "#f7f6f3",
 }
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   const publicEnv = readAdminPublicEnv()
 
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html
+      lang="en"
+      className={`${geist.variable} ${newsreader.variable} ${jetBrainsMono.variable}`}
+      suppressHydrationWarning
+    >
       <body>
         <Providers {...publicEnv}>{children}</Providers>
       </body>

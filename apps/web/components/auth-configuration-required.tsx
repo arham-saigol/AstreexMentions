@@ -20,12 +20,10 @@ export function AuthConfigurationRequired({
       <div className="border-border bg-muted text-muted-foreground grid size-10 place-items-center rounded-lg border">
         <WarningCircleIcon aria-hidden="true" className="size-5" />
       </div>
-      <p className="text-primary mt-5 text-xs font-semibold tracking-wide uppercase">
-        Service status
-      </p>
+      <p className="editorial-eyebrow mt-5">Service status</p>
       <h2
         id="auth-configuration-title"
-        className="text-foreground mt-2 text-2xl font-semibold tracking-tight sm:text-3xl"
+        className="font-display text-foreground mt-3 text-3xl font-medium tracking-[-0.025em] sm:text-4xl"
       >
         {title}
       </h2>

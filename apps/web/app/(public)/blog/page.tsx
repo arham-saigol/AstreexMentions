@@ -36,21 +36,21 @@ export default function BlogIndexPage() {
         <div className="mx-auto grid w-full max-w-6xl gap-10 px-6 py-16 sm:py-20 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-end">
           <div className="max-w-3xl">
             <Badge variant="outline">Astreex field notes</Badge>
-            <h1 className="text-foreground mt-5 text-4xl font-semibold tracking-[-0.03em] text-balance sm:text-5xl">
+            <h1 className="font-display text-foreground mt-5 text-5xl font-medium tracking-[-0.03em] text-balance sm:text-6xl">
               Better systems for listening to customers.
             </h1>
-            <p className="text-muted-foreground mt-5 max-w-2xl text-lg leading-8 text-pretty">
+            <p className="mt-5 max-w-2xl text-lg leading-8 text-pretty text-[var(--ink-secondary)]">
               Detailed, practical guidance for finding useful conversations,
               improving the signal, and giving every important mention a clear
               next step.
             </p>
           </div>
 
-          <div className="border-border border-l pl-6">
+          <div className="border-border lg:border-l lg:pl-6">
             <p className="text-foreground text-sm font-semibold">
               Written for people doing the work
             </p>
-            <p className="text-muted-foreground mt-2 text-sm leading-6">
+            <p className="mt-2 text-sm leading-6 text-[var(--ink-secondary)]">
               No trend summaries or vague playbooks. Each article includes a
               process you can inspect, adapt, and put into practice.
             </p>
@@ -65,7 +65,7 @@ export default function BlogIndexPage() {
               <p className="text-primary text-sm font-semibold">The library</p>
               <h2
                 id="latest-articles"
-                className="text-foreground mt-2 text-2xl font-semibold tracking-tight sm:text-3xl"
+                className="font-display text-foreground mt-2 text-3xl font-medium tracking-[-0.02em] sm:text-4xl"
               >
                 Practical guides, carefully explained.
               </h2>
@@ -86,7 +86,7 @@ export default function BlogIndexPage() {
                   >
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-primary text-xs font-semibold tracking-wide uppercase">
+                        <span className="font-mono text-[11px] tracking-[0.12em] text-[var(--ink-secondary)] uppercase">
                           {post.category}
                         </span>
                         {post.featured && (
@@ -107,10 +107,10 @@ export default function BlogIndexPage() {
                     </div>
 
                     <div>
-                      <h3 className="text-foreground group-hover:text-primary text-xl font-semibold tracking-tight text-balance transition-colors sm:text-2xl">
+                      <h3 className="font-display text-foreground text-xl font-medium tracking-[-0.02em] text-balance transition-colors group-hover:text-[var(--ink-secondary)] sm:text-2xl">
                         {post.title}
                       </h3>
-                      <p className="text-muted-foreground mt-3 max-w-3xl text-sm leading-6 sm:text-base sm:leading-7">
+                      <p className="mt-3 max-w-3xl text-sm leading-6 text-[var(--ink-secondary)] sm:text-base sm:leading-7">
                         {post.description}
                       </p>
                       <span className="text-muted-foreground mt-4 flex items-center gap-1.5 text-xs">
@@ -119,7 +119,7 @@ export default function BlogIndexPage() {
                       </span>
                     </div>
 
-                    <span className="border-border text-muted-foreground group-hover:border-primary/40 group-hover:text-primary grid size-9 place-items-center rounded-full border transition-colors md:mt-1">
+                    <span className="border-border text-muted-foreground group-hover:border-primary/40 group-hover:text-primary grid size-9 place-items-center rounded-md border transition-colors md:mt-1">
                       <ArrowRightIcon aria-hidden="true" className="size-4" />
                       <span className="sr-only">Read {post.title}</span>
                     </span>

@@ -15,24 +15,24 @@ const stateContent = {
     eyebrow: "Data service unavailable",
     title: "The public changelog is not configured.",
     description:
-      "Published entries require a valid Convex deployment. No releases, dates, or product changes are being filled in while that service is unavailable.",
-    note: "No draft or private changelog data has been requested.",
+      "Published product updates are temporarily unavailable. Astreex will not fill the gap with sample or unverified releases.",
+    note: "Private drafts remain private.",
     icon: WrenchIcon,
   },
   empty: {
     eyebrow: "Nothing published yet",
     title: "The changelog is ready for its first entry.",
     description:
-      "The public published-entry query completed successfully, but it did not return any published updates.",
-    note: "Draft entries remain private and are not included here.",
+      "There are no published product updates yet. The first one will appear here when it is ready.",
+    note: "Draft entries remain private.",
     icon: NoteBlankIcon,
   },
   error: {
     eyebrow: "Request unavailable",
     title: "Published updates could not be loaded.",
     description:
-      "The configured public changelog query did not return a usable response. Astreex is not substituting sample releases or displaying unverified data.",
-    note: "Draft and administrative records have not been requested.",
+      "Astreex could not load published updates right now. No sample or unverified releases are shown in their place.",
+    note: "Private drafts remain private.",
     icon: WarningCircleIcon,
   },
 } as const
@@ -50,16 +50,14 @@ export function ChangelogState({ state }: ChangelogStateProps) {
         <div className="border-border bg-muted text-muted-foreground grid size-10 place-items-center rounded-lg border">
           <Icon aria-hidden="true" className="size-5" />
         </div>
-        <p className="text-primary mt-5 text-xs font-semibold tracking-wide uppercase">
-          {content.eyebrow}
-        </p>
+        <p className="editorial-eyebrow mt-5">{content.eyebrow}</p>
         <h2
           id="changelog-state-title"
-          className="text-foreground mt-2 text-2xl font-semibold tracking-tight"
+          className="font-display text-foreground mt-3 text-3xl font-medium tracking-[-0.02em]"
         >
           {content.title}
         </h2>
-        <p className="text-muted-foreground mt-3 text-sm leading-6 sm:text-base">
+        <p className="mt-3 text-sm leading-6 text-[var(--ink-secondary)] sm:text-base">
           {content.description}
         </p>
         <p className="text-muted-foreground mt-4 text-xs leading-5">

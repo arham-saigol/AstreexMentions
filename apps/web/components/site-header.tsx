@@ -52,13 +52,10 @@ export function SiteHeader() {
   const configuration = getRuntimeConfiguration()
 
   return (
-    <header className="border-border bg-secondary sticky top-0 z-40 border-b">
+    <header className="border-border sticky top-0 z-40 border-b bg-[rgba(251,251,250,0.94)] backdrop-blur-sm">
       <div className="relative mx-auto flex h-16 w-full max-w-[1184px] items-center gap-3 px-4 sm:px-6 lg:px-8">
         <Link href="/" aria-label="Astreex home" className="shrink-0">
-          <AstreexWordmark
-            className="text-base sm:text-lg"
-            markClassName="size-6 sm:size-7"
-          />
+          <AstreexWordmark markClassName="size-6.5" />
         </Link>
 
         <nav
@@ -69,7 +66,7 @@ export function SiteHeader() {
             <Link
               key={link.href}
               href={link.href}
-              className="text-muted-foreground hover:text-foreground text-sm font-medium transition-colors"
+              className="hover:text-foreground text-sm font-medium text-[var(--ink-secondary)] transition-colors"
             >
               {link.label}
             </Link>

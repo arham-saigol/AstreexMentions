@@ -54,6 +54,27 @@ describe("MentionCard", () => {
     expect(sourceLink.getAttribute("target")).toBe("_blank")
   })
 
+  it("uses a custom category's configured color family", () => {
+    render(
+      <MentionCard
+        mention={{
+          ...mention,
+          category: {
+            id: "category_custom" as NonNullable<MentionItem["category"]>["id"],
+            name: "Pricing objection",
+            colorToken: "purple",
+          },
+        }}
+        pending={false}
+        onStatusChange={vi.fn()}
+      />,
+    )
+
+    expect(
+      screen.getByText("Pricing objection").className.split(/\s+/),
+    ).toContain("bg-competitor")
+  })
+
   it("locks status actions while an optimistic update is pending", () => {
     render(
       <MentionCard
