@@ -1,13 +1,8 @@
 "use client"
 
 import { UserButton } from "@clerk/nextjs"
-import {
-  ChartLineUpIcon,
-  LightbulbIcon,
-  ListIcon,
-  NewspaperIcon,
-} from "@phosphor-icons/react/dist/ssr"
 import { AstreexWordmark } from "@astreex/ui/components/astreex-wordmark"
+import { ChartLine, Lightbulb, Menu, Newspaper } from "lucide-react"
 import { cn } from "@astreex/ui/lib/utils"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -18,19 +13,19 @@ const navigation = [
     href: "/metrics",
     label: "Metrics",
     description: "Platform and provider health",
-    icon: ChartLineUpIcon,
+    icon: ChartLine,
   },
   {
     href: "/feature-requests",
     label: "Feature Requests",
     description: "Customer feedback queue",
-    icon: LightbulbIcon,
+    icon: Lightbulb,
   },
   {
     href: "/changelog",
     label: "Changelog",
     description: "Draft and publish updates",
-    icon: NewspaperIcon,
+    icon: Newspaper,
   },
 ] as const
 
@@ -97,7 +92,7 @@ function MobileNavigation() {
       onKeyDown={handleKeyDown}
     >
       <summary className="bg-background text-foreground hover:bg-accent flex size-9 list-none items-center justify-center rounded-md border shadow-xs marker:content-none [&::-webkit-details-marker]:hidden">
-        <ListIcon className="size-5" aria-hidden="true" />
+        <Menu className="size-5" aria-hidden="true" />
         <span className="sr-only">Toggle navigation</span>
       </summary>
       <div className="bg-popover text-popover-foreground absolute top-11 left-0 w-64 rounded-lg border p-2 shadow-sm">

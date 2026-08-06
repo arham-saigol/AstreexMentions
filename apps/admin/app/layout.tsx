@@ -55,6 +55,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html
       lang="en"
+      data-theme="light"
+      data-astryx-theme="neutral"
       className={`${geist.variable} ${newsreader.variable} ${jetBrainsMono.variable}`}
       suppressHydrationWarning
     >

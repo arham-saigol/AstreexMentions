@@ -1,17 +1,6 @@
 "use client"
 
 import { SignOutButton, useUser } from "@clerk/nextjs"
-import {
-  AtIcon,
-  CaretDownIcon,
-  CreditCardIcon,
-  EnvelopeSimpleIcon,
-  GearSixIcon,
-  GridFourIcon,
-  KeyIcon,
-  LightbulbIcon,
-  SignOutIcon,
-} from "@phosphor-icons/react"
 import { AstreexWordmark } from "@astreex/ui/components/astreex-wordmark"
 import {
   Avatar,
@@ -28,6 +17,17 @@ import {
   DropdownMenuTrigger,
 } from "@astreex/ui/components/dropdown-menu"
 import { cn } from "@astreex/ui/lib/utils"
+import {
+  AtSign,
+  ChevronDown,
+  CreditCard,
+  KeyRound,
+  LayoutGrid,
+  Lightbulb,
+  LogOut,
+  Mail,
+  Settings,
+} from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useRef, type ReactNode } from "react"
@@ -40,8 +40,8 @@ import { useProductContext } from "@/components/product/product-context"
 import type { SettingsSectionId } from "@/components/product/settings-dialog-shell"
 
 const productNavigation = [
-  { href: "/app/mentions", label: "Mentions", icon: AtIcon },
-  { href: "/app/keywords", label: "Keywords", icon: KeyIcon },
+  { href: "/app/mentions", label: "Mentions", icon: AtSign },
+  { href: "/app/keywords", label: "Keywords", icon: KeyRound },
 ] as const
 
 function initials(
@@ -80,7 +80,7 @@ function ProductNavigation() {
               <NavigationIcon
                 aria-hidden="true"
                 className="size-4"
-                weight={active ? "bold" : "regular"}
+                strokeWidth={active ? 2.4 : 2}
               />
               {label}
             </Link>
@@ -92,13 +92,13 @@ function ProductNavigation() {
 }
 
 const configurationNavigation = [
-  { label: "Categories", section: "categories", icon: GridFourIcon },
-  { label: "Digest", section: "digest", icon: EnvelopeSimpleIcon },
-  { label: "Billing", section: "billing", icon: CreditCardIcon },
+  { label: "Categories", section: "categories", icon: LayoutGrid },
+  { label: "Digest", section: "digest", icon: Mail },
+  { label: "Billing", section: "billing", icon: CreditCard },
 ] as const satisfies ReadonlyArray<{
   label: string
   section: SettingsSectionId
-  icon: typeof GridFourIcon
+  icon: typeof LayoutGrid
 }>
 
 function ConfigurationNavigation() {
@@ -149,7 +149,7 @@ function ProductAvatarMenu() {
               {initials(displayName, primaryEmail)}
             </AvatarFallback>
           </Avatar>
-          <CaretDownIcon
+          <ChevronDown
             aria-hidden="true"
             className="text-muted-foreground size-3.5 max-[380px]:hidden"
           />
@@ -172,19 +172,19 @@ function ProductAvatarMenu() {
             openSettings("general", accountMenuTriggerRef.current)
           }
         >
-          <GearSixIcon aria-hidden="true" />
+          <Settings aria-hidden="true" />
           Settings
         </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={() => openFeatureRequests(accountMenuTriggerRef.current)}
         >
-          <LightbulbIcon aria-hidden="true" />
+          <Lightbulb aria-hidden="true" />
           Feature Requests
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <SignOutButton redirectUrl="/">
           <DropdownMenuItem variant="destructive">
-            <SignOutIcon aria-hidden="true" />
+            <LogOut aria-hidden="true" />
             Sign Out
           </DropdownMenuItem>
         </SignOutButton>
@@ -226,7 +226,7 @@ export function ProductShell({ children }: { children: ReactNode }) {
         >
           Skip to main content
         </a>
-        <aside className="border-sidebar-border sticky top-0 hidden h-dvh flex-col border-r bg-[var(--canvas-soft)] px-4 py-5 md:flex">
+        <aside className="border-sidebar-border bg-sidebar sticky top-0 hidden h-dvh flex-col border-r px-4 py-5 md:flex">
           <Link
             href="/app"
             aria-label="Astreex dashboard home"
@@ -235,13 +235,13 @@ export function ProductShell({ children }: { children: ReactNode }) {
             <AstreexWordmark className="text-base" markClassName="size-6" />
           </Link>
           <div className="mt-10">
-            <p className="mb-2 px-3 font-mono text-[10px] tracking-[0.12em] text-[var(--ink-faint)] uppercase">
+            <p className="text-muted-foreground mb-2 px-3 text-xs font-semibold tracking-[0.06em] uppercase">
               Listen
             </p>
             <ProductNavigation />
           </div>
           <div className="mt-6">
-            <p className="mb-2 px-3 font-mono text-[10px] tracking-[0.12em] text-[var(--ink-faint)] uppercase">
+            <p className="text-muted-foreground mb-2 px-3 text-xs font-semibold tracking-[0.06em] uppercase">
               Configure
             </p>
             <ConfigurationNavigation />

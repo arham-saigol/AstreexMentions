@@ -174,10 +174,11 @@ function CategoryRow({ category }: { category: SettingsCategory }) {
           </Label>
           <Switch
             id={`category-enabled-${category.id}`}
-            checked={category.enabled}
-            onCheckedChange={(checked) => void setEnabled(checked)}
-            disabled={saving || isOther}
-            aria-label={`${category.enabled ? "Disable" : "Enable"} ${category.name}`}
+            label={`${category.enabled ? "Disable" : "Enable"} ${category.name}`}
+            isLabelHidden
+            value={category.enabled}
+            onChange={(checked) => void setEnabled(checked)}
+            isDisabled={saving || isOther}
           />
         </div>
       </div>

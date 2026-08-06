@@ -67,7 +67,7 @@ function KeywordUsage({
           <>
             <Progress
               value={percentage}
-              className="mt-3 h-1.5"
+              className="mt-3"
               aria-label={`${count} of ${limit} keyword slots used`}
             />
             <p className="text-muted-foreground mt-2 text-xs leading-5">

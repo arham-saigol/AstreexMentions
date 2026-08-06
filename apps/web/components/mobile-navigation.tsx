@@ -1,8 +1,8 @@
 "use client"
 
 import { Show } from "@clerk/nextjs"
-import { ListIcon, XIcon } from "@phosphor-icons/react"
 import { Button } from "@astreex/ui/components/button"
+import { Menu, X } from "lucide-react"
 import Link from "next/link"
 import { useEffect, useId, useRef, useState } from "react"
 
@@ -88,18 +88,23 @@ export function MobileNavigation({ clerkEnabled }: MobileNavigationProps) {
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
       >
-        {open ? (
-          <XIcon aria-hidden="true" className="size-5" />
-        ) : (
-          <ListIcon aria-hidden="true" className="size-5" />
-        )}
+        <span
+          aria-hidden="true"
+          className="t-icon-swap"
+          data-state={open ? "b" : "a"}
+        >
+          <Menu className="t-icon size-5" data-icon="a" />
+          <X className="t-icon size-5" data-icon="b" />
+        </span>
       </Button>
 
       {open && (
         <nav
           id={navigationId}
           aria-label="Mobile navigation"
-          className="border-border bg-popover text-popover-foreground absolute top-[calc(100%+0.5rem)] right-0 w-64 rounded-lg border p-3 shadow-sm"
+          data-state="open"
+          data-origin="top-right"
+          className="t-dropdown border-border bg-popover text-popover-foreground absolute top-[calc(100%+0.5rem)] right-0 w-64 rounded-lg border p-3 shadow-md"
         >
           <ul className="space-y-1">
             {publicNavigationLinks.map((link) => (

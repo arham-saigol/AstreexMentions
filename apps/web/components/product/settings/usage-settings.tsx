@@ -104,7 +104,7 @@ export function UsageSettings() {
             <Progress
               value={percent}
               aria-label={`${used} of ${allowance} mentions used`}
-              className="mt-5 h-2"
+              className="mt-5"
             />
             <dl className="border-border mt-5 grid divide-y border-y sm:grid-cols-3 sm:divide-x sm:divide-y-0">
               <div className="px-3 py-4 first:pl-0 sm:px-5">

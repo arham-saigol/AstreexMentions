@@ -1,11 +1,7 @@
 "use client"
 
-import {
-  CaretDownIcon,
-  CaretUpIcon,
-  CheckIcon,
-} from "@phosphor-icons/react/dist/ssr"
 import * as SelectPrimitive from "@radix-ui/react-select"
+import { Check, ChevronDown, ChevronUp } from "lucide-react"
 import type * as React from "react"
 
 import { cn } from "../lib/utils"
@@ -37,7 +33,7 @@ function SelectTrigger({
     >
       {children}
       <SelectPrimitive.Icon asChild>
-        <CaretDownIcon className="text-muted-foreground size-4" />
+        <ChevronDown className="text-muted-foreground size-4" />
       </SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>
   )
@@ -55,8 +51,7 @@ function SelectContent({
       <SelectPrimitive.Content
         data-slot="select-content"
         className={cn(
-          "border-border bg-popover text-popover-foreground relative z-50 max-h-(--radix-select-content-available-height) min-w-32 overflow-x-hidden overflow-y-auto rounded-md border shadow-sm",
-          "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
+          "t-dropdown border-border bg-popover text-popover-foreground relative z-50 max-h-(--radix-select-content-available-height) min-w-32 overflow-x-hidden overflow-y-auto rounded-md border shadow-sm",
           position === "popper" &&
             "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
           className,
@@ -114,7 +109,7 @@ function SelectItem({
     >
       <span className="absolute right-2 flex size-4 items-center justify-center">
         <SelectPrimitive.ItemIndicator>
-          <CheckIcon className="size-4" weight="bold" />
+          <Check className="size-4" strokeWidth={2.5} />
         </SelectPrimitive.ItemIndicator>
       </span>
       <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
@@ -148,7 +143,7 @@ function SelectScrollUpButton({
       )}
       {...props}
     >
-      <CaretUpIcon className="size-4" />
+      <ChevronUp className="size-4" />
     </SelectPrimitive.ScrollUpButton>
   )
 }
@@ -166,7 +161,7 @@ function SelectScrollDownButton({
       )}
       {...props}
     >
-      <CaretDownIcon className="size-4" />
+      <ChevronDown className="size-4" />
     </SelectPrimitive.ScrollDownButton>
   )
 }

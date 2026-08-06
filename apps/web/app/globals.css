@@ -3,10 +3,6 @@
 @source "../**/*.{ts,tsx}";
 @source "../../../packages/ui/src/**/*.{ts,tsx}";
 
-@theme inline {
-  --font-display: var(--font-display-face);
-}
-
 html {
   scroll-behavior: smooth;
 }
@@ -37,5 +33,109 @@ html {
   .reveal.reveal-in {
     opacity: 1;
     transform: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * transitions.dev — namespaced `t-*` transitions (CSS-only, reduced-motion
+ * guarded). Tunable vars declared once; snippets licensed MIT by
+ * Jakub Antalik (https://transitions.dev). See skill: transitions-dev.
+ * ------------------------------------------------------------------------- */
+:root {
+  /* texts reveal */
+  --stagger-dur: 500ms;
+  --stagger-distance: 12px;
+  --stagger-stagger: 40ms;
+  --stagger-blur: 3px;
+  --stagger-ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* accordion expand */
+  --acc-expand: 250ms;
+  --acc-collapse: 250ms;
+  --acc-chevron: 250ms;
+  --acc-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@layer utilities {
+  /* --- texts reveal (18) --- */
+  .t-stagger-line {
+    display: block;
+    opacity: 0;
+    transform: translateY(var(--stagger-distance));
+    filter: blur(var(--stagger-blur));
+    transition:
+      opacity var(--stagger-dur) var(--stagger-ease),
+      transform var(--stagger-dur) var(--stagger-ease),
+      filter var(--stagger-dur) var(--stagger-ease);
+    will-change: transform, opacity, filter;
+  }
+  .t-stagger-line--2 {
+    transition-delay: var(--stagger-stagger);
+  }
+  .t-stagger-line--3 {
+    transition-delay: calc(var(--stagger-stagger) * 2);
+  }
+  .t-stagger.is-shown .t-stagger-line {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+  .t-stagger.is-hiding .t-stagger-line {
+    opacity: 0;
+    transform: translateY(0);
+    filter: blur(0);
+    transition:
+      opacity 200ms ease,
+      transform 0s linear,
+      filter 0s linear;
+    transition-delay: 0s;
+  }
+
+  /* --- accordion expand (21) --- */
+  .t-acc-panel {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows var(--acc-collapse) var(--acc-ease);
+  }
+  .t-acc[data-open="true"] .t-acc-panel {
+    grid-template-rows: 1fr;
+    transition: grid-template-rows var(--acc-expand) var(--acc-ease);
+  }
+  .t-acc-panel-inner {
+    overflow: hidden;
+    opacity: 0;
+    filter: blur(2px);
+    transition:
+      opacity var(--acc-collapse) var(--acc-ease),
+      filter var(--acc-collapse) var(--acc-ease);
+  }
+  .t-acc[data-open="true"] .t-acc-panel-inner {
+    opacity: 1;
+    filter: blur(0);
+    transition:
+      opacity var(--acc-expand) var(--acc-ease),
+      filter var(--acc-expand) var(--acc-ease);
+  }
+  .t-acc-chevron {
+    display: inline-flex;
+    transform: scaleY(1);
+    transform-origin: center;
+    transition: transform var(--acc-chevron) var(--acc-ease);
+  }
+  .t-acc-chevron svg {
+    vector-effect: non-scaling-stroke;
+  }
+  .t-acc[data-open="true"] .t-acc-chevron {
+    transform: scaleY(-1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-stagger-line,
+  .reveal,
+  .t-acc-panel,
+  .t-acc-panel-inner,
+  .t-acc-chevron {
+    transition: none !important;
   }
 }

@@ -1,7 +1,7 @@
 "use client"
 
-import { CheckIcon, MinusIcon } from "@phosphor-icons/react/dist/ssr"
 import * as CheckboxPrimitive from "@radix-ui/react-checkbox"
+import { Check, Minus } from "lucide-react"
 import type * as React from "react"
 
 import { cn } from "../lib/utils"
@@ -14,7 +14,7 @@ function Checkbox({
     <CheckboxPrimitive.Root
       data-slot="checkbox"
       className={cn(
-        "peer border-input bg-background size-4 shrink-0 rounded-[4px] border transition-[border-color,box-shadow] outline-none disabled:cursor-not-allowed disabled:opacity-50",
+        "t-check peer border-input bg-background size-4 shrink-0 rounded-[4px] border outline-none disabled:cursor-not-allowed disabled:opacity-50",
         "focus-visible:border-foreground focus-visible:shadow-[0_0_0_3px_rgba(27,26,24,0.06)]",
         "data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground",
         "data-[state=indeterminate]:border-primary data-[state=indeterminate]:bg-primary data-[state=indeterminate]:text-primary-foreground",
@@ -24,11 +24,12 @@ function Checkbox({
       {...props}
     >
       <CheckboxPrimitive.Indicator
+        forceMount
         data-slot="checkbox-indicator"
-        className="grid place-content-center text-current data-[state=indeterminate]:[&_.checked-icon]:hidden data-[state=checked]:[&_.indeterminate-icon]:hidden"
+        className="grid place-content-center text-current data-[state=unchecked]:opacity-0 data-[state=indeterminate]:[&_.checked-icon]:hidden data-[state=checked]:[&_.indeterminate-icon]:hidden"
       >
-        <CheckIcon className="checked-icon size-3" weight="bold" />
-        <MinusIcon className="indeterminate-icon size-3" weight="bold" />
+        <Check className="checked-icon size-3" strokeWidth={2.5} />
+        <Minus className="indeterminate-icon size-3" strokeWidth={2.5} />
       </CheckboxPrimitive.Indicator>
     </CheckboxPrimitive.Root>
   )

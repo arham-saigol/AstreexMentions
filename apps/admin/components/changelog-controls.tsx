@@ -15,7 +15,7 @@ import { Button } from "@astreex/ui/components/button"
 import { Input } from "@astreex/ui/components/input"
 import { Label } from "@astreex/ui/components/label"
 import { Textarea } from "@astreex/ui/components/textarea"
-import { CircleNotchIcon, TrashIcon } from "@phosphor-icons/react/dist/ssr"
+import { LoaderCircle, Trash2 } from "lucide-react"
 import { useActionState, useId, useState } from "react"
 
 import {
@@ -301,7 +301,7 @@ function ChangelogEditor({ entry }: { entry?: ChangelogEntry }) {
           <div className="flex min-h-9 flex-wrap items-center gap-3 border-t pt-4">
             <Button type="submit" disabled={pending}>
               {pending ? (
-                <CircleNotchIcon className="animate-spin" aria-hidden="true" />
+                <LoaderCircle className="animate-spin" aria-hidden="true" />
               ) : null}
               {pending
                 ? "Saving…"
@@ -355,7 +355,7 @@ function PublicationAction({
         disabled={pending}
       >
         {pending ? (
-          <CircleNotchIcon className="animate-spin" aria-hidden="true" />
+          <LoaderCircle className="animate-spin" aria-hidden="true" />
         ) : null}
         {pending
           ? isPublished
@@ -392,7 +392,7 @@ function DeleteChangelogEntry({
     <AlertDialog>
       <AlertDialogTrigger asChild>
         <Button type="button" variant="destructive">
-          <TrashIcon aria-hidden="true" />
+          <Trash2 aria-hidden="true" />
           Delete
         </Button>
       </AlertDialogTrigger>
@@ -415,9 +415,9 @@ function DeleteChangelogEntry({
             <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
             <Button type="submit" variant="destructive" disabled={pending}>
               {pending ? (
-                <CircleNotchIcon className="animate-spin" aria-hidden="true" />
+                <LoaderCircle className="animate-spin" aria-hidden="true" />
               ) : (
-                <TrashIcon aria-hidden="true" />
+                <Trash2 aria-hidden="true" />
               )}
               {pending ? "Deleting…" : "Delete entry"}
             </Button>

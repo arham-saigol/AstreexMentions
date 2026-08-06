@@ -729,9 +729,11 @@ function CategoriesStep({
                     </Label>
                     <Switch
                       id={`category-${category.serverId}`}
-                      checked={category.enabled}
-                      disabled={immutable}
-                      onCheckedChange={(enabled) =>
+                      label={`${category.enabled ? "Disable" : "Enable"} ${category.name}`}
+                      isLabelHidden
+                      value={category.enabled}
+                      isDisabled={immutable}
+                      onChange={(enabled) =>
                         onChange(category.serverId, { enabled })
                       }
                     />
@@ -1628,7 +1630,7 @@ export function OnboardingFlow() {
         <Progress
           value={progress}
           aria-label={`Onboarding progress: step ${draft.step} of ${ONBOARDING_STEP_COUNT}`}
-          className="mt-5 h-1"
+          className="mt-5"
         />
         <ol className="mt-6 hidden space-y-1 lg:block">
           {steps.map((step, index) => {

@@ -3,6 +3,7 @@
 import { ClerkProvider, useAuth } from "@clerk/nextjs"
 import { ConvexReactClient, ConvexProvider } from "convex/react"
 import { ConvexProviderWithClerk } from "convex/react-clerk"
+import { AstryxTheme } from "@astreex/ui/astryx-theme"
 import { useMemo, type ReactNode } from "react"
 
 type ProvidersProps = {
@@ -49,6 +50,8 @@ export function Providers({
     children
   )
 
+  const themed = <AstryxTheme>{content}</AstryxTheme>
+
   return clerkPublishableKey ? (
     <ClerkProvider
       publishableKey={clerkPublishableKey}
@@ -56,9 +59,9 @@ export function Providers({
       signUpUrl="/sign-up"
       afterSignOutUrl="/"
     >
-      {content}
+      {themed}
     </ClerkProvider>
   ) : (
-    content
+    themed
   )
 }

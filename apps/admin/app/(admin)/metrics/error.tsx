@@ -2,7 +2,7 @@
 
 import { Button } from "@astreex/ui/components/button"
 import { StatusState } from "@astreex/ui/components/status-state"
-import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/ssr"
+import { RefreshCw } from "lucide-react"
 
 export default function MetricsError({
   error,
@@ -22,7 +22,7 @@ export default function MetricsError({
         description="The dashboard encountered an unexpected error. No placeholder metrics are shown."
         action={
           <Button type="button" variant="outline" onClick={reset}>
-            <ArrowClockwiseIcon aria-hidden="true" />
+            <RefreshCw aria-hidden="true" />
             Try again
           </Button>
         }

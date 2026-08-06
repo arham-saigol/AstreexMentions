@@ -1,12 +1,8 @@
 "use client"
 
-import {
-  ArrowClockwiseIcon,
-  CircleNotchIcon,
-  WarningCircleIcon,
-} from "@phosphor-icons/react"
 import { AstreexWordmark } from "@astreex/ui/components/astreex-wordmark"
 import { Button } from "@astreex/ui/components/button"
+import { CircleAlert, LoaderCircle, RefreshCw } from "lucide-react"
 
 export function ProductLoadingState({ message }: { message: string }) {
   return (
@@ -17,10 +13,10 @@ export function ProductLoadingState({ message }: { message: string }) {
         aria-live="polite"
       >
         <AstreexWordmark className="justify-center" />
-        <CircleNotchIcon
+        <LoaderCircle
           aria-hidden="true"
-          className="text-primary mx-auto mt-8 size-6 animate-spin"
-          weight="bold"
+          className="text-accent-foreground mx-auto mt-8 size-6 animate-spin"
+          strokeWidth={2.25}
         />
         <p className="text-muted-foreground mt-4 text-sm">{message}</p>
       </div>
@@ -45,13 +41,10 @@ export function ProductErrorState({
       >
         <AstreexWordmark />
         <div className="border-border mt-8 border-y py-8" role="alert">
-          <WarningCircleIcon
-            aria-hidden="true"
-            className="text-destructive size-7"
-          />
+          <CircleAlert aria-hidden="true" className="text-destructive size-7" />
           <h1
             id="product-error-title"
-            className="font-display text-foreground mt-4 text-3xl font-medium tracking-[-0.025em]"
+            className="text-foreground mt-4 text-3xl font-semibold tracking-[-0.025em]"
           >
             {title}
           </h1>
@@ -59,7 +52,7 @@ export function ProductErrorState({
             {description}
           </p>
           <Button onClick={onRetry} variant="outline" className="mt-6">
-            <ArrowClockwiseIcon aria-hidden="true" />
+            <RefreshCw aria-hidden="true" />
             Try again
           </Button>
         </div>

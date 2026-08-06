@@ -2,7 +2,7 @@
 
 import { Button } from "@astreex/ui/components/button"
 import { StatusState } from "@astreex/ui/components/status-state"
-import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/ssr"
+import { RefreshCw } from "lucide-react"
 
 export default function ChangelogError({
   error,
@@ -22,7 +22,7 @@ export default function ChangelogError({
         description="An unexpected error interrupted this view. No placeholder entries or local fallback data are shown."
         action={
           <Button type="button" variant="outline" onClick={reset}>
-            <ArrowClockwiseIcon aria-hidden="true" />
+            <RefreshCw aria-hidden="true" />
             Try again
           </Button>
         }
