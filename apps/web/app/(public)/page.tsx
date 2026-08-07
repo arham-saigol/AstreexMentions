@@ -18,31 +18,31 @@ import { SignalPreview } from "@/components/marketing/signal-preview"
 const workflow = [
   [
     "01",
-    "Choose what matters",
-    "Add your brand, products, competitors, and the problems customers describe.",
+    "Choose your keywords",
+    "Track your brand, products, competitors, and the phrases that customers use to describe their problems.",
   ],
   [
     "02",
-    "Review by intent",
-    "Questions, complaints, praise, bugs, and requests arrive in one calm queue.",
+    "Start with the right mentions",
+    "Astreex sorts each mention into questions, complaints, praise, bugs, feature requests, and your custom categories.",
   ],
   [
     "03",
-    "Act while it matters",
-    "Open the original conversation, save it for later, or clear it from view.",
+    "Read the original conversation",
+    "Open the source, save the mention for later, or remove it from your queue.",
   ],
 ] as const
 
 const sources = [
-  ["X", "Public posts, product language, and competitor shifts.", XLogoIcon],
+  ["X", "Track public posts about your brand, product, or market.", XLogoIcon],
   [
     "Reddit",
-    "Questions and candid conversations in the communities that matter.",
+    "Find questions and candid feedback in relevant communities.",
     RedditLogoIcon,
   ],
   [
     "Hacker News",
-    "Technical discussions, launch reactions, and product feedback.",
+    "Follow technical discussions, launch reactions, and product feedback.",
     NewspaperClippingIcon,
   ],
 ] as const
@@ -55,23 +55,23 @@ const features: Array<{
   badges?: string[]
 }> = [
   {
-    label: "Intent-first queue",
-    title: "The conversations that need a response surface first.",
-    body: "Questions, complaints, praise, bugs, and requests arrive in one calm queue instead of a raw feed.",
+    label: "Categories by intent",
+    title: "See questions, complaints, and bugs first.",
+    body: "Astreex sorts matching posts into a focused queue, so you do not have to scan a raw feed.",
     spans: "lg:col-span-2",
   },
   {
     label: "Daily digest",
-    title: "09:00",
-    body: "In your local timezone",
+    title: "09:00 by default",
+    body: "Set your local delivery time",
   },
   {
     label: "Saved views",
-    title: "Recurring questions, one click away.",
+    title: "Return to the mentions you review often.",
   },
   {
     label: "Custom categories",
-    title: "Shape the catalog to your business.",
+    title: "Organize mentions around your business.",
     spans: "lg:col-span-2",
     badges: ["Onboarding friction", "Pricing objection", "Integration request"],
   },
@@ -79,16 +79,16 @@ const features: Array<{
 
 const faqs = [
   [
-    "Which conversations can Astreex monitor?",
-    "Astreex monitors configured keywords across X, Reddit, and Hacker News. Coverage and collection cadence depend on the source and your plan limits.",
+    "What can Astreex monitor?",
+    "Astreex tracks the keywords that you choose across X, Reddit, and Hacker News. Coverage and update frequency depend on the source and your plan.",
   ],
   [
-    "How does categorization work?",
-    "Astreex categorizes collected mentions with AI into questions, complaints, praise, bugs, feature requests, competitor mentions, and your custom categories. The original post always stays visible.",
+    "How does Astreex categorize mentions?",
+    "AI sorts mentions into questions, complaints, praise, bugs, feature requests, competitor mentions, and your custom categories. You can always read the original post.",
   ],
   [
-    "What do plans change?",
-    "Every plan includes the full product. Plans differ by monitored keywords and monthly mention volume.",
+    "What changes between plans?",
+    "Every plan includes all product features. Plans differ only by the number of keywords and mentions that you can monitor each month.",
   ],
 ] as const
 
@@ -104,15 +104,15 @@ export default function HomePage() {
         <div className="relative mx-auto grid w-full max-w-[1180px] gap-16 px-5 py-24 min-[1081px]:grid-cols-[1.05fr_1fr] min-[1081px]:items-center sm:px-8 lg:px-16 lg:py-28">
           <Stagger>
             <p className="editorial-eyebrow">
-              Customer conversations, made actionable
+              Keyword monitoring for customer conversations
             </p>
             <h1 className="t-stagger-line text-foreground mt-6 max-w-[14ch] text-[clamp(2.75rem,5.4vw,4.5rem)] leading-[1.02] font-semibold tracking-[-0.03em] text-balance">
-              Hear what the market is telling you.
+              Find the customer conversations worth your attention.
             </h1>
             <p className="t-stagger-line t-stagger-line--2 text-muted-foreground mt-7 max-w-[52ch] text-lg leading-[1.6]">
-              Astreex finds the conversations around your keywords across X,
-              Reddit, and Hacker News, organizes them by intent, and keeps the
-              original context close enough to act with confidence.
+              Track keywords across X, Reddit, and Hacker News. Astreex sorts
+              each mention into questions, complaints, praise, bugs, and
+              feature requests, so you know where to look first.
             </p>
             <div className="mt-9 flex flex-wrap items-center gap-3">
               <PressButton href="/sign-up">
@@ -120,7 +120,7 @@ export default function HomePage() {
                 <ArrowRight className="size-4" aria-hidden="true" />
               </PressButton>
               <Button asChild size="lg" variant="ghost">
-                <Link href="#product">See how it works</Link>
+                <Link href="#product">See how Astreex works</Link>
               </Button>
             </div>
             <p className="text-muted-foreground mt-5 text-sm">
@@ -152,9 +152,9 @@ export default function HomePage() {
         <div className="mx-auto w-full max-w-[1180px] px-5 py-24 sm:px-8 lg:px-16">
           <div className="grid gap-12 min-[1081px]:grid-cols-[0.75fr_1fr] min-[1081px]:gap-20">
             <Reveal>
-              <p className="editorial-eyebrow">The review loop</p>
+              <p className="editorial-eyebrow">How Astreex works</p>
               <h2 className="mt-4 max-w-[13ch] text-4xl leading-[1.05] font-semibold tracking-[-0.025em] sm:text-5xl">
-                From scattered noise to a clear next move.
+                Turn scattered mentions into a daily review queue.
               </h2>
             </Reveal>
             <ol className="border-t">
@@ -187,12 +187,12 @@ export default function HomePage() {
           <p className="editorial-eyebrow">Sources</p>
           <div className="mt-4 grid gap-8 min-[1081px]:grid-cols-[0.9fr_1fr] min-[1081px]:items-end min-[1081px]:gap-20">
             <h2 className="max-w-[12ch] text-4xl leading-[1.05] font-semibold tracking-[-0.025em] sm:text-5xl">
-              Source context stays attached.
+              Read every mention in context.
             </h2>
             <p className="text-muted-foreground max-w-[58ch] text-base leading-7">
-              A category is a clue, not an answer. Astreex keeps the author,
-              source, time, excerpt, engagement, and original link visible
-              before its interpretation.
+              A category helps you decide what to read first. The author,
+              source, time, excerpt, engagement, and original link stay with
+              every mention.
             </p>
           </div>
           <div className="bg-border mt-14 grid gap-px overflow-hidden rounded-xl border min-[1081px]:grid-cols-3">
@@ -216,9 +216,9 @@ export default function HomePage() {
       {/* Features ----------------------------------------------------------- */}
       <section id="features" className="scroll-mt-16 border-b">
         <div className="mx-auto w-full max-w-[1180px] px-5 py-24 sm:px-8 lg:px-16">
-          <p className="editorial-eyebrow">Built for a daily habit</p>
+          <p className="editorial-eyebrow">A focused daily review</p>
           <h2 className="mt-4 max-w-[14ch] text-4xl leading-[1.05] font-semibold tracking-[-0.025em] sm:text-5xl">
-            Review less. Notice more.
+            Know what needs your attention first.
           </h2>
           <div className="mt-12 grid gap-4 lg:grid-cols-3">
             {features.map((f, i) => (
@@ -258,11 +258,11 @@ export default function HomePage() {
         <div className="mx-auto w-full max-w-[1180px] px-5 py-24 sm:px-8 lg:px-16">
           <p className="editorial-eyebrow">Pricing</p>
           <h2 className="mt-4 text-4xl font-semibold tracking-[-0.025em] sm:text-5xl">
-            Choose by volume.
+            Pick the volume that fits.
           </h2>
           <p className="text-muted-foreground mt-4 max-w-2xl text-base leading-7">
-            Every plan includes the full product. Only keywords and monthly
-            mention volume change.
+            Every plan includes all product features. Choose how many keywords
+            and mentions you want to monitor each month.
           </p>
           <div className="mt-10 grid gap-4 lg:grid-cols-3">
             {PLAN_DEFINITIONS.map((plan, index) => {
@@ -292,17 +292,17 @@ export default function HomePage() {
                   </p>
                   <p className="text-muted-foreground mt-4 text-sm leading-6">
                     {index === 0
-                      ? "For a single brand finding its first conversations."
+                      ? "For one brand and the conversations around it."
                       : index === 1
-                        ? "For teams tracking their brand and a few competitors."
-                        : "For a brand, competitors, and problem phrases."}
+                        ? "For teams that track their brand and key competitors."
+                        : "For broad coverage of a brand, competitors, and customer problems."}
                   </p>
                   <ul className="text-muted-foreground mt-6 flex-1 text-sm">
                     {[
                       `${plan.keywordLimit} monitored keywords`,
                       `${plan.monthlyMentionLimit.toLocaleString()} mentions / month`,
                       "X, Reddit, Hacker News",
-                      "All categories and custom",
+                      "Built-in and custom categories",
                       "Daily digest",
                     ].map((feature) => (
                       <li
@@ -340,7 +340,7 @@ export default function HomePage() {
           <div>
             <p className="editorial-eyebrow">FAQ</p>
             <h2 className="mt-4 text-4xl font-semibold tracking-[-0.025em]">
-              Before you start.
+              Questions before you start
             </h2>
           </div>
           <FaqAccordion items={faqs} />
@@ -351,7 +351,7 @@ export default function HomePage() {
       <section>
         <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-8 px-5 py-16 sm:px-8 md:flex-row md:items-center md:justify-between lg:px-16">
           <h2 className="max-w-[16ch] text-4xl font-semibold tracking-[-0.03em]">
-            Find the conversation worth joining.
+            Start with the keywords that matter to your business.
           </h2>
           <Button asChild size="lg">
             <Link href="/sign-up">

@@ -53,7 +53,7 @@ export function SignalPreview() {
             Mentions
           </p>
           <p className="text-muted-foreground mt-0.5 font-mono text-[11px]">
-            Example workspace · 87 today
+            Illustrative workspace · 87 today
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

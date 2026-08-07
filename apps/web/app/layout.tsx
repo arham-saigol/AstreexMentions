@@ -31,11 +31,11 @@ const jetBrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   metadataBase: siteUrl,
   title: {
-    default: "Astreex — Customer signal, made clear",
+    default: "Astreex — Customer conversation monitoring",
     template: "%s · Astreex",
   },
   description:
-    "Astreex organizes customer conversations into clear, actionable signals for focused review.",
+    "Track keywords across X, Reddit, and Hacker News. Astreex sorts matching posts into questions, complaints, praise, bugs, and feature requests.",
   applicationName: "Astreex",
   alternates: {
     canonical: "/",
@@ -44,15 +44,15 @@ export const metadata: Metadata = {
     type: "website",
     url: "/",
     siteName: "Astreex",
-    title: "Astreex — Customer signal, made clear",
+    title: "Astreex — Customer conversation monitoring",
     description:
-      "Organize customer conversations into clear, actionable signals for focused review.",
+      "Track keywords across X, Reddit, and Hacker News. Sort matching posts by intent and keep every mention in context.",
   },
   twitter: {
     card: "summary",
-    title: "Astreex — Customer signal, made clear",
+    title: "Astreex — Customer conversation monitoring",
     description:
-      "Organize customer conversations into clear, actionable signals for focused review.",
+      "Track keywords across X, Reddit, and Hacker News. Sort matching posts by intent and keep every mention in context.",
   },
   robots: {
     index: true,

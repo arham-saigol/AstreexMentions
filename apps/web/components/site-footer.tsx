@@ -18,7 +18,7 @@ export function SiteFooter() {
             <AstreexWordmark />
           </Link>
           <p className="text-muted-foreground mt-3 max-w-sm text-sm">
-            Customer conversations, made actionable.
+            Track keywords across X, Reddit, and Hacker News.
           </p>
         </div>
         <nav aria-label="Footer navigation">
@@ -39,7 +39,7 @@ export function SiteFooter() {
       <div className="border-t">
         <div className="text-muted-foreground mx-auto flex w-full max-w-[1184px] flex-wrap justify-between gap-2 px-4 py-4 text-xs sm:px-6 lg:px-8">
           <span>© {new Date().getFullYear()} Astreex</span>
-          <span>Monitor deliberately. Act in context.</span>
+          <span>Track the right words. Read the full conversation.</span>
         </div>
       </div>
     </footer>
