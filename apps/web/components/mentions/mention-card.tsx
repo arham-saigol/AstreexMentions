@@ -197,7 +197,7 @@ export function MentionCard({
       )}
       <p
         className={cn(
-          "max-w-4xl text-[14.5px] leading-[1.62]",
+          "[display:-webkit-box] max-w-4xl overflow-hidden text-[14.5px] leading-[1.62] [-webkit-box-orient:vertical] [-webkit-line-clamp:3]",
           mention.title ? "mt-1" : "mt-3",
         )}
       >

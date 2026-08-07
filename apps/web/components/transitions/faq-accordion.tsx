@@ -50,7 +50,7 @@ function AccordionItem({
           <ChevronDown className="size-5" aria-hidden="true" />
         </span>
       </button>
-      <div className="t-acc-panel">
+      <div className="t-acc-panel" aria-hidden={!open}>
         <div className="t-acc-panel-inner">
           <p className="text-muted-foreground max-w-2xl pb-6 text-sm leading-6">
             {answer}
