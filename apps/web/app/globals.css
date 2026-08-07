@@ -60,37 +60,15 @@ html {
   /* --- texts reveal (18) --- */
   .t-stagger-line {
     display: block;
-    opacity: 0;
-    transform: translateY(var(--stagger-distance));
-    filter: blur(var(--stagger-blur));
-    transition:
-      opacity var(--stagger-dur) var(--stagger-ease),
-      transform var(--stagger-dur) var(--stagger-ease),
-      filter var(--stagger-dur) var(--stagger-ease);
+    animation: t-stagger-line-in var(--stagger-dur) var(--stagger-ease) both;
     will-change: transform, opacity, filter;
   }
   .t-stagger-line--2 {
-    transition-delay: var(--stagger-stagger);
+    animation-delay: var(--stagger-stagger);
   }
   .t-stagger-line--3 {
-    transition-delay: calc(var(--stagger-stagger) * 2);
+    animation-delay: calc(var(--stagger-stagger) * 2);
   }
-  .t-stagger.is-shown .t-stagger-line {
-    opacity: 1;
-    transform: translateY(0);
-    filter: blur(0);
-  }
-  .t-stagger.is-hiding .t-stagger-line {
-    opacity: 0;
-    transform: translateY(0);
-    filter: blur(0);
-    transition:
-      opacity 200ms ease,
-      transform 0s linear,
-      filter 0s linear;
-    transition-delay: 0s;
-  }
-
   /* --- accordion expand (21) --- */
   .t-acc-panel {
     display: grid;
@@ -130,6 +108,19 @@ html {
   }
 }
 
+@keyframes t-stagger-line-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--stagger-distance));
+    filter: blur(var(--stagger-blur));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .t-stagger-line,
   .reveal,
@@ -137,5 +128,9 @@ html {
   .t-acc-panel-inner,
   .t-acc-chevron {
     transition: none !important;
+  }
+
+  .t-stagger-line {
+    animation: none !important;
   }
 }
