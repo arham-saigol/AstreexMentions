@@ -1,28 +1,24 @@
-"use client"
+import { Divider, type DividerProps } from "@astryxdesign/core/Divider"
 
-import * as SeparatorPrimitive from "@radix-ui/react-separator"
-import type * as React from "react"
+type SeparatorProps = Omit<DividerProps, "label"> & {
+  /** Decorative separators are hidden from assistive technology by default. */
+  decorative?: boolean
+}
 
-import { cn } from "../lib/utils"
-
-function Separator({
-  className,
-  orientation = "horizontal",
-  decorative = true,
-  ...props
-}: React.ComponentProps<typeof SeparatorPrimitive.Root>) {
+/**
+ * Compatibility wrapper over Astryx Divider. Existing separators are purely
+ * visual; aria-hidden preserves that contract even though Astryx correctly
+ * emits role="separator" for semantic dividers.
+ */
+function Separator({ decorative = true, ...props }: SeparatorProps) {
   return (
-    <SeparatorPrimitive.Root
+    <Divider
       data-slot="separator"
-      decorative={decorative}
-      orientation={orientation}
-      className={cn(
-        "bg-border shrink-0 data-[orientation=horizontal]:h-px data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-px",
-        className,
-      )}
+      aria-hidden={decorative ? "true" : undefined}
       {...props}
     />
   )
 }
 
 export { Separator }
+export type { SeparatorProps }

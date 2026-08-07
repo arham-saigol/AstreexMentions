@@ -85,17 +85,17 @@ function MarkdownLink({ href = "", children }: ComponentPropsWithoutRef<"a">) {
 
 const markdownComponents: Components = {
   h2: ({ children }) => (
-    <h2 className="text-foreground mt-12 text-2xl font-semibold tracking-tight text-balance sm:text-3xl">
+    <h2 className="font-display text-foreground mt-12 text-3xl font-medium tracking-[-0.02em] text-balance sm:text-4xl">
       {children}
     </h2>
   ),
   h3: ({ children }) => (
-    <h3 className="text-foreground mt-9 text-xl font-semibold tracking-tight text-balance sm:text-2xl">
+    <h3 className="font-display text-foreground mt-9 text-2xl font-medium tracking-[-0.02em] text-balance sm:text-3xl">
       {children}
     </h3>
   ),
   p: ({ children }) => (
-    <p className="text-muted-foreground mt-5 text-base leading-8 sm:text-[1.0625rem]">
+    <p className="mt-5 text-base leading-8 text-[var(--ink-secondary)] sm:text-[1.0625rem]">
       {children}
     </p>
   ),
@@ -104,14 +104,14 @@ const markdownComponents: Components = {
     <strong className="text-foreground font-semibold">{children}</strong>
   ),
   ul: ({ children }) => (
-    <ul className="text-muted-foreground marker:text-primary mt-5 ml-5 list-disc space-y-2 text-base leading-7 sm:text-[1.0625rem]">
+    <ul className="mt-5 ml-5 list-disc space-y-2 text-base leading-7 text-[var(--ink-secondary)] marker:text-[var(--signal)] sm:text-[1.0625rem]">
       {children}
     </ul>
   ),
   ol: ({ children, start }) => (
     <ol
       start={start}
-      className="text-muted-foreground marker:text-foreground mt-5 ml-5 list-decimal space-y-2 text-base leading-7 marker:font-semibold sm:text-[1.0625rem]"
+      className="marker:text-foreground mt-5 ml-5 list-decimal space-y-2 text-base leading-7 text-[var(--ink-secondary)] marker:font-semibold sm:text-[1.0625rem]"
     >
       {children}
     </ol>
@@ -163,7 +163,7 @@ const markdownComponents: Components = {
   td: ({ children, style }) => (
     <td
       style={style}
-      className="text-muted-foreground border-border border-r px-4 py-3 align-top leading-6 last:border-r-0"
+      className="border-border border-r px-4 py-3 align-top leading-6 text-[var(--ink-secondary)] last:border-r-0"
     >
       {children}
     </td>
@@ -230,10 +230,10 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
                 {post.readingTimeMinutes} min read
               </span>
             </div>
-            <h1 className="text-foreground mt-5 text-4xl font-semibold tracking-[-0.035em] text-balance sm:text-5xl">
+            <h1 className="font-display text-foreground mt-5 text-5xl font-medium tracking-[-0.035em] text-balance sm:text-6xl">
               {post.title}
             </h1>
-            <p className="text-muted-foreground mt-5 max-w-3xl text-lg leading-8 text-pretty">
+            <p className="mt-5 max-w-3xl text-lg leading-8 text-pretty text-[var(--ink-secondary)]">
               {post.description}
             </p>
             <div className="text-muted-foreground mt-7 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">

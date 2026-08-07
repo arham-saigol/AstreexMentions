@@ -1,9 +1,4 @@
-import {
-  CheckCircleIcon,
-  CircleNotchIcon,
-  InfoIcon,
-  WarningCircleIcon,
-} from "@phosphor-icons/react/dist/ssr"
+import { CircleAlert, CircleCheck, Info, LoaderCircle } from "lucide-react"
 import { cva, type VariantProps } from "class-variance-authority"
 import type * as React from "react"
 
@@ -29,11 +24,11 @@ const statusStateVariants = cva(
 )
 
 const statusIcons = {
-  info: InfoIcon,
-  success: CheckCircleIcon,
-  warning: WarningCircleIcon,
-  error: WarningCircleIcon,
-  loading: CircleNotchIcon,
+  info: Info,
+  success: CircleCheck,
+  warning: CircleAlert,
+  error: CircleAlert,
+  loading: LoaderCircle,
 } as const
 
 type StatusStateProps = Omit<React.ComponentProps<"div">, "title"> &
@@ -86,7 +81,7 @@ function StatusState({
       >
         {icon ?? (
           <Icon
-            weight={normalizedVariant === "loading" ? "bold" : "regular"}
+            strokeWidth={normalizedVariant === "loading" ? 2.25 : 2}
             className={cn(normalizedVariant === "loading" && "animate-spin")}
           />
         )}

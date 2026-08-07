@@ -453,16 +453,13 @@ export function MentionsScreen() {
 
   return (
     <div>
-      <div className="border-border flex flex-col gap-3 border-b pb-5 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-3 pb-6 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-primary text-xs font-semibold tracking-wide uppercase">
-            {workspace.workspace.name}
-          </p>
-          <h1 className="text-foreground mt-1 text-2xl font-semibold tracking-tight">
+          <h1 className="font-display text-foreground text-[28px] leading-[34px] font-medium tracking-[-0.02em]">
             Mentions
           </h1>
-          <p className="text-muted-foreground mt-1 text-sm leading-6">
-            Review customer conversations collected for your keywords.
+          <p className="text-muted-foreground mt-1 text-xs">
+            {workspace.workspace.name}
           </p>
         </div>
         {preview ? (
@@ -517,7 +514,7 @@ export function MentionsScreen() {
             selectedViewId={selectedViewId}
           />
 
-          <div className="border-border flex flex-col gap-3 border-b py-4 lg:flex-row lg:items-center">
+          <div className="flex flex-col gap-3 py-4 lg:flex-row lg:items-center">
             <div className="relative min-w-0 flex-1">
               <MagnifyingGlassIcon
                 aria-hidden="true"
@@ -563,7 +560,7 @@ export function MentionsScreen() {
             </div>
           </div>
 
-          <div className="pt-5">
+          <div className="pt-2">
             {visibleMentions.length > 0 &&
               (setupRequired || paused || usageLimited) && (
                 <FeedNotice
@@ -598,12 +595,9 @@ export function MentionsScreen() {
                       ? `${mentionsValue.totalCount} mentions`
                       : `${visibleMentions.length} mentions on this page`}
                   </p>
-                  <p className="text-muted-foreground text-xs">
-                    Search is limited to the collected feed.
-                  </p>
                 </div>
 
-                <div className="border-border divide-border divide-y overflow-hidden rounded-lg border">
+                <div className="flex flex-col gap-3">
                   {visibleMentions.map((mention) => (
                     <MentionCard
                       key={mention.id}

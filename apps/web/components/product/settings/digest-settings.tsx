@@ -166,9 +166,10 @@ export function DigestSettings() {
         </div>
         <Switch
           id="digest-enabled"
-          checked={enabled}
-          onCheckedChange={setEnabledDraft}
-          aria-label="Enable daily digest"
+          label="Enable daily digest"
+          isLabelHidden
+          value={enabled}
+          onChange={(checked) => setEnabledDraft(checked)}
         />
       </div>
 

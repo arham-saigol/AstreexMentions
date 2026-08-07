@@ -24,7 +24,7 @@ export async function ProtectedProductLayout({
         <ConfigurationRequired
           services={missingServices}
           title="The customer account needs configuration"
-          description="Protected account and subscription data remain unavailable until Clerk and Convex are both configured. Astreex is not showing sample customer data in their place."
+          description="Account access is not configured for this deployment. Customer data remains unavailable until setup is complete."
         />
       </main>
     )

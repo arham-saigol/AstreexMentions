@@ -20,14 +20,14 @@ export function ConfigurationRequired({
       aria-labelledby="configuration-title"
       className="mx-auto w-full max-w-2xl px-6 py-20 sm:py-28"
     >
-      <div className="border-border bg-card rounded-xl border p-6 shadow-xs sm:p-8">
+      <div className="border-border bg-card rounded-xl border p-6 sm:p-8">
         <div className="border-border bg-muted text-muted-foreground mb-5 grid size-11 place-items-center rounded-lg border">
           <WarningCircleIcon aria-hidden="true" className="size-6" />
         </div>
         <p className="text-primary text-sm font-semibold">Service status</p>
         <h1
           id="configuration-title"
-          className="text-foreground mt-2 text-2xl font-semibold tracking-tight sm:text-3xl"
+          className="font-display text-foreground mt-2 text-3xl font-medium tracking-[-0.025em] sm:text-4xl"
         >
           {title}
         </h1>

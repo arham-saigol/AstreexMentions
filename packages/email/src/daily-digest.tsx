@@ -9,7 +9,13 @@ import { Button, Heading, Link, Section, Text } from "react-email"
 import type { CSSProperties } from "react"
 import { z } from "zod"
 
-import { colors, EmailLayout, fontFamily } from "./email-layout"
+import {
+  colors,
+  displayFontFamily,
+  EmailLayout,
+  fontFamily,
+  monoFontFamily,
+} from "./email-layout"
 import {
   emailButtonContainerStyle,
   emailParagraphStyle,
@@ -56,9 +62,10 @@ const platformLabels: Record<Platform, string> = {
 
 const sectionHeadingStyle: CSSProperties = {
   color: colors.text,
-  fontFamily,
-  fontSize: "20px",
-  fontWeight: 700,
+  fontFamily: displayFontFamily,
+  fontSize: "22px",
+  fontWeight: 500,
+  letterSpacing: "-0.01em",
   lineHeight: "28px",
   margin: "28px 0 12px",
 }
@@ -73,26 +80,55 @@ const listStyle: CSSProperties = {
 }
 
 const mentionStyle: CSSProperties = {
-  backgroundColor: colors.background,
-  border: `1px solid ${colors.border}`,
-  borderRadius: "6px",
-  margin: "0 0 16px",
-  padding: "18px 20px",
+  backgroundColor: colors.card,
+  borderBottom: `1px solid ${colors.border}`,
+  margin: 0,
+  padding: "16px 0",
+}
+
+const categoryColors: Record<
+  MentionCategory,
+  { backgroundColor: string; color: string }
+> = {
+  Question: { backgroundColor: "#e4eff7", color: "#2c5f82" },
+  Complaint: { backgroundColor: "#fdebec", color: "#9f2f2d" },
+  Praise: { backgroundColor: "#edf3ec", color: "#346538" },
+  Bug: { backgroundColor: "#fcefe3", color: "#9a4b16" },
+  "Feature Request": { backgroundColor: "#fbf3db", color: "#956400" },
+  "Competitor Mention": {
+    backgroundColor: "#f0edf7",
+    color: "#5a4b8a",
+  },
+  Other: { backgroundColor: "#efede8", color: "#6b665f" },
+}
+
+const categoryTagStyle: CSSProperties = {
+  borderRadius: "9999px",
+  display: "inline-block",
+  fontFamily,
+  fontSize: "10px",
+  fontWeight: 500,
+  letterSpacing: "0.06em",
+  lineHeight: "12px",
+  margin: "0 0 8px",
+  padding: "5px 9px",
+  textTransform: "uppercase",
 }
 
 const mentionHeadingStyle: CSSProperties = {
   color: colors.text,
-  fontFamily,
-  fontSize: "17px",
-  fontWeight: 700,
+  fontFamily: displayFontFamily,
+  fontSize: "18px",
+  fontWeight: 500,
+  letterSpacing: "-0.01em",
   lineHeight: "25px",
   margin: "0 0 8px",
 }
 
 const metadataStyle: CSSProperties = {
   color: colors.muted,
-  fontFamily,
-  fontSize: "13px",
+  fontFamily: monoFontFamily,
+  fontSize: "11px",
   lineHeight: "20px",
   margin: "0 0 10px",
 }
@@ -177,7 +213,7 @@ function readableDate(localDate: string): string {
 }
 
 function mentionMetadata(mention: DailyDigestMention): string {
-  const parts = [platformLabels[mention.platform], mention.category]
+  const parts = [platformLabels[mention.platform]]
   const author = mention.author?.trim()
   if (author) parts.push(author)
   if (mention.engagementScore !== undefined) {
@@ -305,6 +341,14 @@ export function DailyDigestEmail(props: DailyDigestEmailProps) {
             key={`${canonicalUrl}:${index}`}
             style={mentionStyle}
           >
+            <Text
+              style={{
+                ...categoryTagStyle,
+                ...categoryColors[mention.category],
+              }}
+            >
+              {mention.category}
+            </Text>
             <Heading as="h3" className="email-text" style={mentionHeadingStyle}>
               {index + 1}. {title}
             </Heading>

@@ -1,108 +1,106 @@
 import {
-  MagnifyingGlassIcon,
   NewspaperClippingIcon,
   RedditLogoIcon,
   XLogoIcon,
 } from "@phosphor-icons/react/dist/ssr"
-import { Badge, CategoryBadge } from "@astreex/ui/components/badge"
+import { Badge } from "@astreex/ui/components/badge"
 
 const exampleMentions = [
   {
-    source: "Reddit",
-    context: "Product community",
+    source: "r/SaaS",
+    author: "u/indie_builds",
     excerpt:
-      "We keep losing the useful feedback after launch threads slow down. How is everyone organizing it?",
+      "Anyone using Astreex for customer monitoring? I want Reddit comments and a digest that respects my timezone.",
     category: "Question",
+    variant: "question",
+    time: "2h",
     icon: RedditLogoIcon,
+    glyph: "bg-[var(--category-other)] text-foreground",
   },
   {
     source: "X",
-    context: "Public post",
+    author: "@devops_dan",
     excerpt:
-      "The new export is much faster. Being able to save the exact filter would make this part of my daily workflow.",
+      "The new export is much faster. Saving this exact filter would make it part of my daily workflow.",
     category: "Feature Request",
+    variant: "feature",
+    time: "5h",
     icon: XLogoIcon,
+    glyph: "bg-foreground text-white",
   },
   {
     source: "Hacker News",
-    context: "Discussion thread",
+    author: "patio_fan",
     excerpt:
-      "The setup is unusually clear, but the error states could explain which connection needs attention.",
+      "Caught a useful complaint quickly enough to answer before the thread moved on. That alone is worth it.",
     category: "Praise",
+    variant: "praise",
+    time: "1d",
     icon: NewspaperClippingIcon,
+    glyph: "bg-bug text-bug-foreground",
   },
 ] as const
 
 export function SignalPreview() {
   return (
-    <figure
-      aria-labelledby="signal-preview-title"
-      className="border-border bg-card overflow-hidden rounded-xl border shadow-md"
-    >
-      <div className="border-border flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 sm:px-5">
+    <figure aria-labelledby="signal-preview-title">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <p
             id="signal-preview-title"
-            className="text-foreground text-sm font-semibold"
+            className="font-display text-2xl font-medium tracking-[-0.02em]"
           >
-            Signal inbox
+            Mentions
           </p>
-          <p className="text-muted-foreground mt-0.5 text-xs">
-            Example account with sample mentions
+          <p className="text-muted-foreground mt-0.5 font-mono text-[11px]">
+            Illustrative workspace · 87 today
           </p>
         </div>
-        <Badge variant="muted">Illustrative view</Badge>
-      </div>
-
-      <div className="border-border bg-muted/40 border-b p-3 sm:p-4">
-        <div className="border-border bg-background text-muted-foreground flex items-center gap-2 rounded-md border px-3 py-2 text-xs shadow-xs">
-          <MagnifyingGlassIcon aria-hidden="true" className="size-4 shrink-0" />
-          <span className="truncate">
-            Watching “Astreex” OR “customer feedback workflow”
-          </span>
+        <div className="flex flex-wrap gap-2">
+          <Badge variant="question">Question</Badge>
+          <Badge variant="bug">Bug</Badge>
+          <Badge variant="praise">Praise</Badge>
         </div>
       </div>
 
-      <ol
-        aria-label="Example categorized mentions"
-        className="divide-border divide-y"
-      >
+      <ol aria-label="Example categorized mentions" className="space-y-2.5">
         {exampleMentions.map(
-          ({ source, context, excerpt, category, icon: Icon }) => (
+          ({
+            source,
+            author,
+            excerpt,
+            category,
+            variant,
+            time,
+            icon: Icon,
+            glyph,
+          }) => (
             <li
-              key={source}
-              className="grid gap-3 p-4 sm:grid-cols-[auto_1fr] sm:p-5"
+              key={`${source}-${category}`}
+              className="surface-hover bg-card rounded-lg border p-4"
             >
-              <div className="border-border bg-muted text-foreground grid size-9 place-items-center rounded-md border">
-                <Icon aria-hidden="true" className="size-4" weight="bold" />
+              <div className="flex flex-wrap items-center gap-2.5">
+                <span
+                  className={`grid size-[18px] place-items-center rounded-sm ${glyph}`}
+                >
+                  <Icon aria-hidden="true" className="size-3" weight="bold" />
+                </span>
+                <span className="text-[13px] font-medium">{source}</span>
+                <span className="text-muted-foreground font-mono text-[11px]">
+                  {author}
+                </span>
+                <Badge variant={variant}>{category}</Badge>
+                <time className="ml-auto font-mono text-[11px] text-[var(--ink-faint)]">
+                  {time}
+                </time>
               </div>
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span className="text-foreground text-sm font-semibold">
-                    {source}
-                  </span>
-                  <span aria-hidden="true" className="text-border">
-                    /
-                  </span>
-                  <span className="text-muted-foreground text-xs">
-                    {context}
-                  </span>
-                </div>
-                <p className="text-foreground mt-2 text-sm leading-6 text-pretty">
-                  {excerpt}
-                </p>
-                <div className="mt-3">
-                  <CategoryBadge category={category} />
-                </div>
-              </div>
+              <p className="mt-3 text-[13.5px] leading-[1.62]">{excerpt}</p>
             </li>
           ),
         )}
       </ol>
-
-      <figcaption className="border-border bg-muted/35 text-muted-foreground border-t px-4 py-3 text-xs leading-5 sm:px-5">
-        One review queue across configured sources. Categories are shown as an
-        example of the product workflow, not live customer data.
+      <figcaption className="sr-only">
+        Illustrative mentions. Original context stays attached.
       </figcaption>
     </figure>
   )

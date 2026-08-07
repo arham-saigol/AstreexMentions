@@ -60,14 +60,14 @@ function KeywordUsage({
         </div>
         {limit === null ? (
           <p className="text-muted-foreground mt-2 text-xs leading-5">
-            The connected data service did not return a keyword limit. Convex
-            will still enforce the authoritative limit when a keyword is added.
+            The keyword limit is temporarily unavailable. Astreex will verify
+            the limit when you add a keyword.
           </p>
         ) : (
           <>
             <Progress
               value={percentage}
-              className="mt-3 h-1.5"
+              className="mt-3"
               aria-label={`${count} of ${limit} keyword slots used`}
             />
             <p className="text-muted-foreground mt-2 text-xs leading-5">
@@ -150,17 +150,13 @@ export function KeywordsScreen() {
 
   return (
     <div>
-      <div className="border-border flex flex-col gap-4 border-b pb-5 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-4 pb-6 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-primary text-xs font-semibold tracking-wide uppercase">
-            {workspace.workspace.name}
-          </p>
-          <h1 className="text-foreground mt-1 text-2xl font-semibold tracking-tight">
+          <h1 className="font-display text-foreground text-[28px] leading-[34px] font-medium tracking-[-0.02em]">
             Keywords
           </h1>
-          <p className="text-muted-foreground mt-1 max-w-2xl text-sm leading-6">
-            Define precise phrases and inspect the provider schedule for every
-            configured source.
+          <p className="text-muted-foreground mt-1 text-xs">
+            {workspace.workspace.name}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -204,18 +200,14 @@ export function KeywordsScreen() {
             onAdd={openAdd}
           />
         ) : (
-          <div className="space-y-3">
+          <div>
             <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-foreground text-sm font-medium">
                 {keywords.length} configured keyword
                 {keywords.length === 1 ? "" : "s"}
               </p>
-              <p className="text-muted-foreground text-xs">
-                Source times and errors come from the authenticated Convex
-                result.
-              </p>
             </div>
-            <div className="space-y-3">
+            <div className="border-border mt-3 overflow-hidden rounded-lg border">
               {keywords.map((keyword) => (
                 <KeywordRow
                   key={keyword.id}

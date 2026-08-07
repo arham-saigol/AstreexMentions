@@ -175,7 +175,7 @@ export default async function FeatureRequestsPage({
               id="feature-request-status"
               name="status"
               defaultValue={status ?? ""}
-              className="border-input bg-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 text-sm shadow-xs outline-none focus-visible:ring-2"
+              className="border-input bg-background focus-visible:border-foreground h-10 w-full rounded-md border px-3 text-sm outline-none focus-visible:shadow-[0_0_0_3px_rgba(27,26,24,0.06)]"
             >
               <option value="">All statuses</option>
               {featureRequestStatuses.map((value) => (
@@ -191,7 +191,7 @@ export default async function FeatureRequestsPage({
               id="feature-request-sort"
               name="sort"
               defaultValue={sort}
-              className="border-input bg-background focus-visible:ring-ring h-9 w-full rounded-md border px-3 text-sm shadow-xs outline-none focus-visible:ring-2"
+              className="border-input bg-background focus-visible:border-foreground h-10 w-full rounded-md border px-3 text-sm outline-none focus-visible:shadow-[0_0_0_3px_rgba(27,26,24,0.06)]"
             >
               <option value="newest">Newest first</option>
               <option value="oldest">Oldest first</option>
@@ -258,13 +258,13 @@ export default async function FeatureRequestsPage({
                 </div>
 
                 <details className="group border-t">
-                  <summary className="hover:bg-muted/40 flex list-none items-center justify-between gap-4 px-4 py-3 text-sm font-medium marker:content-none sm:px-5 [&::-webkit-details-marker]:hidden">
+                  <summary className="font-display flex list-none items-center justify-between gap-4 px-4 py-4 text-lg font-medium tracking-[-0.01em] marker:content-none sm:px-5 [&::-webkit-details-marker]:hidden">
                     <span>Review details and update status</span>
                     <span
-                      className="text-muted-foreground transition-transform group-open:rotate-180"
+                      className="text-muted-foreground font-mono text-xl transition-transform group-open:rotate-45"
                       aria-hidden="true"
                     >
-                      ↓
+                      +
                     </span>
                   </summary>
                   <div className="space-y-5 border-t px-4 py-4 sm:px-5 sm:py-5">

@@ -1,7 +1,7 @@
 "use client"
 
-import { XIcon } from "@phosphor-icons/react/dist/ssr"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
+import { X } from "lucide-react"
 import type * as React from "react"
 
 import { cn } from "../lib/utils"
@@ -18,10 +18,7 @@ function DialogOverlay({
   return (
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
-      className={cn(
-        "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-black/55",
-        className,
-      )}
+      className={cn("t-overlay bg-overlay fixed inset-0 z-50", className)}
       {...props}
     />
   )
@@ -41,8 +38,7 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "border-border bg-background fixed top-1/2 left-1/2 z-50 grid w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg border p-6 shadow-md duration-200 outline-none",
-          "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
+          "t-modal border-border bg-card fixed top-1/2 left-1/2 z-50 grid w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl border p-6 shadow-md outline-none",
           className,
         )}
         {...props}
@@ -53,7 +49,7 @@ function DialogContent({
             data-slot="dialog-close"
             className="text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:ring-ring absolute top-4 right-4 rounded-sm p-1 opacity-80 transition-colors outline-none hover:opacity-100 focus-visible:ring-2 disabled:pointer-events-none"
           >
-            <XIcon className="size-4" />
+            <X aria-hidden="true" className="size-4" />
             <span className="sr-only">Close</span>
           </DialogPrimitive.Close>
         )}
@@ -92,7 +88,10 @@ function DialogTitle({
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn("text-lg leading-none font-semibold", className)}
+      className={cn(
+        "text-xl leading-tight font-semibold tracking-[-0.02em]",
+        className,
+      )}
       {...props}
     />
   )

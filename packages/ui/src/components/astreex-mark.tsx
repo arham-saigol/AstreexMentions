@@ -11,30 +11,27 @@ function AstreexMark({ className, title, ...props }: AstreexMarkProps) {
 
   return (
     <svg
-      viewBox="0 0 32 32"
+      viewBox="0 0 24 24"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       role={title ? "img" : undefined}
       aria-hidden={title ? undefined : true}
       aria-labelledby={title ? titleId : undefined}
-      className={cn("text-primary size-8 shrink-0", className)}
+      className={cn("text-foreground size-8 shrink-0", className)}
       {...props}
     >
       {title && <title id={titleId}>{title}</title>}
-      <path
-        d="M6.25 23.75 14.1 6.8a2.1 2.1 0 0 1 3.8 0l7.85 16.95"
+      <g
         stroke="currentColor"
-        strokeWidth="3.25"
+        strokeWidth="2"
         strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M10.25 19.25h11.5"
-        stroke="currentColor"
-        strokeWidth="3.25"
-        strokeLinecap="round"
-      />
-      <circle cx="25.5" cy="8" r="2.5" fill="currentColor" />
+        aria-hidden="true"
+      >
+        <path d="M12 3v18" />
+        <path d="M12 3v18" transform="rotate(60 12 12)" />
+        <path d="M12 3v18" transform="rotate(120 12 12)" />
+      </g>
+      <circle cx="12" cy="12" r="2.4" fill="var(--signal)" />
     </svg>
   )
 }

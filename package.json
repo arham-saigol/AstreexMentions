@@ -23,6 +23,7 @@
     "verify:release": "node scripts/verify-release-env.mjs && pnpm verify"
   },
   "devDependencies": {
+    "@astryxdesign/cli": "0.3.0",
     "prettier": "^3.0.0",
     "prettier-plugin-tailwindcss": "^0.8.0",
     "turbo": "^2.0.0"

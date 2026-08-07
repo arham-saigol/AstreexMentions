@@ -22,22 +22,23 @@ export type EmailLayoutProps = {
 }
 
 export const colors = {
-  accent: "#1d4ed8",
-  accentDark: "#93c5fd",
-  background: "#f8fafc",
-  backgroundDark: "#0f172a",
-  border: "#cbd5e1",
-  borderDark: "#475569",
+  accent: "#1b1a18",
+  accentSoft: "#f4eadb",
+  background: "#f7f6f3",
+  border: "#eaeaea",
+  borderStrong: "#d6d4ce",
   card: "#ffffff",
-  cardDark: "#1e293b",
-  muted: "#475569",
-  mutedDark: "#cbd5e1",
-  text: "#0f172a",
-  textDark: "#f8fafc",
+  muted: "#787774",
+  secondary: "#4a4843",
+  text: "#1b1a18",
 } as const
 
 export const fontFamily =
-  "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+  "'Geist', 'Helvetica Neue', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+export const displayFontFamily =
+  "'Newsreader', Georgia, 'Times New Roman', serif"
+export const monoFontFamily =
+  "'JetBrains Mono', 'SFMono-Regular', Consolas, monospace"
 
 const bodyStyle: CSSProperties = {
   backgroundColor: colors.background,
@@ -53,23 +54,25 @@ const containerStyle: CSSProperties = {
   borderRadius: "8px",
   margin: "0 auto",
   maxWidth: "600px",
-  padding: "32px",
+  padding: "28px",
 }
 
 const brandStyle: CSSProperties = {
   color: colors.text,
-  fontSize: "16px",
-  fontWeight: 700,
-  letterSpacing: "0.02em",
-  lineHeight: "24px",
+  fontFamily: displayFontFamily,
+  fontSize: "21px",
+  fontWeight: 500,
+  letterSpacing: "-0.02em",
+  lineHeight: "26px",
   margin: "0 0 24px",
 }
 
 const titleStyle: CSSProperties = {
   color: colors.text,
-  fontSize: "28px",
-  fontWeight: 700,
-  letterSpacing: "-0.02em",
+  fontFamily: displayFontFamily,
+  fontSize: "30px",
+  fontWeight: 500,
+  letterSpacing: "-0.025em",
   lineHeight: "36px",
   margin: "0 0 20px",
 }
@@ -81,31 +84,16 @@ const dividerStyle: CSSProperties = {
 
 const footerStyle: CSSProperties = {
   color: colors.muted,
-  fontSize: "13px",
-  lineHeight: "20px",
+  fontFamily: monoFontFamily,
+  fontSize: "11px",
+  lineHeight: "18px",
   margin: 0,
 }
 
 const footerLinkStyle: CSSProperties = {
-  color: colors.accent,
+  color: colors.secondary,
   textDecoration: "underline",
 }
-
-const colorSchemeStyles = `
-  :root { color-scheme: light dark; supported-color-schemes: light dark; }
-  @media (prefers-color-scheme: dark) {
-    .email-body { background-color: ${colors.backgroundDark} !important; color: ${colors.textDark} !important; }
-    .email-body > table > tbody > tr > td { background-color: ${colors.backgroundDark} !important; color: ${colors.textDark} !important; }
-    .email-card { background-color: ${colors.cardDark} !important; border-color: ${colors.borderDark} !important; }
-    .email-text { color: ${colors.textDark} !important; }
-    .email-muted { color: ${colors.mutedDark} !important; }
-    .email-border { border-color: ${colors.borderDark} !important; }
-    .email-info { background-color: #172554 !important; }
-    .email-danger { background-color: #450a0a !important; }
-    .email-subtle { background-color: ${colors.backgroundDark} !important; }
-    .email-link { color: ${colors.accentDark} !important; }
-  }
-`
 
 export function EmailLayout({
   astreexUrl,
@@ -118,9 +106,8 @@ export function EmailLayout({
   return (
     <Html lang="en">
       <Head>
-        <meta content="light dark" name="color-scheme" />
-        <meta content="light dark" name="supported-color-schemes" />
-        <style>{colorSchemeStyles}</style>
+        <meta content="light" name="color-scheme" />
+        <meta content="light" name="supported-color-schemes" />
       </Head>
       <Preview>{preview}</Preview>
       <Body className="email-body" style={bodyStyle}>
@@ -134,8 +121,7 @@ export function EmailLayout({
           <Section>{children}</Section>
           <Hr className="email-border" style={dividerStyle} />
           <Text className="email-muted" style={footerStyle}>
-            This email was sent by {ASTREEX_BRAND}. You can review your account
-            in{" "}
+            This email was sent by {ASTREEX_BRAND}. Review your account in{" "}
             <Link
               className="email-link"
               href={safeAstreexUrl}

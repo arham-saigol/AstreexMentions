@@ -2,7 +2,7 @@
 
 import { Button } from "@astreex/ui/components/button"
 import { StatusState } from "@astreex/ui/components/status-state"
-import { ArrowClockwiseIcon, SignInIcon } from "@phosphor-icons/react/dist/ssr"
+import { LogIn, RefreshCw } from "lucide-react"
 import Link from "next/link"
 
 import type { ConfigurationIssue } from "@/lib/env"
@@ -95,14 +95,14 @@ export function AccessState(props: AccessStateProps) {
           props.kind === "signed-out" ? (
             <Button asChild>
               <Link href="/sign-in">
-                <SignInIcon aria-hidden="true" />
+                <LogIn aria-hidden="true" />
                 Sign in
               </Link>
             </Button>
           ) : props.kind === "unavailable" ? (
             <Button asChild variant="outline">
               <Link href="/metrics">
-                <ArrowClockwiseIcon aria-hidden="true" />
+                <RefreshCw aria-hidden="true" />
                 Try again
               </Link>
             </Button>

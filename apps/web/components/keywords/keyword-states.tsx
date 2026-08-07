@@ -118,8 +118,8 @@ export function UnpaidKeywordNotice({
       title="Draft configuration — monitoring is inactive"
       description={
         billingSetupRequired
-          ? "Keywords and platforms can be prepared, but billing is not configured and no provider checks will run. Astreex is showing the saved configuration only."
-          : "Keywords and platforms can be prepared before payment. No provider checks or customer mentions are implied until Convex reports an active subscription."
+          ? "You can prepare keywords and sources, but billing is not configured and monitoring cannot start."
+          : "You can prepare keywords and sources before payment. Monitoring starts after your subscription is active."
       }
       icon={<CreditCardIcon />}
     />

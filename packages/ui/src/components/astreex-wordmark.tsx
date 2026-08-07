@@ -16,7 +16,7 @@ function AstreexWordmark({
     <span
       data-slot="astreex-wordmark"
       className={cn(
-        "text-foreground inline-flex items-center gap-2 text-lg font-semibold tracking-tight",
+        "text-foreground inline-flex items-center gap-2.5 font-serif text-[22px] font-medium tracking-[-0.02em]",
         className,
       )}
       {...props}

@@ -14,7 +14,7 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   transpilePackages: ["@astreex/ui", "@astreex/domain", "@astreex/email"],
   experimental: {
-    optimizePackageImports: ["@phosphor-icons/react"],
+    optimizePackageImports: ["lucide-react", "@phosphor-icons/react"],
   },
   async headers() {
     return [{ source: "/(.*)", headers: securityHeaders }]

@@ -28,8 +28,8 @@ class ProductDataErrorBoundary extends Component<
     if (this.state.failed) {
       return (
         <ProductErrorState
-          title="Protected account request failed"
-          description="Astreex could not load the authenticated account from Convex. The request may be unavailable, unauthorized, or temporarily failing."
+          title="Your account couldn't load"
+          description="The account may be temporarily unavailable or you may not have access. Try again."
           onRetry={this.props.onRetry}
         />
       )
@@ -56,16 +56,14 @@ function AuthenticatedProductSession({ children }: { children: ReactNode }) {
   }, [redirectTarget, router])
 
   if (isLoading) {
-    return (
-      <ProductLoadingState message="Connecting the authenticated data session…" />
-    )
+    return <ProductLoadingState message="Loading your workspace…" />
   }
 
   if (!isAuthenticated) {
     return (
       <ProductErrorState
-        title="Data session is not authenticated"
-        description="Clerk signed in, but Convex did not establish an authenticated customer session. Check the configured Clerk JWT integration before retrying."
+        title="Your account session isn't ready"
+        description="Astreex couldn't verify this session. Refresh the page or sign in again."
         onRetry={() => window.location.reload()}
       />
     )

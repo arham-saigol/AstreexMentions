@@ -7,7 +7,7 @@ function EmptyState({ className, ...props }: React.ComponentProps<"section">) {
     <section
       data-slot="empty-state"
       className={cn(
-        "border-border bg-card flex min-h-48 w-full flex-col items-center justify-center rounded-lg border border-dashed px-6 py-10 text-center",
+        "border-border bg-card flex min-h-48 w-full flex-col items-center justify-center rounded-lg border px-6 py-10 text-center",
         className,
       )}
       {...props}
@@ -33,7 +33,10 @@ function EmptyStateTitle({ className, ...props }: React.ComponentProps<"h3">) {
   return (
     <h3
       data-slot="empty-state-title"
-      className={cn("text-foreground text-base font-semibold", className)}
+      className={cn(
+        "text-foreground font-serif text-lg font-medium tracking-[-0.01em]",
+        className,
+      )}
       {...props}
     />
   )

@@ -229,8 +229,8 @@ export function KeywordFormDialog({
                 className="text-muted-foreground mt-0.5 size-4 shrink-0"
               />
               <p className="text-muted-foreground text-xs leading-5">
-                This configuration will remain a draft. No provider checks begin
-                until Convex reports an active subscription.
+                This configuration will remain a draft. Monitoring starts after
+                your subscription is active.
               </p>
             </div>
           )}
@@ -271,7 +271,7 @@ const confirmationCopy = {
   pause: {
     title: "Pause this keyword?",
     description:
-      "Provider checks for this keyword will stop. Existing mentions remain available, and you can resume the keyword later.",
+      "Monitoring for this keyword will stop. Existing mentions remain available, and you can resume it later.",
     action: "Pause keyword",
     Icon: PauseIcon,
   },

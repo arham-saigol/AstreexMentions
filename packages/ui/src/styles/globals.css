@@ -1,171 +1,460 @@
-@import "tailwindcss";
+/* ----------------------------------------------------------------------------
+ * Astreex global foundation — Astryx (Meta Design Library) + Tailwind v4 bridge.
+ *
+ * Layer order is imported first (see layers.css): Next.js hoists @import content
+ * above inline CSS, so the @layer declaration must live in its own file.
+ *
+ * Migration model (per Astryx migration guide): Tailwind coexists during
+ * migration. A compatibility shim below repoints the prior shadcn semantic
+ * tokens + raw canvas/ink tokens to live Astryx tokens, so existing markup
+ * keeps rendering against the new neutral + amber-accent system while each
+ * surface migrates to Astryx primitives incrementally.
+ * --------------------------------------------------------------------------- */
+
+@import "./layers.css";
+
+/* Tailwind v4 coexistence (split imports so each piece lands in its layer). */
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/preflight.css" layer(base);
+@import "@astryxdesign/core/reset.css";
+@import "@astryxdesign/core/astryx.css";
+@import "@astryxdesign/theme-neutral/theme.css";
+@import "@astryxdesign/core/tailwind-theme.css";
+@import "tailwindcss/utilities.css" layer(utilities);
 
 @source "../**/*.{ts,tsx}";
-@custom-variant dark (&:is(.dark *));
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-question: var(--category-question);
-  --color-question-foreground: var(--category-question-foreground);
-  --color-complaint: var(--category-complaint);
-  --color-complaint-foreground: var(--category-complaint-foreground);
-  --color-praise: var(--category-praise);
-  --color-praise-foreground: var(--category-praise-foreground);
-  --color-bug: var(--category-bug);
-  --color-bug-foreground: var(--category-bug-foreground);
-  --color-feature: var(--category-feature);
-  --color-feature-foreground: var(--category-feature-foreground);
-  --color-competitor: var(--category-competitor);
-  --color-competitor-foreground: var(--category-competitor-foreground);
-  --color-other: var(--category-other);
-  --color-other-foreground: var(--category-other-foreground);
-  --font-sans: var(--font-ui);
-  --font-mono: var(--font-code);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.04);
-  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.08), 0 1px 2px -1px rgb(0 0 0 / 0.08);
-  --shadow-md:
-    0 4px 10px -2px rgb(0 0 0 / 0.12), 0 2px 4px -2px rgb(0 0 0 / 0.08);
-}
+/* ----------------------------------------------------------------------------
+ * Theme tuning — neutral base, single restrained amber accent.
+ *
+ * Scoped to the same [data-astryx-theme="neutral"] surface the neutral theme
+ * uses; higher specificity than the theme block plus later source order wins.
+ * Accent uses a warm amber fill with near-black "on-accent" text for AA contrast
+ * on the primary CTA — the "single restrained accent" direction.
+ * --------------------------------------------------------------------------- */
+[data-astryx-theme="neutral"] {
+  --color-accent: #b26c2e;
+  --color-accent-muted: #f6ead7;
+  --color-on-accent: #1a130a;
+  --color-text-accent: #8a5a23;
 
-:root {
-  color-scheme: light;
-  --font-ui:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-    "Segoe UI", sans-serif;
-  --font-code: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  --radius: 0.625rem;
-  --background: oklch(0.985 0.003 255);
-  --foreground: oklch(0.205 0.015 255);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.205 0.015 255);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.205 0.015 255);
-  --primary: oklch(0.49 0.19 255);
-  --primary-foreground: oklch(0.985 0.005 255);
-  --secondary: oklch(0.95 0.008 255);
-  --secondary-foreground: oklch(0.27 0.02 255);
-  --muted: oklch(0.955 0.006 255);
-  --muted-foreground: oklch(0.49 0.02 255);
-  --accent: oklch(0.935 0.024 255);
-  --accent-foreground: oklch(0.32 0.09 255);
-  --destructive: oklch(0.56 0.22 27);
-  --destructive-foreground: oklch(0.985 0.005 27);
-  --border: oklch(0.89 0.012 255);
-  --input: oklch(0.85 0.015 255);
-  --ring: oklch(0.56 0.18 255);
-  --sidebar: oklch(0.97 0.006 255);
-  --sidebar-foreground: oklch(0.24 0.018 255);
-  --sidebar-accent: oklch(0.925 0.02 255);
-  --sidebar-accent-foreground: oklch(0.3 0.08 255);
-  --sidebar-border: oklch(0.89 0.012 255);
-  --category-question: oklch(0.93 0.045 245);
-  --category-question-foreground: oklch(0.36 0.13 250);
-  --category-complaint: oklch(0.94 0.045 45);
-  --category-complaint-foreground: oklch(0.42 0.14 35);
-  --category-praise: oklch(0.93 0.05 150);
-  --category-praise-foreground: oklch(0.34 0.11 150);
-  --category-bug: oklch(0.93 0.05 20);
-  --category-bug-foreground: oklch(0.4 0.16 20);
-  --category-feature: oklch(0.93 0.05 300);
-  --category-feature-foreground: oklch(0.39 0.14 300);
-  --category-competitor: oklch(0.94 0.055 85);
-  --category-competitor-foreground: oklch(0.4 0.11 70);
-  --category-other: oklch(0.93 0.01 255);
-  --category-other-foreground: oklch(0.4 0.02 255);
-}
-
-.dark {
-  color-scheme: dark;
-  --background: oklch(0.17 0.012 255);
-  --foreground: oklch(0.955 0.006 255);
-  --card: oklch(0.205 0.015 255);
-  --card-foreground: oklch(0.955 0.006 255);
-  --popover: oklch(0.22 0.016 255);
-  --popover-foreground: oklch(0.955 0.006 255);
-  --primary: oklch(0.7 0.15 255);
-  --primary-foreground: oklch(0.18 0.035 255);
-  --secondary: oklch(0.27 0.018 255);
-  --secondary-foreground: oklch(0.94 0.008 255);
-  --muted: oklch(0.25 0.016 255);
-  --muted-foreground: oklch(0.7 0.018 255);
-  --accent: oklch(0.3 0.04 255);
-  --accent-foreground: oklch(0.93 0.025 255);
-  --destructive: oklch(0.65 0.2 25);
-  --destructive-foreground: oklch(0.985 0.005 27);
-  --border: oklch(0.32 0.018 255);
-  --input: oklch(0.37 0.02 255);
-  --ring: oklch(0.69 0.14 255);
-  --sidebar: oklch(0.195 0.014 255);
-  --sidebar-foreground: oklch(0.93 0.008 255);
-  --sidebar-accent: oklch(0.285 0.035 255);
-  --sidebar-accent-foreground: oklch(0.94 0.02 255);
-  --sidebar-border: oklch(0.3 0.018 255);
-  --category-question: oklch(0.31 0.075 250);
-  --category-question-foreground: oklch(0.87 0.075 245);
-  --category-complaint: oklch(0.32 0.075 35);
-  --category-complaint-foreground: oklch(0.88 0.08 50);
-  --category-praise: oklch(0.3 0.07 150);
-  --category-praise-foreground: oklch(0.87 0.08 150);
-  --category-bug: oklch(0.31 0.085 20);
-  --category-bug-foreground: oklch(0.87 0.08 20);
-  --category-feature: oklch(0.31 0.075 300);
-  --category-feature-foreground: oklch(0.87 0.08 300);
-  --category-competitor: oklch(0.32 0.07 75);
-  --category-competitor-foreground: oklch(0.88 0.09 85);
-  --category-other: oklch(0.3 0.02 255);
-  --category-other-foreground: oklch(0.82 0.02 255);
+  /* Premium modern typography: unified Geist sans (no editorial serif). */
+  --font-family-body: var(--font-geist, ui-sans-serif, system-ui, sans-serif);
+  --font-family-heading: var(
+    --font-geist,
+    ui-sans-serif,
+    system-ui,
+    sans-serif
+  );
+  --font-family-code: var(
+    --font-jetbrains-mono,
+    ui-monospace,
+    "SF Mono",
+    Consolas,
+    monospace
+  );
 }
 
 @layer base {
-  * {
-    @apply border-border;
+  :root {
+    /* --- Brand accent ramp (amber) for legacy `var(--brand*)` callers. --- */
+    --brand: var(--color-accent);
+    --brand-hover: #9c5d27;
+    --brand-pressed: #874e20;
+    --brand-soft: var(--color-accent-muted);
+    --brand-soft-ink: var(--color-text-accent);
+    --brand-contrast: var(--color-on-accent);
+    --signal: var(--color-accent);
+    --signal-soft: var(--color-accent-muted);
+    --focus: var(--color-accent);
+
+    /* --- Legacy canvas / surface scale -> Astryx background tokens. --- */
+    --canvas: var(--color-background-body);
+    --canvas-soft: var(--color-background-surface);
+    --surface: var(--color-background-card);
+    --surface-soft: var(--color-background-muted);
+    --surface-sunk: var(--color-background-muted);
+    --surface-strong: var(--color-background-muted);
+
+    /* --- Legacy ink scale -> Astryx text tokens. --- */
+    --ink: var(--color-text-primary);
+    --ink-secondary: var(--color-text-secondary);
+    --ink-tertiary: var(--color-text-secondary);
+    --ink-faint: var(--color-text-disabled);
+
+    /* --- Legacy line scale -> Astryx border tokens. --- */
+    --line: var(--color-border);
+    --line-2: var(--color-border);
+    --line-strong: var(--color-border-emphasized);
+
+    --danger: var(--color-error);
+    --danger-contrast: var(--color-on-error);
+
+    --ease-editorial: cubic-bezier(0.16, 1, 0.3, 1);
+
+    /* Legacy motion durations retained for `var(--motion-*)` callers. */
+    --motion-instant: 0ms;
+    --motion-feedback: 90ms;
+    --motion-control: 140ms;
+    --motion-overlay: 200ms;
+    --motion-layout: 320ms;
+    --motion-emphasis: 600ms;
+
+    /* transitions.dev: shared overlays, anchored surfaces, and controls. */
+    --dropdown-open-dur: 250ms;
+    --dropdown-close-dur: 150ms;
+    --dropdown-pre-scale: 0.97;
+    --dropdown-closing-scale: 0.99;
+    --dropdown-ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --modal-open-dur: 250ms;
+    --modal-close-dur: 150ms;
+    --modal-scale: 0.96;
+    --modal-scale-close: 0.96;
+    --modal-ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --check-box: 150ms;
+    --check-draw: 350ms;
+    --check-delay: 0ms;
+    --check-uncheck: 150ms;
+    --check-ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --icon-swap-dur: 250ms;
+    --icon-swap-blur: 2px;
+    --icon-swap-start-scale: 0.25;
+    --icon-swap-ease: ease-in-out;
+
+    /* Shadows backed by Astryx shadow scale. */
+    --shadow-soft: var(--shadow-low);
+    --shadow-lift: var(--shadow-med);
   }
 
   html {
-    @apply bg-background;
+    color-scheme: light;
   }
 
   body {
-    @apply bg-background text-foreground min-h-dvh font-sans antialiased;
+    @apply bg-background text-foreground min-h-dvh overflow-x-hidden font-sans antialiased;
+    font-size: 15px;
+    line-height: 1.6;
+    text-rendering: optimizeLegibility;
   }
 
   ::selection {
-    @apply bg-primary/20 text-foreground;
+    background: var(--color-accent-muted);
+    color: var(--color-text-accent);
   }
 
   button:not(:disabled),
-  [role="button"]:not([aria-disabled="true"]) {
+  [role="button"]:not([aria-disabled="true"]),
+  summary {
     cursor: pointer;
   }
 
   :focus-visible {
-    @apply outline-ring outline-2 outline-offset-2;
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+/* ----------------------------------------------------------------------------
+ * Tailwind theme shim — keep every prior shadcn semantic utility working by
+ * repointing it to a live Astryx token. The utilities generated from these
+ * names (bg-primary, text-muted-foreground, border-border, bg-destructive, ...)
+ * resolve to the active theme via CSS custom properties, so theme/cosmetic
+ * changes flow automatically. Astryx tailwind-theme.css already maps several
+ * of these; entries here override on top for the shadcn conventions the code
+ * relies on (e.g. --color-primary = accent for primary actions).
+ * --------------------------------------------------------------------------- */
+@theme inline {
+  --color-background: var(--color-background-body);
+  --color-foreground: var(--color-text-primary);
+
+  --color-card: var(--color-background-card);
+  --color-card-foreground: var(--color-text-primary);
+  --color-popover: var(--color-background-popover);
+  --color-popover-foreground: var(--color-text-primary);
+  --color-overlay: rgb(0 0 0 / 55%);
+
+  --color-primary: var(--color-accent);
+  --color-primary-foreground: var(--color-on-accent);
+
+  --color-secondary: var(--color-background-muted);
+  --color-secondary-foreground: var(--color-text-primary);
+
+  --color-muted: var(--color-background-muted);
+  --color-muted-foreground: var(--color-text-secondary);
+
+  --color-accent: var(--color-accent-muted);
+  --color-accent-foreground: var(--color-text-accent);
+
+  --color-destructive: var(--color-error);
+  --color-destructive-foreground: var(--color-on-error);
+
+  --color-border: var(--color-border);
+  --color-input: var(--color-border-emphasized);
+  --color-ring: var(--color-accent);
+
+  --color-sidebar: var(--color-background-surface);
+  --color-sidebar-foreground: var(--color-text-secondary);
+  --color-sidebar-accent: var(--color-background-muted);
+  --color-sidebar-accent-foreground: var(--color-text-primary);
+  --color-sidebar-border: var(--color-border);
+
+  /* Intent categories -> Astryx hue palettes. */
+  --color-question: var(--color-background-blue);
+  --color-question-foreground: var(--color-text-blue);
+  --color-complaint: var(--color-background-red);
+  --color-complaint-foreground: var(--color-text-red);
+  --color-praise: var(--color-background-green);
+  --color-praise-foreground: var(--color-text-green);
+  --color-bug: var(--color-background-orange);
+  --color-bug-foreground: var(--color-text-orange);
+  --color-feature: var(--color-background-yellow);
+  --color-feature-foreground: var(--color-text-yellow);
+  --color-competitor: var(--color-background-purple);
+  --color-competitor-foreground: var(--color-text-purple);
+  --color-other: var(--color-background-gray);
+  --color-other-foreground: var(--color-text-gray);
+
+  --font-sans: var(--font-family-body);
+  --font-serif: var(--font-family-heading);
+  --font-mono: var(--font-family-code);
+  --font-display: var(--font-family-heading);
+
+  --radius-sm: var(--radius-inner);
+  --radius-md: var(--radius-element);
+  --radius-lg: var(--radius-container);
+  --radius-xl: var(--radius-page);
+
+  --shadow-xs: var(--shadow-low);
+  --shadow-sm: var(--shadow-low);
+  --shadow-md: var(--shadow-med);
+  --shadow-lg: var(--shadow-high);
+}
+
+@layer utilities {
+  /* Display is the system sans now; kept as a thin alias during migration so
+     prior `font-display` call sites render cleanly without code churn. */
+  .font-display {
+    font-family: var(--font-family-heading);
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: -0.02em;
+  }
+
+  /* Serious, modern eyebrow — quiet sans label, not the old mono/serif tag. */
+  .editorial-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--color-text-secondary);
+    font-family: var(--font-family-body);
+    font-size: 0.75rem;
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .editorial-eyebrow::before {
+    width: 1.5rem;
+    height: 1px;
+    background: var(--color-border-emphasized);
+    content: "";
+  }
+
+  /* Surface feedback using Astryx tokens + motion. */
+  .surface-hover {
+    transition:
+      border-color var(--duration-medium-min, 180ms) var(--ease-standard, ease),
+      box-shadow var(--duration-medium-min, 180ms) var(--ease-standard, ease),
+      transform var(--duration-medium-min, 180ms) var(--ease-standard, ease);
+  }
+
+  .surface-hover:hover {
+    border-color: var(--color-border-emphasized);
+    box-shadow: var(--shadow-med);
+    transform: translateY(-1px);
+  }
+
+  /* transitions.dev menu-dropdown adapted to Radix Presence. Keyframe
+     animation preserves the exit node until animationend; individual `scale`
+     keeps Radix/Tailwind positioning transforms intact. */
+  .t-dropdown {
+    transform-origin: var(
+      --radix-dropdown-menu-content-transform-origin,
+      var(
+        --radix-popover-content-transform-origin,
+        var(--radix-select-content-transform-origin, center)
+      )
+    );
+    will-change: scale, opacity;
+  }
+
+  .t-dropdown[data-origin="top-right"] {
+    transform-origin: top right;
+  }
+
+  .t-dropdown[data-state="open"] {
+    animation: t-dropdown-open var(--dropdown-open-dur) var(--dropdown-ease)
+      both;
+  }
+
+  .t-dropdown[data-state="closed"] {
+    animation: t-dropdown-close var(--dropdown-close-dur) var(--dropdown-ease)
+      both;
+  }
+
+  /* transitions.dev modal adapted to Radix Presence. */
+  .t-modal {
+    transform-origin: center;
+    will-change: scale, opacity;
+  }
+
+  .t-modal[data-state="open"] {
+    animation: t-modal-open var(--modal-open-dur) var(--modal-ease) both;
+  }
+
+  .t-modal[data-state="closed"] {
+    animation: t-modal-close var(--modal-close-dur) var(--modal-ease) both;
+  }
+
+  .t-overlay[data-state="open"] {
+    animation: t-overlay-open var(--modal-open-dur) ease-out both;
+  }
+
+  .t-overlay[data-state="closed"] {
+    animation: t-overlay-close var(--modal-close-dur) ease-in both;
+  }
+
+  /* transitions.dev checkbox check: keep the indicator mounted so the path
+     has a stable pre-check state to draw from. */
+  .t-check {
+    transition:
+      background var(--check-box) var(--check-ease),
+      border-color var(--check-box) var(--check-ease),
+      box-shadow var(--check-box) var(--check-ease);
+  }
+
+  .t-check svg path {
+    stroke-dasharray: var(--check-len, 15);
+    stroke-dashoffset: var(--check-len, 15);
+    transition: stroke-dashoffset var(--check-uncheck) var(--check-ease);
+  }
+
+  .t-check[aria-checked="true"] svg path,
+  .t-check[data-state="indeterminate"] svg path {
+    stroke-dashoffset: 0;
+    transition: stroke-dashoffset var(--check-draw) var(--check-ease)
+      var(--check-delay);
+  }
+
+  /* transitions.dev icon swap. */
+  .t-icon-swap {
+    position: relative;
+    display: inline-grid;
+  }
+
+  .t-icon-swap .t-icon {
+    grid-area: 1 / 1;
+    transition:
+      opacity var(--icon-swap-dur) var(--icon-swap-ease),
+      filter var(--icon-swap-dur) var(--icon-swap-ease),
+      transform var(--icon-swap-dur) var(--icon-swap-ease);
+    will-change: opacity, filter, transform;
+  }
+
+  .t-icon-swap[data-state="a"] .t-icon[data-icon="a"],
+  .t-icon-swap[data-state="b"] .t-icon[data-icon="b"] {
+    opacity: 1;
+    filter: blur(0);
+    transform: scale(1);
+  }
+
+  .t-icon-swap[data-state="a"] .t-icon[data-icon="b"],
+  .t-icon-swap[data-state="b"] .t-icon[data-icon="a"] {
+    opacity: 0;
+    filter: blur(var(--icon-swap-blur));
+    transform: scale(var(--icon-swap-start-scale));
+  }
+}
+
+@keyframes t-dropdown-open {
+  from {
+    opacity: 0;
+    scale: var(--dropdown-pre-scale);
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
+@keyframes t-dropdown-close {
+  from {
+    opacity: 1;
+    scale: 1;
+  }
+  to {
+    opacity: 0;
+    scale: var(--dropdown-closing-scale);
+  }
+}
+
+@keyframes t-modal-open {
+  from {
+    opacity: 0;
+    scale: var(--modal-scale);
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
+@keyframes t-modal-close {
+  from {
+    opacity: 1;
+    scale: 1;
+  }
+  to {
+    opacity: 0;
+    scale: var(--modal-scale-close);
+  }
+}
+
+@keyframes t-overlay-open {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes t-overlay-close {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+
+  .t-dropdown,
+  .t-modal,
+  .t-overlay,
+  .t-check,
+  .t-check svg path,
+  .t-icon-swap .t-icon {
+    transition: none !important;
+    animation: none !important;
   }
 }

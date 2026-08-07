@@ -54,6 +54,43 @@ describe("MentionCard", () => {
     expect(sourceLink.getAttribute("target")).toBe("_blank")
   })
 
+  it("uses a custom category's configured color family", () => {
+    render(
+      <MentionCard
+        mention={{
+          ...mention,
+          category: {
+            id: "category_custom" as NonNullable<MentionItem["category"]>["id"],
+            name: "Pricing objection",
+            colorToken: "purple",
+          },
+        }}
+        pending={false}
+        onStatusChange={vi.fn()}
+      />,
+    )
+
+    expect(
+      screen.getByText("Pricing objection").className.split(/\s+/),
+    ).toContain("bg-competitor")
+  })
+
+  it("bounds long mention bodies to a feed preview", () => {
+    render(
+      <MentionCard
+        mention={{ ...mention, body: "Long mention body" }}
+        pending={false}
+        onStatusChange={vi.fn()}
+      />,
+    )
+
+    const bodyClasses = screen
+      .getByText("Long mention body")
+      .className.split(/\s+/)
+    expect(bodyClasses).toContain("overflow-hidden")
+    expect(bodyClasses).toContain("[-webkit-line-clamp:3]")
+  })
+
   it("locks status actions while an optimistic update is pending", () => {
     render(
       <MentionCard

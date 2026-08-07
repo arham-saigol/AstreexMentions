@@ -1,7 +1,6 @@
 import { Show, UserButton } from "@clerk/nextjs"
 import { AstreexWordmark } from "@astreex/ui/components/astreex-wordmark"
 import { Button } from "@astreex/ui/components/button"
-import { ThemeToggle } from "@astreex/ui/components/theme-toggle"
 import Link from "next/link"
 
 import { MobileNavigation } from "@/components/mobile-navigation"
@@ -20,7 +19,7 @@ function SignedOutNavigation() {
         <Link href="/sign-in">Sign in</Link>
       </Button>
       <Button asChild size="sm" className="hidden sm:inline-flex">
-        <Link href="/sign-up">Get started</Link>
+        <Link href="/sign-up">Start monitoring</Link>
       </Button>
     </>
   )
@@ -53,32 +52,28 @@ export function SiteHeader() {
   const configuration = getRuntimeConfiguration()
 
   return (
-    <header className="border-border bg-background sticky top-0 z-40 border-b">
-      <div className="mx-auto flex h-16 w-full max-w-6xl items-center gap-3 px-4 sm:px-6">
+    <header className="border-border bg-background/90 supports-[backdrop-filter]:bg-background/75 sticky top-0 z-40 border-b backdrop-blur-xl">
+      <div className="relative mx-auto flex h-16 w-full max-w-[1184px] items-center gap-3 px-4 sm:px-6 lg:px-8">
         <Link href="/" aria-label="Astreex home" className="shrink-0">
-          <AstreexWordmark
-            className="text-base sm:text-lg"
-            markClassName="size-6 sm:size-7"
-          />
+          <AstreexWordmark markClassName="size-6.5" />
         </Link>
 
         <nav
           aria-label="Primary navigation"
-          className="ml-auto hidden items-center gap-5 lg:flex"
+          className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-7 lg:flex"
         >
           {publicNavigationLinks.map((link) => (
             <Link
               key={link.href}
               href={link.href}
-              className="text-muted-foreground hover:text-foreground text-sm font-medium transition-colors"
+              className="text-muted-foreground hover:text-foreground text-sm font-medium transition-colors duration-[var(--motion-control)]"
             >
               {link.label}
             </Link>
           ))}
         </nav>
 
-        <div className="ml-auto flex items-center gap-1 lg:ml-3">
-          <ThemeToggle />
+        <div className="ml-auto flex items-center gap-1">
           <MobileNavigation clerkEnabled={configuration.clerk.configured} />
           {configuration.clerk.configured ? (
             <ClerkNavigation />

@@ -104,24 +104,30 @@ export function UsageSettings() {
             <Progress
               value={percent}
               aria-label={`${used} of ${allowance} mentions used`}
-              className="mt-5 h-2"
+              className="mt-5"
             />
-            <dl className="border-border mt-5 grid grid-cols-3 divide-x border-y">
+            <dl className="border-border mt-5 grid divide-y border-y sm:grid-cols-3 sm:divide-x sm:divide-y-0">
               <div className="px-3 py-4 first:pl-0 sm:px-5">
-                <dt className="text-muted-foreground text-xs">Used</dt>
-                <dd className="text-foreground mt-1 text-xl font-semibold">
+                <dt className="text-muted-foreground font-mono text-[11px] tracking-[0.08em] uppercase">
+                  Used
+                </dt>
+                <dd className="font-display text-foreground mt-1 text-2xl font-medium tracking-[-0.02em]">
                   {used.toLocaleString()}
                 </dd>
               </div>
               <div className="px-3 py-4 sm:px-5">
-                <dt className="text-muted-foreground text-xs">Allowance</dt>
-                <dd className="text-foreground mt-1 text-xl font-semibold">
+                <dt className="text-muted-foreground font-mono text-[11px] tracking-[0.08em] uppercase">
+                  Allowance
+                </dt>
+                <dd className="font-display text-foreground mt-1 text-2xl font-medium tracking-[-0.02em]">
                   {allowance.toLocaleString()}
                 </dd>
               </div>
               <div className="px-3 py-4 last:pr-0 sm:px-5">
-                <dt className="text-muted-foreground text-xs">Remaining</dt>
-                <dd className="text-foreground mt-1 text-xl font-semibold">
+                <dt className="text-muted-foreground font-mono text-[11px] tracking-[0.08em] uppercase">
+                  Remaining
+                </dt>
+                <dd className="font-display text-foreground mt-1 text-2xl font-medium tracking-[-0.02em]">
                   {remaining.toLocaleString()}
                 </dd>
               </div>

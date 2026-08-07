@@ -46,9 +46,25 @@ export default async function SignInPage() {
           path="/sign-in"
           forceRedirectUrl="/metrics"
           appearance={{
+            variables: {
+              colorPrimary: "var(--brand)",
+              colorBackground: "var(--surface)",
+              colorForeground: "var(--ink)",
+              colorMuted: "var(--surface-sunk)",
+              colorMutedForeground: "var(--ink-tertiary)",
+              colorInput: "var(--surface)",
+              colorInputForeground: "var(--ink)",
+              colorBorder: "var(--line)",
+              colorRing: "var(--ink)",
+              borderRadius: "6px",
+              fontFamily: "var(--font-ui)",
+            },
             elements: {
-              cardBox: "shadow-sm",
+              cardBox: "shadow-none",
+              card: "border border-border shadow-none",
               footer: "hidden",
+              formButtonPrimary:
+                "bg-primary text-primary-foreground shadow-none hover:bg-[var(--brand-hover)]",
             },
           }}
         />

@@ -81,7 +81,7 @@ export default async function MetricsPage({
   ] as const
 
   return (
-    <div className="space-y-6 [--metrics-series-1:#2a78d6] [--metrics-series-2:#eda100] [--metrics-series-3:#e87ba4] [--metrics-series-4:#008300] dark:[--metrics-series-1:#3987e5] dark:[--metrics-series-2:#c98500] dark:[--metrics-series-3:#d55181] dark:[--metrics-series-4:#008300]">
+    <div className="space-y-6 [--metrics-series-1:#2c5f82] [--metrics-series-2:#b7793a] [--metrics-series-3:#9f2f2d] [--metrics-series-4:#346538]">
       <form
         className="admin-panel flex flex-wrap items-end gap-3 p-4 sm:p-5"
         aria-label="Metrics filters"
@@ -100,7 +100,7 @@ export default async function MetricsPage({
             id="metrics-days"
             name="days"
             defaultValue={String(days)}
-            className="border-input bg-background focus-visible:ring-ring block h-9 min-w-40 rounded-md border px-3 text-sm shadow-xs outline-none focus-visible:ring-2"
+            className="border-input bg-background focus-visible:border-foreground block h-10 min-w-40 rounded-md border px-3 text-sm outline-none focus-visible:shadow-[0_0_0_3px_rgba(27,26,24,0.06)]"
           >
             {ranges.map((range) => (
               <option key={range} value={range}>
@@ -121,8 +121,10 @@ export default async function MetricsPage({
         <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {stats.map((stat) => (
             <div key={stat.label} className="admin-panel min-w-0 p-4">
-              <dt className="text-muted-foreground text-sm">{stat.label}</dt>
-              <dd className="mt-2 text-2xl font-semibold tracking-tight">
+              <dt className="text-muted-foreground font-mono text-[11px] tracking-[0.1em] uppercase">
+                {stat.label}
+              </dt>
+              <dd className="font-display mt-2 text-3xl font-medium tracking-[-0.02em]">
                 {numberFormatter.format(stat.value)}
               </dd>
               <p className="text-muted-foreground mt-1 text-xs">
