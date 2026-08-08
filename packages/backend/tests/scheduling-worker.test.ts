@@ -81,6 +81,12 @@ function createSchedulingHarness() {
         pages: await ctx.db.query("trackingProviderPages").collect(),
         runs: await ctx.db.query("providerRuns").collect(),
         source: await ctx.db.get("trackingSources", seeded.trackingSourceId),
+        grant: await ctx.db
+          .query("freeEvaluationGrants")
+          .withIndex("by_workspace", (q) =>
+            q.eq("workspaceId", seeded.workspaceId),
+          )
+          .unique(),
         usage: await ctx.db
           .query("usageCycles")
           .withIndex("by_workspace_status_and_period_end", (q) =>
@@ -89,7 +95,7 @@ function createSchedulingHarness() {
           .unique(),
       }))
     },
-    async seedLeasedHackerNewsSource() {
+    async seedLeasedHackerNewsSource(access: "free" | "paid" = "paid") {
       return await t.run(async (ctx) => {
         const userId = await ctx.db.insert("users", {
           clerkUserId: "user_scheduling_worker",
@@ -115,39 +121,50 @@ function createSchedulingHarness() {
           updatedAt: NOW - 8_000,
           workspaceId,
         })
-        const subscriptionId = await ctx.db.insert("subscriptions", {
-          cancelAtPeriodEnd: false,
-          createdAt: NOW - 7_000,
-          currentPeriodEnd: NOW + 30 * 24 * 60 * 60_000,
-          currentPeriodStart: NOW - 60_000,
-          entitlementStatus: "active",
-          lastSyncedAt: NOW - 7_000,
-          planId: "growth",
-          provider: "creem",
-          providerCustomerId: "customer_scheduling_worker",
-          providerSubscriptionId: "subscription_scheduling_worker",
-          status: "active",
-          updatedAt: NOW - 7_000,
-          workspaceId,
-        })
-        await ctx.db.insert("usageCycles", {
-          createdAt: NOW - 6_000,
-          idempotencyKey: "usage:scheduling-worker",
-          keywordLimit: 6,
-          mentionLimit: 100,
-          mentionsUsed: 0,
-          periodEndAt: NOW + 30 * 24 * 60 * 60_000,
-          periodStartAt: NOW - 60_000,
-          planSnapshot: {
+        if (access === "free") {
+          await ctx.db.insert("freeEvaluationGrants", {
+            activatedAt: NOW - 7_000,
+            createdAt: NOW - 7_000,
+            mentionLimit: 100,
+            mentionsUsed: 0,
+            updatedAt: NOW - 7_000,
+            workspaceId,
+          })
+        } else {
+          const subscriptionId = await ctx.db.insert("subscriptions", {
+            cancelAtPeriodEnd: false,
+            createdAt: NOW - 7_000,
+            currentPeriodEnd: NOW + 30 * 24 * 60 * 60_000,
+            currentPeriodStart: NOW - 60_000,
+            entitlementStatus: "active",
+            lastSyncedAt: NOW - 7_000,
+            planId: "growth",
+            provider: "creem",
+            providerCustomerId: "customer_scheduling_worker",
+            providerSubscriptionId: "subscription_scheduling_worker",
+            status: "active",
+            updatedAt: NOW - 7_000,
+            workspaceId,
+          })
+          await ctx.db.insert("usageCycles", {
+            createdAt: NOW - 6_000,
+            idempotencyKey: "usage:scheduling-worker",
             keywordLimit: 6,
             mentionLimit: 100,
-            planId: "growth",
-          },
-          status: "open",
-          subscriptionId,
-          updatedAt: NOW - 6_000,
-          workspaceId,
-        })
+            mentionsUsed: 0,
+            periodEndAt: NOW + 30 * 24 * 60 * 60_000,
+            periodStartAt: NOW - 60_000,
+            planSnapshot: {
+              keywordLimit: 6,
+              mentionLimit: 100,
+              planId: "growth",
+            },
+            status: "open",
+            subscriptionId,
+            updatedAt: NOW - 6_000,
+            workspaceId,
+          })
+        }
         const trackingSourceId = await ctx.db.insert("trackingSources", {
           backoffMs: 0,
           checkpointVersion: 0,
@@ -275,6 +292,30 @@ describe("durable tracking action", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expectCompletedIngestion(await readPersistedState(seeded))
+  })
+
+  it("executes scheduled collection against the free evaluation allowance", async () => {
+    const { readPersistedState, seedLeasedHackerNewsSource, t } =
+      createSchedulingHarness()
+    const seeded = await seedLeasedHackerNewsSource("free")
+    vi.stubGlobal("fetch", async () =>
+      Response.json(JSON.parse(providerResponse) as unknown),
+    )
+
+    await expect(
+      t.action(executeTrackingSource, actionArguments(seeded)),
+    ).resolves.toMatchObject({ inserted: 2, state: "applied" })
+
+    const persisted = await readPersistedState(seeded)
+    expect(persisted.usage).toBeNull()
+    expect(persisted.grant?.mentionsUsed).toBe(2)
+    expect(
+      persisted.mentions.every(
+        (mention) =>
+          mention.retentionExpiresAt === NOW + 60 * 24 * 60 * 60 * 1_000,
+      ),
+    ).toBe(true)
+    expect(persisted.source).toMatchObject({ status: "active" })
   })
 
   it("resumes committed provider pages without fetching or duplicating work", async () => {

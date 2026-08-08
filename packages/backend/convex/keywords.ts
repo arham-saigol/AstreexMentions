@@ -1,22 +1,26 @@
 import type { UserIdentity } from "convex/server"
-import type { Doc, Id } from "./_generated/dataModel"
 import { ConvexError, v } from "convex/values"
 
-import { effectiveEntitlementStatus } from "./billing/lifecycle"
+import type { Doc, Id } from "./_generated/dataModel"
+import { type MutationCtx, type QueryCtx } from "./_generated/server"
 import { authenticatedMutation, authenticatedQuery } from "./lib/authorization"
 import { syncUsagePausedWorkspaceMetric } from "./lib/operationalMetrics"
 import {
+  resolveWorkspaceAllowance,
+  type WorkspaceAllowance,
+} from "./lib/workspaceAccess"
+import {
   createInitialTrackingSchedule,
-  type PlanId,
   type TrackingSourceType,
 } from "./scheduling/model"
 import { finalizeInvalidatedTrackingProviderRun } from "./scheduling/providerRuns"
-import { type MutationCtx, type QueryCtx } from "./_generated/server"
 import { resolveCurrentCustomer } from "./users"
 
 export const MAX_DRAFT_KEYWORDS = 10
 const MAX_KEYWORD_LENGTH = 160
+const MAX_DESCRIPTION_LENGTH = 160
 const MAX_ACTIVE_SAVED_VIEWS = 50
+const MAX_SOURCES_PER_KEYWORD = 8
 
 const platformValidator = v.union(
   v.literal("x"),
@@ -27,6 +31,11 @@ const keywordStatusValidator = v.union(
   v.literal("active"),
   v.literal("paused"),
   v.literal("deleted"),
+)
+const keywordPauseReasonValidator = v.union(
+  v.literal("user"),
+  v.literal("capacity"),
+  v.literal("payment"),
 )
 const trackingSourceTypeValidator = v.union(
   v.literal("x"),
@@ -43,6 +52,7 @@ const trackingSourceStatusValidator = v.union(
 const trackingPauseReasonValidator = v.union(
   v.literal("paid"),
   v.literal("user"),
+  v.literal("capacity"),
   v.literal("usage"),
   v.literal("config"),
 )
@@ -57,10 +67,11 @@ const trackingSourceResultValidator = v.object({
   sourceType: trackingSourceTypeValidator,
   status: trackingSourceStatusValidator,
 })
-
 const keywordResultValidator = v.object({
   createdAt: v.number(),
+  description: v.union(v.string(), v.null()),
   id: v.id("keywords"),
+  pauseReason: v.union(keywordPauseReasonValidator, v.null()),
   pausedAt: v.union(v.number(), v.null()),
   phrase: v.string(),
   platforms: v.array(platformValidator),
@@ -68,7 +79,6 @@ const keywordResultValidator = v.object({
   status: keywordStatusValidator,
   updatedAt: v.number(),
 })
-
 const monitoringStateValidator = v.union(
   v.literal("active"),
   v.literal("paused"),
@@ -76,10 +86,11 @@ const monitoringStateValidator = v.union(
   v.literal("unpaid"),
   v.literal("usage_limited"),
 )
-
 const keywordSummaryValidator = v.object({
   activeCount: v.number(),
+  activeLimit: v.number(),
   canCreate: v.boolean(),
+  configuredLimit: v.number(),
   count: v.number(),
   limit: v.number(),
   limitReached: v.boolean(),
@@ -88,48 +99,19 @@ const keywordSummaryValidator = v.object({
   remaining: v.number(),
 })
 
-const deletedKeywordResultValidator = v.object({
-  id: v.id("keywords"),
-  status: v.literal("deleted"),
-})
-
 type UserId = Id<"users">
 type WorkspaceId = Id<"workspaces">
 type KeywordId = Id<"keywords">
-type TrackingSourceId = Id<"trackingSources">
 type Platform = "x" | "reddit" | "hacker_news"
-type KeywordStatus = "active" | "paused" | "deleted"
-type TrackingPauseReason = "paid" | "user" | "usage" | "config"
-type TrackingSourceStatus = "active" | "paused" | "error" | "deleted"
-type SavedViewFilters = {
-  categoryIds?: Id<"categories">[]
-  keywordIds?: KeywordId[]
-  mentionStatuses?: Array<"new" | "saved" | "dismissed">
-  platforms?: Platform[]
-  publishedAfter?: number
-  publishedBefore?: number
-}
-
+type KeywordPauseReason = "user" | "capacity" | "payment"
+type TrackingPauseReason = "paid" | "user" | "capacity" | "usage" | "config"
 type CustomerDatabaseCtx = {
   db: QueryCtx["db"] | MutationCtx["db"]
   identity: UserIdentity
 }
 
-type CurrentCustomer = {
-  userId: UserId
-  workspaceId: WorkspaceId
-}
-
-type BillingKeywordState = {
-  hasActiveSubscription: boolean
-  hasCurrentUsage: boolean
-  keywordLimit: number
-  planId: PlanId
-  usageExhausted: boolean
-}
-
-type DesiredTrackingState = {
-  pauseReason?: TrackingPauseReason | undefined
+type DesiredSourceState = {
+  pauseReason?: TrackingPauseReason
   status: "active" | "paused"
 }
 
@@ -137,83 +119,35 @@ function keywordError(code: string, message: string): never {
   throw new ConvexError({ code, message })
 }
 
-function removeKeywordFromSavedViewFilters(
-  filters: SavedViewFilters,
-  keywordId: KeywordId,
-): SavedViewFilters {
-  const keywordIds = filters.keywordIds?.filter(
-    (candidate) => candidate !== keywordId,
-  )
-  return {
-    ...(filters.categoryIds === undefined
-      ? {}
-      : { categoryIds: filters.categoryIds }),
-    ...(keywordIds === undefined || keywordIds.length === 0
-      ? {}
-      : { keywordIds }),
-    ...(filters.mentionStatuses === undefined
-      ? {}
-      : { mentionStatuses: filters.mentionStatuses }),
-    ...(filters.platforms === undefined
-      ? {}
-      : { platforms: filters.platforms }),
-    ...(filters.publishedAfter === undefined
-      ? {}
-      : { publishedAfter: filters.publishedAfter }),
-    ...(filters.publishedBefore === undefined
-      ? {}
-      : { publishedBefore: filters.publishedBefore }),
-  }
-}
-
-async function removeKeywordFromActiveSavedViews(
-  ctx: MutationCtx,
-  workspaceId: WorkspaceId,
-  keywordId: KeywordId,
-  now: number,
-  failureCode: "KEYWORD_DELETE_FAILED" | "KEYWORD_UPDATE_FAILED",
-): Promise<void> {
-  const savedViews = await ctx.db
-    .query("savedViews")
-    .withIndex("by_workspace_deleted_and_updated_at", (q) =>
-      q.eq("workspaceId", workspaceId).eq("deletedAt", undefined),
-    )
-    .take(MAX_ACTIVE_SAVED_VIEWS + 1)
-  if (savedViews.length > MAX_ACTIVE_SAVED_VIEWS) {
-    keywordError(failureCode, "Saved view count exceeds the supported maximum")
-  }
-  for (const savedView of savedViews) {
-    const filters = savedView.filters as SavedViewFilters
-    if (!filters.keywordIds?.includes(keywordId)) {
-      continue
-    }
-    await ctx.db.patch("savedViews", savedView._id, {
-      filters: removeKeywordFromSavedViewFilters(filters, keywordId),
-      updatedAt: now,
-    })
-  }
+async function currentCustomer(ctx: CustomerDatabaseCtx) {
+  const { viewer, workspace } = await resolveCurrentCustomer(ctx, ctx.identity)
+  return { userId: viewer.id, workspaceId: workspace.id }
 }
 
 export function normalizeKeywordPhrase(value: string): string {
   return value.trim().replace(/\s+/g, " ").toLocaleLowerCase("en")
 }
 
-function validatedPhrase(value: string): {
-  normalizedPhrase: string
-  phrase: string
-} {
+function validatedPhrase(value: string) {
   const phrase = value.trim().replace(/\s+/g, " ")
-  if (phrase.length === 0 || phrase.length > MAX_KEYWORD_LENGTH) {
+  if (!phrase || phrase.length > MAX_KEYWORD_LENGTH) {
     keywordError(
       "INVALID_KEYWORD",
       `Keyword phrases must contain 1 to ${MAX_KEYWORD_LENGTH} characters`,
     )
   }
+  return { normalizedPhrase: normalizeKeywordPhrase(phrase), phrase }
+}
 
-  return {
-    normalizedPhrase: normalizeKeywordPhrase(phrase),
-    phrase,
+function validatedDescription(value: string | undefined): string | undefined {
+  const description = value?.trim() ?? ""
+  if (description.length > MAX_DESCRIPTION_LENGTH) {
+    keywordError(
+      "INVALID_KEYWORD_DESCRIPTION",
+      `Keyword descriptions can contain at most ${MAX_DESCRIPTION_LENGTH} characters`,
+    )
   }
+  return description || undefined
 }
 
 export function normalizeKeywordPlatforms(
@@ -240,175 +174,10 @@ export function trackingSourceTypesForPlatforms(
   platforms: readonly Platform[],
 ): TrackingSourceType[] {
   return platforms.flatMap((platform) => {
-    switch (platform) {
-      case "x":
-        return ["x"]
-      case "reddit":
-        return ["reddit_posts", "reddit_comments"]
-      case "hacker_news":
-        return ["hacker_news"]
-    }
+    if (platform === "x") return ["x"]
+    if (platform === "reddit") return ["reddit_posts", "reddit_comments"]
+    return ["hacker_news"]
   })
-}
-
-export function keywordCapacity(input: {
-  configuredCount: number
-  paidKeywordLimit?: number | undefined
-}): {
-  canCreate: boolean
-  limit: number
-  limitReached: boolean
-  remaining: number
-} {
-  if (!Number.isInteger(input.configuredCount) || input.configuredCount < 0) {
-    throw new RangeError("configuredCount must be a non-negative integer")
-  }
-  if (
-    input.paidKeywordLimit !== undefined &&
-    (!Number.isInteger(input.paidKeywordLimit) || input.paidKeywordLimit < 0)
-  ) {
-    throw new RangeError("paidKeywordLimit must be a non-negative integer")
-  }
-
-  const limit = input.paidKeywordLimit ?? MAX_DRAFT_KEYWORDS
-  const remaining = Math.max(0, limit - input.configuredCount)
-  return {
-    canCreate: remaining > 0,
-    limit,
-    limitReached: remaining === 0,
-    remaining,
-  }
-}
-
-export function desiredTrackingState(input: {
-  hasActiveSubscription: boolean
-  hasCurrentUsage: boolean
-  keywordStatus: Exclude<KeywordStatus, "deleted">
-  usageExhausted: boolean
-}): DesiredTrackingState {
-  if (input.keywordStatus === "paused") {
-    return { pauseReason: "user", status: "paused" }
-  }
-  if (!input.hasActiveSubscription) {
-    return { pauseReason: "paid", status: "paused" }
-  }
-  if (!input.hasCurrentUsage || input.usageExhausted) {
-    return { pauseReason: "usage", status: "paused" }
-  }
-  return { status: "active" }
-}
-
-function planIdFrom(value: unknown): PlanId {
-  if (value === "starter" || value === "growth" || value === "scale") {
-    return value
-  }
-  keywordError("BILLING_STATE_INVALID", "The active plan is invalid")
-}
-
-async function requireCurrentCustomer(
-  ctx: CustomerDatabaseCtx,
-): Promise<CurrentCustomer> {
-  const { viewer, workspace } = await resolveCurrentCustomer(ctx, ctx.identity)
-  return { userId: viewer.id, workspaceId: workspace.id }
-}
-
-async function readBillingKeywordState(
-  ctx: Pick<CustomerDatabaseCtx, "db">,
-  workspaceId: WorkspaceId,
-  now: number,
-): Promise<BillingKeywordState> {
-  const subscriptions = await ctx.db
-    .query("subscriptions")
-    .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-    .collect()
-  const activeSubscription = subscriptions
-    .sort(
-      (left, right) =>
-        (right.lastSyncedAt as number) - (left.lastSyncedAt as number),
-    )
-    .find(
-      (subscription) =>
-        effectiveEntitlementStatus(
-          {
-            currentPeriodEnd: subscription.currentPeriodEnd as number,
-            entitlementStatus: subscription.entitlementStatus as
-              "active" | "inactive",
-            status: subscription.status as string,
-          },
-          now,
-        ) === "active",
-    )
-
-  if (!activeSubscription) {
-    return {
-      hasActiveSubscription: false,
-      hasCurrentUsage: false,
-      keywordLimit: MAX_DRAFT_KEYWORDS,
-      planId: "starter",
-      usageExhausted: false,
-    }
-  }
-
-  const planId = planIdFrom(activeSubscription.planId)
-  const cycles = await ctx.db
-    .query("usageCycles")
-    .withIndex("by_workspace_status_and_period_end", (q) =>
-      q.eq("workspaceId", workspaceId).eq("status", "open"),
-    )
-    .collect()
-  const currentCycles = cycles
-    .filter(
-      (cycle) =>
-        (cycle.periodStartAt as number) <= now &&
-        (cycle.periodEndAt as number) > now,
-    )
-    .sort(
-      (left, right) =>
-        (right.periodStartAt as number) - (left.periodStartAt as number),
-    )
-  const linkedCycle = currentCycles.find(
-    (cycle) => cycle.subscriptionId === activeSubscription._id,
-  )
-  const usageCycle =
-    linkedCycle ??
-    currentCycles.find(
-      (cycle) =>
-        cycle.subscriptionId === undefined &&
-        (cycle.planSnapshot as { planId?: unknown } | undefined)?.planId ===
-          planId,
-    )
-
-  if (!usageCycle) {
-    return {
-      hasActiveSubscription: true,
-      hasCurrentUsage: false,
-      keywordLimit: 0,
-      planId,
-      usageExhausted: true,
-    }
-  }
-
-  const keywordLimit = usageCycle.keywordLimit as number
-  const mentionLimit = usageCycle.mentionLimit as number
-  const mentionsUsed = usageCycle.mentionsUsed as number
-  if (
-    !Number.isInteger(keywordLimit) ||
-    keywordLimit < 0 ||
-    !Number.isInteger(mentionLimit) ||
-    mentionLimit < 0 ||
-    !Number.isInteger(mentionsUsed) ||
-    mentionsUsed < 0
-  ) {
-    keywordError("BILLING_STATE_INVALID", "The active usage cycle is invalid")
-  }
-
-  return {
-    hasActiveSubscription: true,
-    hasCurrentUsage: true,
-    keywordLimit,
-    planId,
-    usageExhausted: mentionsUsed >= mentionLimit,
-  }
 }
 
 async function configuredKeywords(
@@ -417,24 +186,250 @@ async function configuredKeywords(
 ): Promise<Doc<"keywords">[]> {
   const rows = (
     await Promise.all(
-      (["active", "paused"] as const).map(
-        async (status) =>
-          await ctx.db
-            .query("keywords")
-            .withIndex("by_workspace_status_and_created_at", (q) =>
-              q.eq("workspaceId", workspaceId).eq("status", status),
-            )
-            .collect(),
+      (["active", "paused"] as const).map(async (status) =>
+        ctx.db
+          .query("keywords")
+          .withIndex("by_workspace_status_and_created_at", (q) =>
+            q.eq("workspaceId", workspaceId).eq("status", status),
+          )
+          .take(MAX_DRAFT_KEYWORDS + 1),
       ),
     )
   ).flat()
-  return rows
-    .filter((row) => row.deletedAt === undefined)
-    .sort(
-      (left, right) =>
-        (right.updatedAt as number) - (left.updatedAt as number) ||
-        String(left._id).localeCompare(String(right._id), "en"),
+  const configured = rows.filter((row) => row.deletedAt === undefined)
+  if (configured.length > MAX_DRAFT_KEYWORDS) {
+    keywordError(
+      "KEYWORD_CONFIGURATION_INVALID",
+      "Workspace keyword count exceeds the supported maximum",
     )
+  }
+  return configured.sort(
+    (left, right) =>
+      (left.activationPriority ?? Number.MAX_SAFE_INTEGER) -
+        (right.activationPriority ?? Number.MAX_SAFE_INTEGER) ||
+      left.createdAt - right.createdAt ||
+      String(left._id).localeCompare(String(right._id), "en"),
+  )
+}
+
+async function sourcesForKeyword(
+  ctx: Pick<CustomerDatabaseCtx, "db">,
+  keywordId: KeywordId,
+): Promise<Doc<"trackingSources">[]> {
+  return await ctx.db
+    .query("trackingSources")
+    .withIndex("by_keyword_and_source_type", (q) =>
+      q.eq("keywordId", keywordId),
+    )
+    .take(MAX_SOURCES_PER_KEYWORD)
+}
+
+function sourceState(
+  allowance: WorkspaceAllowance,
+  keyword: Pick<Doc<"keywords">, "status" | "pauseReason">,
+): DesiredSourceState {
+  if (keyword.status === "paused") {
+    if (keyword.pauseReason === "capacity") {
+      return { pauseReason: "capacity", status: "paused" }
+    }
+    if (keyword.pauseReason === "payment") {
+      return { pauseReason: "paid", status: "paused" }
+    }
+    return { pauseReason: "user", status: "paused" }
+  }
+  if (allowance.kind === "none") {
+    return { pauseReason: allowance.pauseReason, status: "paused" }
+  }
+  if (allowance.exhausted) {
+    return { pauseReason: "usage", status: "paused" }
+  }
+  return { status: "active" }
+}
+
+async function insertSource(
+  ctx: MutationCtx,
+  input: {
+    allowance: WorkspaceAllowance
+    keyword: Doc<"keywords">
+    now: number
+    sourceType: TrackingSourceType
+  },
+): Promise<void> {
+  const state = sourceState(input.allowance, input.keyword)
+  const schedule = createInitialTrackingSchedule({
+    now: input.now,
+    planId: input.allowance.planId,
+    sourceKey: `${String(input.keyword.workspaceId)}:${String(input.keyword._id)}:${input.sourceType}`,
+    sourceType: input.sourceType,
+  })
+  await ctx.db.insert("trackingSources", {
+    ...schedule,
+    createdAt: input.now,
+    keywordId: input.keyword._id,
+    providerQuery: input.keyword.phrase,
+    sourceType: input.sourceType,
+    status: state.status,
+    ...(state.pauseReason === undefined
+      ? {}
+      : { pauseReason: state.pauseReason }),
+    updatedAt: input.now,
+    workspaceId: input.keyword.workspaceId,
+  })
+}
+
+async function syncKeywordSources(
+  ctx: MutationCtx,
+  keyword: Doc<"keywords">,
+  allowance: WorkspaceAllowance,
+  now: number,
+): Promise<void> {
+  const desiredTypes = trackingSourceTypesForPlatforms(keyword.platforms)
+  const desiredSet = new Set(desiredTypes)
+  const retained = new Set<TrackingSourceType>()
+  const state = sourceState(allowance, keyword)
+
+  for (const source of await sourcesForKeyword(ctx, keyword._id)) {
+    const sourceType = source.sourceType as TrackingSourceType
+    if (!desiredSet.has(sourceType) || retained.has(sourceType)) {
+      if (source.status !== "deleted" || source.deletedAt === undefined) {
+        await finalizeInvalidatedTrackingProviderRun(ctx, {
+          errorCode: "source_deleted",
+          errorMessage: "Tracking source configuration was removed",
+          now,
+          source,
+        })
+        await ctx.db.patch("trackingSources", source._id, {
+          deletedAt: now,
+          leaseExpiresAt: undefined,
+          leaseToken: undefined,
+          pauseReason: undefined,
+          status: "deleted",
+          updatedAt: now,
+        })
+      }
+      continue
+    }
+    retained.add(sourceType)
+    const reactivating =
+      source.status === "deleted" || source.deletedAt !== undefined
+    const queryChanged = source.providerQuery !== keyword.phrase
+    const preserveError =
+      !reactivating &&
+      !queryChanged &&
+      state.status === "active" &&
+      source.status === "error"
+    if (queryChanged || reactivating || state.status === "paused") {
+      await finalizeInvalidatedTrackingProviderRun(ctx, {
+        errorCode:
+          state.status === "active" ? "source_changed" : "source_paused",
+        errorMessage:
+          state.status === "active"
+            ? "Tracking source configuration changed"
+            : "Tracking source became ineligible",
+        now,
+        source,
+      })
+    }
+    const schedule = reactivating
+      ? createInitialTrackingSchedule({
+          now,
+          planId: allowance.planId,
+          sourceKey: `${String(keyword.workspaceId)}:${String(keyword._id)}:${sourceType}`,
+          sourceType,
+        })
+      : {}
+    await ctx.db.patch("trackingSources", source._id, {
+      ...schedule,
+      deletedAt: undefined,
+      providerQuery: keyword.phrase,
+      status: preserveError ? "error" : state.status,
+      pauseReason: preserveError ? source.pauseReason : state.pauseReason,
+      ...(queryChanged
+        ? {
+            backoffMs: 0,
+            backoffUntil: undefined,
+            consecutiveFailures: 0,
+            inProgressCursor: undefined,
+            inProgressPage: undefined,
+            inProgressWindowEndAt: undefined,
+            inProgressWindowStartAt: undefined,
+            lastError: undefined,
+            leaseExpiresAt: undefined,
+            leaseToken: undefined,
+            leaseVersion: source.leaseVersion + 1,
+            nextRunAt: now,
+          }
+        : state.status === "active" && !reactivating
+          ? {}
+          : { leaseExpiresAt: undefined, leaseToken: undefined }),
+      updatedAt: now,
+    })
+  }
+
+  for (const sourceType of desiredTypes) {
+    if (!retained.has(sourceType)) {
+      await insertSource(ctx, { allowance, keyword, now, sourceType })
+    }
+  }
+}
+
+function activationOrder(
+  left: Doc<"keywords">,
+  right: Doc<"keywords">,
+): number {
+  return (
+    Number(Boolean(right.brandCandidate)) -
+      Number(Boolean(left.brandCandidate)) ||
+    (left.activationPriority ?? Number.MAX_SAFE_INTEGER) -
+      (right.activationPriority ?? Number.MAX_SAFE_INTEGER) ||
+    left.createdAt - right.createdAt ||
+    String(left._id).localeCompare(String(right._id), "en")
+  )
+}
+
+export async function reconcileWorkspaceKeywords(
+  ctx: MutationCtx,
+  input: { now: number; workspaceId: WorkspaceId },
+): Promise<{ activeCount: number; pausedCount: number }> {
+  const [keywords, allowance] = await Promise.all([
+    configuredKeywords(ctx, input.workspaceId),
+    resolveWorkspaceAllowance(ctx, input.workspaceId, input.now),
+  ])
+  const eligible = keywords
+    .filter((keyword) => keyword.pauseReason !== "user")
+    .sort(activationOrder)
+  const activeIds = new Set(
+    (allowance.kind === "none"
+      ? []
+      : eligible.slice(0, allowance.keywordLimit)
+    ).map((keyword) => String(keyword._id)),
+  )
+
+  for (const keyword of keywords) {
+    const userPaused = keyword.pauseReason === "user"
+    const active = activeIds.has(String(keyword._id))
+    const pauseReason: KeywordPauseReason | undefined = active
+      ? undefined
+      : userPaused
+        ? "user"
+        : allowance.kind === "none"
+          ? "payment"
+          : "capacity"
+    const status = active ? "active" : "paused"
+    await ctx.db.patch("keywords", keyword._id, {
+      pauseReason,
+      pausedAt: active ? undefined : (keyword.pausedAt ?? input.now),
+      status,
+      updatedAt: input.now,
+    })
+    const updated = { ...keyword, pauseReason, status } as Doc<"keywords">
+    await syncKeywordSources(ctx, updated, allowance, input.now)
+  }
+  await syncUsagePausedWorkspaceMetric(ctx, input.workspaceId, input.now)
+  return {
+    activeCount: activeIds.size,
+    pausedCount: keywords.length - activeIds.size,
+  }
 }
 
 async function assertUniquePhrase(
@@ -443,7 +438,7 @@ async function assertUniquePhrase(
   normalizedPhrase: string,
   exceptKeywordId?: KeywordId,
 ): Promise<void> {
-  const matches = await ctx.db
+  const rows = await ctx.db
     .query("keywords")
     .withIndex("by_workspace_phrase_and_deleted_at", (q) =>
       q
@@ -452,11 +447,8 @@ async function assertUniquePhrase(
         .eq("deletedAt", undefined),
     )
     .take(2)
-
   if (
-    matches.some(
-      (row) => row._id !== exceptKeywordId && row.status !== "deleted",
-    )
+    rows.some((row) => row._id !== exceptKeywordId && row.status !== "deleted")
   ) {
     keywordError(
       "KEYWORD_ALREADY_EXISTS",
@@ -482,264 +474,110 @@ async function keywordForWorkspace(
   return keyword
 }
 
-function trackingStateFor(
-  billing: BillingKeywordState,
-  keywordStatus: Exclude<KeywordStatus, "deleted">,
-): DesiredTrackingState {
-  return desiredTrackingState({
-    hasActiveSubscription: billing.hasActiveSubscription,
-    hasCurrentUsage: billing.hasCurrentUsage,
-    keywordStatus,
-    usageExhausted: billing.usageExhausted,
-  })
-}
-
-async function insertTrackingSource(
+async function removeFromSavedViews(
   ctx: MutationCtx,
-  input: {
-    billing: BillingKeywordState
-    keywordId: KeywordId
-    keywordStatus: Exclude<KeywordStatus, "deleted">
-    now: number
-    phrase: string
-    sourceType: TrackingSourceType
-    workspaceId: WorkspaceId
-  },
-): Promise<TrackingSourceId> {
-  const schedule = createInitialTrackingSchedule({
-    now: input.now,
-    planId: input.billing.planId,
-    sourceKey: `${String(input.workspaceId)}:${String(input.keywordId)}:${input.sourceType}`,
-    sourceType: input.sourceType,
-  })
-  const trackingState = trackingStateFor(input.billing, input.keywordStatus)
-
-  return (await ctx.db.insert("trackingSources", {
-    ...schedule,
-    createdAt: input.now,
-    keywordId: input.keywordId,
-    providerQuery: input.phrase,
-    sourceType: input.sourceType,
-    status: trackingState.status,
-    ...(trackingState.pauseReason === undefined
-      ? {}
-      : { pauseReason: trackingState.pauseReason }),
-    updatedAt: input.now,
-    workspaceId: input.workspaceId,
-  })) as TrackingSourceId
-}
-
-async function sourcesForKeyword(
-  ctx: Pick<CustomerDatabaseCtx, "db">,
+  workspaceId: WorkspaceId,
   keywordId: KeywordId,
-): Promise<Doc<"trackingSources">[]> {
-  return await ctx.db
-    .query("trackingSources")
-    .withIndex("by_keyword_and_source_type", (q) =>
-      q.eq("keywordId", keywordId),
-    )
-    .collect()
-}
-
-function sourceTypeOrder(value: unknown): number {
-  switch (value) {
-    case "x":
-      return 0
-    case "reddit_posts":
-      return 1
-    case "reddit_comments":
-      return 2
-    case "hacker_news":
-      return 3
-    default:
-      return 4
-  }
-}
-
-async function formatKeyword(
-  ctx: Pick<CustomerDatabaseCtx, "db">,
-  keyword: Doc<"keywords">,
-) {
-  const sources = (await sourcesForKeyword(ctx, keyword._id as KeywordId))
-    .filter(
-      (source) => source.status !== "deleted" && source.deletedAt === undefined,
-    )
-    .sort(
-      (left, right) =>
-        sourceTypeOrder(left.sourceType) - sourceTypeOrder(right.sourceType),
-    )
-    .map((source) => ({
-      id: source._id as TrackingSourceId,
-      intervalMs: source.intervalMs as number,
-      lastCheckedAt:
-        (source.lastRunAt as number | undefined) ??
-        (source.lastSuccessAt as number | undefined) ??
-        null,
-      lastError: (source.lastError as string | undefined) ?? null,
-      nextExpectedAt: (source.nextRunAt as number | undefined) ?? null,
-      pauseReason:
-        (source.pauseReason as TrackingPauseReason | undefined) ?? null,
-      sourceType: source.sourceType as TrackingSourceType,
-      status: source.status as TrackingSourceStatus,
-    }))
-
-  return {
-    createdAt: keyword.createdAt as number,
-    id: keyword._id as KeywordId,
-    pausedAt: (keyword.pausedAt as number | undefined) ?? null,
-    phrase: keyword.phrase as string,
-    platforms: keyword.platforms as Platform[],
-    sources,
-    status: keyword.status as KeywordStatus,
-    updatedAt: keyword.updatedAt as number,
-  }
-}
-
-async function syncTrackingSources(
-  ctx: MutationCtx,
-  input: {
-    billing: BillingKeywordState
-    keywordId: KeywordId
-    keywordStatus: Exclude<KeywordStatus, "deleted">
-    now: number
-    phrase: string
-    platforms: Platform[]
-    workspaceId: WorkspaceId
-  },
+  now: number,
 ): Promise<void> {
-  const desiredTypes = trackingSourceTypesForPlatforms(input.platforms)
-  const desiredSet = new Set<TrackingSourceType>(desiredTypes)
-  const currentSources = await sourcesForKeyword(ctx, input.keywordId)
-  const retainedTypes = new Set<TrackingSourceType>()
-  const desiredState = trackingStateFor(input.billing, input.keywordStatus)
-
-  for (const source of currentSources) {
-    const sourceType = source.sourceType as TrackingSourceType
-    const sourceId = source._id as TrackingSourceId
-    if (!desiredSet.has(sourceType) || retainedTypes.has(sourceType)) {
-      await finalizeInvalidatedTrackingProviderRun(ctx, {
-        errorCode: "source_deleted",
-        errorMessage: "Tracking source configuration was removed",
-        now: input.now,
-        source,
-      })
-      await ctx.db.patch("trackingSources", sourceId, {
-        deletedAt: input.now,
-        inProgressCursor: undefined,
-        inProgressPage: undefined,
-        inProgressWindowEndAt: undefined,
-        inProgressWindowStartAt: undefined,
-        leaseExpiresAt: undefined,
-        leaseToken: undefined,
-        pauseReason: undefined,
-        status: "deleted",
-        updatedAt: input.now,
-      })
-      continue
-    }
-
-    retainedTypes.add(sourceType)
-    const reactivating =
-      source.status === "deleted" || source.deletedAt !== undefined
-    const providerQueryChanged = source.providerQuery !== input.phrase
-    const schedule = reactivating
-      ? createInitialTrackingSchedule({
-          now: input.now,
-          planId: input.billing.planId,
-          sourceKey: `${String(input.workspaceId)}:${String(input.keywordId)}:${sourceType}`,
-          sourceType,
-        })
-      : {}
-    const preserveError =
-      !reactivating &&
-      !providerQueryChanged &&
-      desiredState.status === "active" &&
-      source.status === "error"
-    if (
-      providerQueryChanged ||
-      reactivating ||
-      desiredState.status !== "active"
-    ) {
-      await finalizeInvalidatedTrackingProviderRun(ctx, {
-        errorCode:
-          desiredState.status === "active" ? "source_changed" : "source_paused",
-        errorMessage:
-          desiredState.status === "active"
-            ? "Tracking source configuration changed"
-            : "Tracking source became ineligible",
-        now: input.now,
-        source,
-      })
-    }
-
-    await ctx.db.patch("trackingSources", sourceId, {
-      ...schedule,
-      deletedAt: undefined,
-      providerQuery: input.phrase,
-      status: preserveError ? "error" : desiredState.status,
-      pauseReason: preserveError
-        ? (source.pauseReason as TrackingPauseReason | undefined)
-        : desiredState.pauseReason,
-      ...(providerQueryChanged
-        ? {
-            backoffMs: 0,
-            backoffUntil: undefined,
-            consecutiveFailures: 0,
-            inProgressCursor: undefined,
-            inProgressPage: undefined,
-            inProgressWindowEndAt: undefined,
-            inProgressWindowStartAt: undefined,
-            lastError: undefined,
-            leaseExpiresAt: undefined,
-            leaseToken: undefined,
-            leaseVersion: (source.leaseVersion as number) + 1,
-            nextRunAt: input.now,
-          }
-        : desiredState.status === "active" && !reactivating
-          ? {}
-          : {
-              leaseExpiresAt: undefined,
-              leaseToken: undefined,
-            }),
-      updatedAt: input.now,
+  const views = await ctx.db
+    .query("savedViews")
+    .withIndex("by_workspace_deleted_and_updated_at", (q) =>
+      q.eq("workspaceId", workspaceId).eq("deletedAt", undefined),
+    )
+    .take(MAX_ACTIVE_SAVED_VIEWS + 1)
+  if (views.length > MAX_ACTIVE_SAVED_VIEWS) {
+    keywordError(
+      "KEYWORD_UPDATE_FAILED",
+      "Saved view count exceeds the supported maximum",
+    )
+  }
+  for (const view of views) {
+    if (!view.filters.keywordIds?.includes(keywordId)) continue
+    const keywordIds = view.filters.keywordIds.filter((id) => id !== keywordId)
+    const { keywordIds: _removedKeywordIds, ...otherFilters } = view.filters
+    await ctx.db.patch("savedViews", view._id, {
+      filters: {
+        ...otherFilters,
+        ...(keywordIds.length ? { keywordIds } : {}),
+      },
+      updatedAt: now,
     })
   }
+}
 
-  for (const sourceType of desiredTypes) {
-    if (!retainedTypes.has(sourceType)) {
-      await insertTrackingSource(ctx, {
-        billing: input.billing,
-        keywordId: input.keywordId,
-        keywordStatus: input.keywordStatus,
-        now: input.now,
-        phrase: input.phrase,
-        sourceType,
-        workspaceId: input.workspaceId,
-      })
-    }
+async function deleteKeywordRow(
+  ctx: MutationCtx,
+  keyword: Doc<"keywords">,
+  now: number,
+): Promise<void> {
+  await removeFromSavedViews(ctx, keyword.workspaceId, keyword._id, now)
+  await ctx.db.patch("keywords", keyword._id, {
+    deletedAt: now,
+    pauseReason: undefined,
+    status: "deleted",
+    updatedAt: now,
+  })
+  for (const source of await sourcesForKeyword(ctx, keyword._id)) {
+    if (source.status === "deleted" && source.deletedAt !== undefined) continue
+    await finalizeInvalidatedTrackingProviderRun(ctx, {
+      errorCode: "source_deleted",
+      errorMessage: "Keyword configuration was removed",
+      now,
+      source,
+    })
+    await ctx.db.patch("trackingSources", source._id, {
+      deletedAt: now,
+      leaseExpiresAt: undefined,
+      leaseToken: undefined,
+      pauseReason: undefined,
+      status: "deleted",
+      updatedAt: now,
+    })
   }
-  await syncUsagePausedWorkspaceMetric(ctx, input.workspaceId, input.now)
 }
 
 export async function replaceWorkspaceKeywordConfiguration(
   ctx: MutationCtx,
   input: {
-    keywords: Array<{ phrase: string; platforms: Platform[] }>
+    keywords: Array<{
+      brandCandidate?: boolean
+      description?: string
+      phrase: string
+      platforms: Platform[]
+      selectionOrder: number
+    }>
     userId: UserId
     workspaceId: WorkspaceId
   },
-): Promise<KeywordId[]> {
-  const desired = input.keywords.map((keyword) => ({
-    ...validatedPhrase(keyword.phrase),
-    platforms: validatedPlatforms(keyword.platforms),
-  }))
-  const normalizedPhrases = new Set(
-    desired.map((keyword) => keyword.normalizedPhrase),
-  )
-  if (desired.length === 0) {
-    keywordError("INVALID_KEYWORD", "Onboarding requires at least one keyword")
+): Promise<{
+  activeCount: number
+  keywordIds: KeywordId[]
+  pausedCount: number
+}> {
+  if (
+    input.keywords.length === 0 ||
+    input.keywords.length > MAX_DRAFT_KEYWORDS
+  ) {
+    keywordError(
+      "INVALID_KEYWORD",
+      `Select 1 to ${MAX_DRAFT_KEYWORDS} keywords`,
+    )
   }
-  if (normalizedPhrases.size !== desired.length) {
+  const desired = input.keywords.map((keyword, index) => ({
+    ...validatedPhrase(keyword.phrase),
+    brandCandidate: keyword.brandCandidate === true,
+    description: validatedDescription(keyword.description),
+    platforms: validatedPlatforms(keyword.platforms),
+    selectionOrder:
+      Number.isInteger(keyword.selectionOrder) && keyword.selectionOrder >= 0
+        ? keyword.selectionOrder
+        : index,
+  }))
+  if (
+    new Set(desired.map(({ normalizedPhrase }) => normalizedPhrase)).size !==
+    desired.length
+  ) {
     keywordError(
       "KEYWORD_ALREADY_EXISTS",
       "Keyword phrases must be unique within the configuration",
@@ -747,140 +585,122 @@ export async function replaceWorkspaceKeywordConfiguration(
   }
 
   const now = Date.now()
-  const [existing, billing] = await Promise.all([
-    configuredKeywords(ctx, input.workspaceId),
-    readBillingKeywordState(ctx, input.workspaceId, now),
-  ])
-  if (billing.hasActiveSubscription && !billing.hasCurrentUsage) {
-    keywordError(
-      "USAGE_CYCLE_REQUIRED",
-      "The active subscription does not have a current usage cycle",
-    )
-  }
-  const capacity = keywordCapacity({
-    configuredCount: desired.length,
-    ...(billing.hasActiveSubscription
-      ? { paidKeywordLimit: billing.keywordLimit }
-      : {}),
-  })
-  if (desired.length > capacity.limit) {
-    keywordError(
-      "KEYWORD_LIMIT_REACHED",
-      billing.hasActiveSubscription
-        ? "The active plan keyword limit has been reached"
-        : `Keyword drafts are limited to ${MAX_DRAFT_KEYWORDS}`,
-    )
-  }
-
+  const existing = await configuredKeywords(ctx, input.workspaceId)
   const existingByPhrase = new Map(
-    existing.map((keyword) => [keyword.normalizedPhrase as string, keyword]),
+    existing.map((row) => [row.normalizedPhrase, row]),
   )
-  const desiredIds: KeywordId[] = []
-
+  const desiredPhrases = new Set(desired.map((row) => row.normalizedPhrase))
   for (const keyword of existing) {
-    if (normalizedPhrases.has(keyword.normalizedPhrase as string)) {
-      continue
-    }
-    const keywordId = keyword._id as KeywordId
-    await removeKeywordFromActiveSavedViews(
-      ctx,
-      input.workspaceId,
-      keywordId,
-      now,
-      "KEYWORD_UPDATE_FAILED",
-    )
-    await ctx.db.patch("keywords", keywordId, {
-      deletedAt: now,
-      status: "deleted",
-      updatedAt: now,
-    })
-    for (const source of await sourcesForKeyword(ctx, keywordId)) {
-      if (source.status === "deleted" && source.deletedAt !== undefined) {
-        continue
-      }
-      await finalizeInvalidatedTrackingProviderRun(ctx, {
-        errorCode: "source_deleted",
-        errorMessage: "Keyword configuration was removed",
-        now,
-        source,
-      })
-      await ctx.db.patch("trackingSources", source._id as TrackingSourceId, {
-        deletedAt: now,
-        inProgressCursor: undefined,
-        inProgressPage: undefined,
-        inProgressWindowEndAt: undefined,
-        inProgressWindowStartAt: undefined,
-        leaseExpiresAt: undefined,
-        leaseToken: undefined,
-        pauseReason: undefined,
-        status: "deleted",
-        updatedAt: now,
-      })
+    if (!desiredPhrases.has(keyword.normalizedPhrase)) {
+      await deleteKeywordRow(ctx, keyword, now)
     }
   }
 
+  const ordered = [...desired].sort(
+    (left, right) =>
+      Number(right.brandCandidate) - Number(left.brandCandidate) ||
+      left.selectionOrder - right.selectionOrder,
+  )
+  const priorityByPhrase = new Map(
+    ordered.map((keyword, priority) => [keyword.normalizedPhrase, priority]),
+  )
+  const keywordIds: KeywordId[] = []
   for (const keyword of desired) {
     const current = existingByPhrase.get(keyword.normalizedPhrase)
-    if (current) {
-      const keywordId = current._id as KeywordId
-      const status = current.status as Exclude<KeywordStatus, "deleted">
-      await ctx.db.patch("keywords", keywordId, {
-        normalizedPhrase: keyword.normalizedPhrase,
-        phrase: keyword.phrase,
-        platforms: keyword.platforms,
-        updatedAt: now,
-      })
-      await syncTrackingSources(ctx, {
-        billing,
-        keywordId,
-        keywordStatus: status,
-        now,
-        phrase: keyword.phrase,
-        platforms: keyword.platforms,
-        workspaceId: input.workspaceId,
-      })
-      desiredIds.push(keywordId)
-      continue
-    }
-
-    const keywordId = (await ctx.db.insert("keywords", {
-      createdAt: now,
-      createdByUserId: input.userId,
+    const document = {
+      activationPriority: priorityByPhrase.get(keyword.normalizedPhrase)!,
+      brandCandidate: keyword.brandCandidate,
       normalizedPhrase: keyword.normalizedPhrase,
+      pauseReason: undefined,
+      pausedAt: undefined,
       phrase: keyword.phrase,
       platforms: keyword.platforms,
-      status: "active",
+      status: "paused" as const,
       updatedAt: now,
-      workspaceId: input.workspaceId,
-    })) as KeywordId
-    for (const sourceType of trackingSourceTypesForPlatforms(
-      keyword.platforms,
-    )) {
-      await insertTrackingSource(ctx, {
-        billing,
-        keywordId,
-        keywordStatus: "active",
-        now,
-        phrase: keyword.phrase,
-        sourceType,
-        workspaceId: input.workspaceId,
-      })
     }
-    desiredIds.push(keywordId)
+    if (current) {
+      await ctx.db.patch("keywords", current._id, {
+        ...document,
+        description: keyword.description,
+      })
+      keywordIds.push(current._id)
+    } else {
+      keywordIds.push(
+        await ctx.db.insert("keywords", {
+          activationPriority: document.activationPriority,
+          brandCandidate: document.brandCandidate,
+          ...(keyword.description === undefined
+            ? {}
+            : { description: keyword.description }),
+          createdAt: now,
+          createdByUserId: input.userId,
+          normalizedPhrase: document.normalizedPhrase,
+          phrase: document.phrase,
+          platforms: document.platforms,
+          status: document.status,
+          updatedAt: now,
+          workspaceId: input.workspaceId,
+        }),
+      )
+    }
   }
+  const counts = await reconcileWorkspaceKeywords(ctx, {
+    now,
+    workspaceId: input.workspaceId,
+  })
+  return { ...counts, keywordIds }
+}
 
-  await syncUsagePausedWorkspaceMetric(ctx, input.workspaceId, now)
-  return desiredIds
+function sourceOrder(value: TrackingSourceType): number {
+  return ["x", "reddit_posts", "reddit_comments", "hacker_news"].indexOf(value)
+}
+
+async function formatKeyword(
+  ctx: Pick<CustomerDatabaseCtx, "db">,
+  keyword: Doc<"keywords">,
+) {
+  const sources = (await sourcesForKeyword(ctx, keyword._id))
+    .filter(
+      (source) => source.status !== "deleted" && source.deletedAt === undefined,
+    )
+    .sort(
+      (left, right) =>
+        sourceOrder(left.sourceType) - sourceOrder(right.sourceType),
+    )
+    .map((source) => ({
+      id: source._id,
+      intervalMs: source.intervalMs,
+      lastCheckedAt: source.lastRunAt ?? source.lastSuccessAt ?? null,
+      lastError: source.lastError ?? null,
+      nextExpectedAt: source.nextRunAt ?? null,
+      pauseReason:
+        (source.pauseReason as TrackingPauseReason | undefined) ?? null,
+      sourceType: source.sourceType,
+      status: source.status,
+    }))
+  return {
+    createdAt: keyword.createdAt,
+    description: keyword.description ?? null,
+    id: keyword._id,
+    pauseReason:
+      (keyword.pauseReason as KeywordPauseReason | undefined) ?? null,
+    pausedAt: keyword.pausedAt ?? null,
+    phrase: keyword.phrase,
+    platforms: keyword.platforms,
+    sources,
+    status: keyword.status,
+    updatedAt: keyword.updatedAt,
+  }
 }
 
 export const listKeywords = authenticatedQuery({
   args: {},
   returns: v.array(keywordResultValidator),
   handler: async (ctx) => {
-    const customer = await requireCurrentCustomer(ctx)
-    const keywords = await configuredKeywords(ctx, customer.workspaceId)
+    const customer = await currentCustomer(ctx)
+    const rows = await configuredKeywords(ctx, customer.workspaceId)
     return await Promise.all(
-      keywords.map(async (keyword) => await formatKeyword(ctx, keyword)),
+      rows.map(async (row) => await formatKeyword(ctx, row)),
     )
   },
 })
@@ -892,172 +712,134 @@ export const getKeywordSummary = authenticatedQuery({
     if (!Number.isSafeInteger(args.now) || args.now < 0) {
       keywordError("INVALID_KEYWORD_INPUT", "Current time is invalid")
     }
-    const customer = await requireCurrentCustomer(ctx)
-    const [keywords, billing] = await Promise.all([
+    const customer = await currentCustomer(ctx)
+    const [keywords, allowance] = await Promise.all([
       configuredKeywords(ctx, customer.workspaceId),
-      readBillingKeywordState(ctx, customer.workspaceId, args.now),
+      resolveWorkspaceAllowance(ctx, customer.workspaceId, args.now),
     ])
     const activeCount = keywords.filter(
       (keyword) => keyword.status === "active",
     ).length
-    const pausedCount = keywords.filter(
-      (keyword) => keyword.status === "paused",
-    ).length
-    const capacity = keywordCapacity({
-      configuredCount: keywords.length,
-      ...(billing.hasActiveSubscription
-        ? { paidKeywordLimit: billing.keywordLimit }
-        : {}),
-    })
     const monitoringState:
       "active" | "paused" | "setup_required" | "unpaid" | "usage_limited" =
       keywords.length === 0
         ? "setup_required"
-        : !billing.hasActiveSubscription
+        : allowance.kind === "none"
           ? "unpaid"
-          : !billing.hasCurrentUsage || billing.usageExhausted
+          : allowance.exhausted
             ? "usage_limited"
             : activeCount === 0
               ? "paused"
               : "active"
-
+    const remaining = Math.max(0, MAX_DRAFT_KEYWORDS - keywords.length)
     return {
       activeCount,
-      canCreate: capacity.canCreate,
+      activeLimit: allowance.keywordLimit,
+      canCreate: remaining > 0,
+      configuredLimit: MAX_DRAFT_KEYWORDS,
       count: keywords.length,
-      limit: capacity.limit,
-      limitReached: capacity.limitReached,
+      limit: allowance.keywordLimit,
+      limitReached: activeCount >= allowance.keywordLimit,
       monitoringState,
-      pausedCount,
-      remaining: capacity.remaining,
+      pausedCount: keywords.length - activeCount,
+      remaining,
     }
   },
 })
 
 export const createKeyword = authenticatedMutation({
   args: {
+    description: v.optional(v.string()),
     phrase: v.string(),
     platforms: v.array(platformValidator),
   },
   returns: keywordResultValidator,
   handler: async (ctx, args) => {
-    const customer = await requireCurrentCustomer(ctx)
+    const customer = await currentCustomer(ctx)
     const { normalizedPhrase, phrase } = validatedPhrase(args.phrase)
+    const description = validatedDescription(args.description)
     const platforms = validatedPlatforms(args.platforms)
-    const now = Date.now()
-    const [keywords, billing] = await Promise.all([
-      configuredKeywords(ctx, customer.workspaceId),
-      readBillingKeywordState(ctx, customer.workspaceId, now),
-      assertUniquePhrase(ctx, customer.workspaceId, normalizedPhrase),
-    ])
-
-    if (billing.hasActiveSubscription && !billing.hasCurrentUsage) {
-      keywordError(
-        "USAGE_CYCLE_REQUIRED",
-        "The active subscription does not have a current usage cycle",
-      )
-    }
-    const capacity = keywordCapacity({
-      configuredCount: keywords.length,
-      ...(billing.hasActiveSubscription
-        ? { paidKeywordLimit: billing.keywordLimit }
-        : {}),
-    })
-    if (!capacity.canCreate) {
+    const existing = await configuredKeywords(ctx, customer.workspaceId)
+    if (existing.length >= MAX_DRAFT_KEYWORDS) {
       keywordError(
         "KEYWORD_LIMIT_REACHED",
-        billing.hasActiveSubscription
-          ? "The active plan keyword limit has been reached"
-          : `Keyword drafts are limited to ${MAX_DRAFT_KEYWORDS}`,
+        `Workspaces support up to ${MAX_DRAFT_KEYWORDS} configured keywords`,
       )
     }
-
-    const keywordId = (await ctx.db.insert("keywords", {
+    await assertUniquePhrase(ctx, customer.workspaceId, normalizedPhrase)
+    const now = Date.now()
+    const keywordId = await ctx.db.insert("keywords", {
+      activationPriority: existing.length,
       createdAt: now,
       createdByUserId: customer.userId,
+      ...(description === undefined ? {} : { description }),
       normalizedPhrase,
+      pauseReason: "capacity",
+      pausedAt: now,
       phrase,
       platforms,
-      status: "active",
+      status: "paused",
       updatedAt: now,
       workspaceId: customer.workspaceId,
-    })) as KeywordId
-
-    for (const sourceType of trackingSourceTypesForPlatforms(platforms)) {
-      await insertTrackingSource(ctx, {
-        billing,
-        keywordId,
-        keywordStatus: "active",
-        now,
-        phrase,
-        sourceType,
-        workspaceId: customer.workspaceId,
-      })
-    }
-    await syncUsagePausedWorkspaceMetric(ctx, customer.workspaceId, now)
-
-    const keyword = await keywordForWorkspace(
+    })
+    await reconcileWorkspaceKeywords(ctx, {
+      now,
+      workspaceId: customer.workspaceId,
+    })
+    return await formatKeyword(
       ctx,
-      customer.workspaceId,
-      keywordId,
+      await keywordForWorkspace(ctx, customer.workspaceId, keywordId),
     )
-    return await formatKeyword(ctx, keyword)
   },
 })
 
 export const updateKeyword = authenticatedMutation({
   args: {
+    description: v.optional(v.string()),
     keywordId: v.id("keywords"),
     phrase: v.string(),
     platforms: v.array(platformValidator),
   },
   returns: keywordResultValidator,
   handler: async (ctx, args) => {
-    const customer = await requireCurrentCustomer(ctx)
-    const keywordId = args.keywordId as KeywordId
+    const customer = await currentCustomer(ctx)
     const existing = await keywordForWorkspace(
       ctx,
       customer.workspaceId,
-      keywordId,
+      args.keywordId,
     )
     const { normalizedPhrase, phrase } = validatedPhrase(args.phrase)
+    const description = validatedDescription(args.description)
     const platforms = validatedPlatforms(args.platforms)
     await assertUniquePhrase(
       ctx,
       customer.workspaceId,
       normalizedPhrase,
-      keywordId,
+      args.keywordId,
     )
-
     const now = Date.now()
-    const billing = await readBillingKeywordState(
-      ctx,
-      customer.workspaceId,
-      now,
-    )
-    const keywordStatus = existing.status as Exclude<KeywordStatus, "deleted">
-    await ctx.db.patch("keywords", keywordId, {
+    await ctx.db.patch("keywords", args.keywordId, {
+      description,
       normalizedPhrase,
       phrase,
       platforms,
       updatedAt: now,
     })
-    await syncTrackingSources(ctx, {
-      billing,
-      keywordId,
-      keywordStatus,
-      now,
-      phrase,
-      platforms,
-      workspaceId: customer.workspaceId,
-    })
-
-    const updated = await keywordForWorkspace(
+    const allowance = await resolveWorkspaceAllowance(
       ctx,
       customer.workspaceId,
-      keywordId,
+      now,
     )
-    return await formatKeyword(ctx, updated)
+    await syncKeywordSources(
+      ctx,
+      { ...existing, normalizedPhrase, phrase, platforms, updatedAt: now },
+      allowance,
+      now,
+    )
+    return await formatKeyword(
+      ctx,
+      await keywordForWorkspace(ctx, customer.workspaceId, args.keywordId),
+    )
   },
 })
 
@@ -1065,43 +847,41 @@ export const pauseKeyword = authenticatedMutation({
   args: { keywordId: v.id("keywords") },
   returns: keywordResultValidator,
   handler: async (ctx, args) => {
-    const customer = await requireCurrentCustomer(ctx)
-    const keywordId = args.keywordId as KeywordId
-    await keywordForWorkspace(ctx, customer.workspaceId, keywordId)
+    const customer = await currentCustomer(ctx)
+    const keyword = await keywordForWorkspace(
+      ctx,
+      customer.workspaceId,
+      args.keywordId,
+    )
     const now = Date.now()
-
-    await ctx.db.patch("keywords", keywordId, {
+    await ctx.db.patch("keywords", args.keywordId, {
+      pauseReason: "user",
       pausedAt: now,
       status: "paused",
       updatedAt: now,
     })
-    const sources = await sourcesForKeyword(ctx, keywordId)
-    for (const source of sources) {
-      if (source.status === "deleted" || source.deletedAt !== undefined) {
-        continue
-      }
-      await finalizeInvalidatedTrackingProviderRun(ctx, {
-        errorCode: "source_paused",
-        errorMessage: "Keyword was paused by the user",
-        now,
-        source,
-      })
-      await ctx.db.patch("trackingSources", source._id as TrackingSourceId, {
-        leaseExpiresAt: undefined,
-        leaseToken: undefined,
-        pauseReason: "user",
-        status: "paused",
-        updatedAt: now,
-      })
-    }
-    await syncUsagePausedWorkspaceMetric(ctx, customer.workspaceId, now)
-
-    const keyword = await keywordForWorkspace(
+    const allowance = await resolveWorkspaceAllowance(
       ctx,
       customer.workspaceId,
-      keywordId,
+      now,
     )
-    return await formatKeyword(ctx, keyword)
+    await syncKeywordSources(
+      ctx,
+      {
+        ...keyword,
+        pauseReason: "user",
+        pausedAt: now,
+        status: "paused",
+        updatedAt: now,
+      },
+      allowance,
+      now,
+    )
+    await syncUsagePausedWorkspaceMetric(ctx, customer.workspaceId, now)
+    return await formatKeyword(
+      ctx,
+      await keywordForWorkspace(ctx, customer.workspaceId, args.keywordId),
+    )
   },
 })
 
@@ -1109,127 +889,62 @@ export const resumeKeyword = authenticatedMutation({
   args: { keywordId: v.id("keywords") },
   returns: keywordResultValidator,
   handler: async (ctx, args) => {
-    const customer = await requireCurrentCustomer(ctx)
-    const keywordId = args.keywordId as KeywordId
-    const existingKeyword = await keywordForWorkspace(
-      ctx,
-      customer.workspaceId,
-      keywordId,
-    )
+    const customer = await currentCustomer(ctx)
+    await keywordForWorkspace(ctx, customer.workspaceId, args.keywordId)
     const now = Date.now()
-    const billing = await readBillingKeywordState(
-      ctx,
-      customer.workspaceId,
-      now,
-    )
-    if (
-      existingKeyword.status !== "active" &&
-      billing.hasActiveSubscription &&
-      billing.keywordLimit <= MAX_DRAFT_KEYWORDS
-    ) {
-      if (billing.keywordLimit === 0) {
-        keywordError(
-          "KEYWORD_LIMIT_REACHED",
-          "The active plan keyword limit has been reached",
-        )
-      }
-      const activeKeywords = await ctx.db
-        .query("keywords")
-        .withIndex("by_workspace_status_and_created_at", (q) =>
-          q.eq("workspaceId", customer.workspaceId).eq("status", "active"),
-        )
-        .take(billing.keywordLimit)
-      if (activeKeywords.length >= billing.keywordLimit) {
-        keywordError(
-          "KEYWORD_LIMIT_REACHED",
-          "The active plan keyword limit has been reached",
-        )
-      }
+    const [keywords, allowance] = await Promise.all([
+      configuredKeywords(ctx, customer.workspaceId),
+      resolveWorkspaceAllowance(ctx, customer.workspaceId, now),
+    ])
+    if (allowance.kind === "none") {
+      keywordError(
+        "MONITORING_ACCESS_REQUIRED",
+        "Start the free evaluation or activate a paid subscription first",
+      )
     }
-    const trackingState = trackingStateFor(billing, "active")
-
-    await ctx.db.patch("keywords", keywordId, {
+    const occupied = keywords.filter(
+      (keyword) =>
+        keyword.status === "active" && keyword._id !== args.keywordId,
+    ).length
+    if (occupied >= allowance.keywordLimit) {
+      keywordError(
+        "KEYWORD_LIMIT_REACHED",
+        "Pause an active keyword before activating this one",
+      )
+    }
+    await ctx.db.patch("keywords", args.keywordId, {
+      pauseReason: undefined,
       pausedAt: undefined,
       status: "active",
       updatedAt: now,
     })
-    const sources = await sourcesForKeyword(ctx, keywordId)
-    for (const source of sources) {
-      if (source.status === "deleted" || source.deletedAt !== undefined) {
-        continue
-      }
-      await finalizeInvalidatedTrackingProviderRun(ctx, {
-        errorCode: "source_changed",
-        errorMessage: "Keyword was resumed with a new tracking lease",
-        now,
-        source,
-      })
-      await ctx.db.patch("trackingSources", source._id as TrackingSourceId, {
-        leaseExpiresAt: undefined,
-        leaseToken: undefined,
-        pauseReason: trackingState.pauseReason,
-        status: trackingState.status,
-        updatedAt: now,
-      })
-    }
-    await syncUsagePausedWorkspaceMetric(ctx, customer.workspaceId, now)
-
     const keyword = await keywordForWorkspace(
       ctx,
       customer.workspaceId,
-      keywordId,
+      args.keywordId,
     )
+    await syncKeywordSources(ctx, keyword, allowance, now)
+    await syncUsagePausedWorkspaceMetric(ctx, customer.workspaceId, now)
     return await formatKeyword(ctx, keyword)
   },
 })
 
 export const deleteKeyword = authenticatedMutation({
   args: { keywordId: v.id("keywords") },
-  returns: deletedKeywordResultValidator,
+  returns: v.object({ id: v.id("keywords"), status: v.literal("deleted") }),
   handler: async (ctx, args) => {
-    const customer = await requireCurrentCustomer(ctx)
-    const keywordId = args.keywordId as KeywordId
-    await keywordForWorkspace(ctx, customer.workspaceId, keywordId)
-    const now = Date.now()
-
-    await removeKeywordFromActiveSavedViews(
+    const customer = await currentCustomer(ctx)
+    const keyword = await keywordForWorkspace(
       ctx,
       customer.workspaceId,
-      keywordId,
-      now,
-      "KEYWORD_DELETE_FAILED",
+      args.keywordId,
     )
-    await ctx.db.patch("keywords", keywordId, {
-      deletedAt: now,
-      status: "deleted",
-      updatedAt: now,
+    const now = Date.now()
+    await deleteKeywordRow(ctx, keyword, now)
+    await reconcileWorkspaceKeywords(ctx, {
+      now,
+      workspaceId: customer.workspaceId,
     })
-    const sources = await sourcesForKeyword(ctx, keywordId)
-    for (const source of sources) {
-      if (source.status === "deleted" && source.deletedAt !== undefined) {
-        continue
-      }
-      await finalizeInvalidatedTrackingProviderRun(ctx, {
-        errorCode: "source_deleted",
-        errorMessage: "Keyword was deleted",
-        now,
-        source,
-      })
-      await ctx.db.patch("trackingSources", source._id as TrackingSourceId, {
-        deletedAt: now,
-        inProgressCursor: undefined,
-        inProgressPage: undefined,
-        inProgressWindowEndAt: undefined,
-        inProgressWindowStartAt: undefined,
-        leaseExpiresAt: undefined,
-        leaseToken: undefined,
-        pauseReason: undefined,
-        status: "deleted",
-        updatedAt: now,
-      })
-    }
-    await syncUsagePausedWorkspaceMetric(ctx, customer.workspaceId, now)
-
-    return { id: keywordId, status: "deleted" as const }
+    return { id: args.keywordId, status: "deleted" as const }
   },
 })

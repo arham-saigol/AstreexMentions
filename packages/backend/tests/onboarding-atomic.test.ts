@@ -13,269 +13,172 @@ const modules = {
 const saveConfiguration = makeFunctionReference<
   "mutation",
   {
-    categories: Array<{
-      categoryId: GenericId<"categories">
-      colorToken:
-        | "blue"
-        | "orange"
-        | "green"
-        | "red"
-        | "purple"
-        | "yellow"
-        | "gray"
-        | "pink"
-        | "cyan"
-        | "slate"
-      description: string
-      enabled: boolean
-    }>
+    accessPath: "free" | "starter" | "growth" | "scale"
+    companyDescription: string
     keywords: Array<{
+      brandCandidate?: boolean
+      description?: string
       phrase: string
       platforms: Array<"x" | "reddit" | "hacker_news">
+      selectionOrder: number
     }>
     workspaceName: string
   },
   {
+    activeCount: number
     keywordCount: number
     keywordIds: GenericId<"keywords">[]
+    pausedCount: number
     workspaceName: string
   }
 >("onboarding:saveOnboardingConfiguration")
 
+async function seedCustomer() {
+  const t = convexTest({ modules, schema })
+  const identity = {
+    issuer: "https://clerk.example.test",
+    subject: "onboarding-user",
+    tokenIdentifier: "https://clerk.example.test|onboarding-user",
+  } as UserIdentity
+  const seeded = await t.run(async (ctx) => {
+    const now = Date.now()
+    const userId = await ctx.db.insert("users", {
+      clerkUserId: identity.subject,
+      createdAt: now,
+      tokenIdentifier: identity.tokenIdentifier,
+      updatedAt: now,
+    })
+    const workspaceId = await ctx.db.insert("workspaces", {
+      createdAt: now,
+      kind: "personal",
+      name: "Original workspace",
+      normalizedName: "original workspace",
+      ownerUserId: userId,
+      updatedAt: now,
+    })
+    await ctx.db.patch("users", userId, { personalWorkspaceId: workspaceId })
+    await ctx.db.insert("workspaceMembers", {
+      createdAt: now,
+      role: "owner",
+      updatedAt: now,
+      userId,
+      workspaceId,
+    })
+    return { userId, workspaceId }
+  })
+  return { client: t.withIdentity(identity), seeded, t }
+}
+
+const keywords = [
+  {
+    description: "A product phrase selected first by the user.",
+    phrase: "First selected",
+    platforms: ["x" as const],
+    selectionOrder: 0,
+  },
+  {
+    brandCandidate: true,
+    description: "The suggested company brand.",
+    phrase: "Brand candidate",
+    platforms: ["reddit" as const],
+    selectionOrder: 1,
+  },
+  {
+    description: "An overflow phrase that remains configured.",
+    phrase: "Third signal",
+    platforms: ["hacker_news" as const],
+    selectionOrder: 2,
+  },
+]
+
 describe("atomic onboarding configuration", () => {
-  it("rolls back destructive keyword changes if a later category validation fails", async () => {
-    const t = convexTest({ modules, schema })
-    const identity = {
-      issuer: "https://clerk.example.test",
-      subject: "onboarding-atomic-user",
-      tokenIdentifier: "https://clerk.example.test|onboarding-atomic-user",
-    } as UserIdentity
-    const seeded = await t.run(async (ctx) => {
-      const now = Date.now()
-      const userId = await ctx.db.insert("users", {
-        clerkUserId: identity.subject,
-        createdAt: now,
-        tokenIdentifier: identity.tokenIdentifier,
-        updatedAt: now,
-      })
-      const workspaceId = await ctx.db.insert("workspaces", {
-        createdAt: now,
-        kind: "personal",
-        name: "Original workspace",
-        normalizedName: "original workspace",
-        ownerUserId: userId,
-        updatedAt: now,
-      })
-      await ctx.db.patch("users", userId, {
-        personalWorkspaceId: workspaceId,
-      })
-      await ctx.db.insert("workspaceMembers", {
-        createdAt: now,
-        role: "owner",
-        updatedAt: now,
-        userId,
-        workspaceId,
-      })
-      const oldKeywordId = await ctx.db.insert("keywords", {
-        createdAt: now,
-        createdByUserId: userId,
-        normalizedPhrase: "old signal",
-        phrase: "Old signal",
-        platforms: ["x"],
-        status: "active",
-        updatedAt: now,
-        workspaceId,
-      })
-      const oldSourceId = await ctx.db.insert("trackingSources", {
-        backoffMs: 0,
-        checkpointVersion: 0,
-        consecutiveFailures: 0,
-        createdAt: now,
-        intervalMs: 60_000,
-        keywordId: oldKeywordId,
-        leaseVersion: 0,
-        nextRunAt: now,
-        pauseReason: "paid",
-        providerQuery: "Old signal",
-        sourceType: "x",
-        status: "paused",
-        totalFailures: 0,
-        updatedAt: now,
-        workspaceId,
-      })
-      const categoryId = await ctx.db.insert("categories", {
-        colorToken: "blue",
-        createdAt: now,
-        description: "Questions",
-        enabled: true,
-        isSystem: true,
-        name: "Question",
-        normalizedName: "question",
-        sortOrder: 0,
-        systemKey: "question",
-        updatedAt: now,
-        workspaceId,
-      })
-      const otherCategoryId = await ctx.db.insert("categories", {
-        colorToken: "slate",
-        createdAt: now,
-        description: "Other mentions",
-        enabled: true,
-        isSystem: true,
-        name: "Other",
-        normalizedName: "other",
-        sortOrder: 1,
-        systemKey: "other",
-        updatedAt: now,
-        workspaceId,
-      })
-      const savedViewId = await ctx.db.insert("savedViews", {
-        createdAt: now,
-        filters: {
-          categoryIds: [categoryId, otherCategoryId],
-          keywordIds: [oldKeywordId],
-        },
-        icon: "funnel",
-        name: "Onboarding filters",
-        normalizedName: "onboarding filters",
-        position: 0,
-        sort: "newest",
-        updatedAt: now,
-        userId,
-        workspaceId,
-      })
-
-      const foreignUserId = await ctx.db.insert("users", {
-        clerkUserId: "foreign-user",
-        createdAt: now,
-        tokenIdentifier: "issuer|foreign-user",
-        updatedAt: now,
-      })
-      const foreignWorkspaceId = await ctx.db.insert("workspaces", {
-        createdAt: now,
-        kind: "personal",
-        name: "Foreign workspace",
-        normalizedName: "foreign workspace",
-        ownerUserId: foreignUserId,
-        updatedAt: now,
-      })
-      const foreignCategoryId = await ctx.db.insert("categories", {
-        colorToken: "red",
-        createdAt: now,
-        description: "Foreign",
-        enabled: true,
-        isSystem: false,
-        name: "Foreign",
-        normalizedName: "foreign",
-        sortOrder: 0,
-        updatedAt: now,
-        workspaceId: foreignWorkspaceId,
-      })
-      return {
-        categoryId,
-        foreignCategoryId,
-        oldKeywordId,
-        oldSourceId,
-        otherCategoryId,
-        savedViewId,
-        workspaceId,
-      }
-    })
-    const customer = t.withIdentity(identity)
+  it("creates one durable free grant, preserves over-cap keywords, and activates the selected brand candidate", async () => {
+    const { client, seeded, t } = await seedCustomer()
 
     await expect(
-      customer.mutation(saveConfiguration, {
-        categories: [
-          {
-            categoryId: seeded.foreignCategoryId,
-            colorToken: "red",
-            description: "Cannot update this",
-            enabled: true,
-          },
-        ],
-        keywords: [{ phrase: "New signal", platforms: ["x"] }],
-        workspaceName: "Changed workspace",
-      }),
-    ).rejects.toThrow()
-
-    const rolledBack = await t.run(async (ctx) => ({
-      keywords: await ctx.db.query("keywords").collect(),
-      source: await ctx.db.get("trackingSources", seeded.oldSourceId),
-      savedView: await ctx.db.get("savedViews", seeded.savedViewId),
-      workspace: await ctx.db.get("workspaces", seeded.workspaceId),
-    }))
-    expect(rolledBack.keywords).toEqual([
-      expect.objectContaining({
-        _id: seeded.oldKeywordId,
-        status: "active",
-      }),
-    ])
-    expect(rolledBack.source).toMatchObject({ status: "paused" })
-    expect(rolledBack.savedView?.filters).toEqual({
-      categoryIds: [seeded.categoryId, seeded.otherCategoryId],
-      keywordIds: [seeded.oldKeywordId],
-    })
-    expect(rolledBack.workspace).toMatchObject({ name: "Original workspace" })
-
-    await expect(
-      customer.mutation(saveConfiguration, {
-        categories: [
-          {
-            categoryId: seeded.categoryId,
-            colorToken: "green",
-            description: "Updated questions",
-            enabled: false,
-          },
-          {
-            categoryId: seeded.otherCategoryId,
-            colorToken: "slate",
-            description: "Other mentions",
-            enabled: true,
-          },
-        ],
-        keywords: [{ phrase: "New signal", platforms: ["x"] }],
-        workspaceName: "Changed workspace",
+      client.mutation(saveConfiguration, {
+        accessPath: "free",
+        companyDescription: "A company that monitors customer conversations.",
+        keywords,
+        workspaceName: "Astreex",
       }),
     ).resolves.toMatchObject({
-      keywordCount: 1,
-      workspaceName: "Changed workspace",
+      activeCount: 1,
+      keywordCount: 3,
+      pausedCount: 2,
     })
 
-    const applied = await t.run(async (ctx) => ({
-      category: await ctx.db.get("categories", seeded.categoryId),
-      keywords: await ctx.db.query("keywords").collect(),
+    await client.mutation(saveConfiguration, {
+      accessPath: "free",
+      companyDescription: "A company that monitors customer conversations.",
+      keywords,
+      workspaceName: "Astreex",
+    })
+
+    const state = await t.run(async (ctx) => ({
+      grants: await ctx.db.query("freeEvaluationGrants").collect(),
+      keywords: await ctx.db
+        .query("keywords")
+        .withIndex("by_workspace_and_updated_at", (q) =>
+          q.eq("workspaceId", seeded.workspaceId),
+        )
+        .collect(),
       sources: await ctx.db.query("trackingSources").collect(),
-      savedView: await ctx.db.get("savedViews", seeded.savedViewId),
       workspace: await ctx.db.get("workspaces", seeded.workspaceId),
     }))
-    expect(applied.category).toMatchObject({
-      colorToken: "green",
-      description: "Updated questions",
-      enabled: false,
+    expect(state.grants).toHaveLength(1)
+    expect(state.grants[0]).toMatchObject({
+      mentionLimit: 100,
+      mentionsUsed: 0,
     })
-    expect(applied.keywords).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          _id: seeded.oldKeywordId,
-          status: "deleted",
-        }),
-        expect.objectContaining({
-          normalizedPhrase: "new signal",
-          status: "active",
-        }),
-      ]),
-    )
     expect(
-      applied.sources.filter((source) => source.status !== "deleted"),
+      state.keywords.filter((keyword) => keyword.status === "active"),
     ).toEqual([
       expect.objectContaining({
-        providerQuery: "New signal",
-        sourceType: "x",
+        description: "The suggested company brand.",
+        phrase: "Brand candidate",
       }),
     ])
-    expect(applied.savedView?.filters).toEqual({
-      categoryIds: [seeded.otherCategoryId],
+    expect(
+      state.keywords.filter((keyword) => keyword.status === "paused"),
+    ).toHaveLength(2)
+    expect(
+      state.sources
+        .filter((source) => source.pauseReason === "capacity")
+        .every((source) => source.status === "paused"),
+    ).toBe(true)
+    expect(state.workspace).toMatchObject({
+      companyDescription: "A company that monitors customer conversations.",
+      name: "Astreex",
     })
-    expect(applied.workspace).toMatchObject({ name: "Changed workspace" })
+  })
+
+  it("saves a paid selection without granting client-selected paid monitoring", async () => {
+    const { client, t } = await seedCustomer()
+    await expect(
+      client.mutation(saveConfiguration, {
+        accessPath: "growth",
+        companyDescription: "Paid onboarding context.",
+        keywords,
+        workspaceName: "Paid workspace",
+      }),
+    ).resolves.toMatchObject({
+      activeCount: 0,
+      keywordCount: 3,
+      pausedCount: 3,
+    })
+
+    const state = await t.run(async (ctx) => ({
+      grants: await ctx.db.query("freeEvaluationGrants").collect(),
+      keywords: await ctx.db.query("keywords").collect(),
+      sources: await ctx.db.query("trackingSources").collect(),
+    }))
+    expect(state.grants).toEqual([])
+    expect(
+      state.keywords.every((keyword) => keyword.pauseReason === "payment"),
+    ).toBe(true)
+    expect(state.sources.every((source) => source.pauseReason === "paid")).toBe(
+      true,
+    )
   })
 })

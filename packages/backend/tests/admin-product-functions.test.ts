@@ -44,8 +44,15 @@ const schema = defineSchema({
       searchField: "searchText",
       filterFields: ["status"],
     }),
+  freeEvaluationGrants: defineTable(v.any()).index("by_workspace", [
+    "workspaceId",
+  ]),
   mentions: defineTable(v.any()),
-  keywords: defineTable(v.any()),
+  keywords: defineTable(v.any()).index("by_workspace_status_and_created_at", [
+    "workspaceId",
+    "status",
+    "createdAt",
+  ]),
   providerMetricBuckets: defineTable(v.any())
     .index("by_granularity_and_bucket", ["granularity", "bucketStartAt"])
     .index("by_provider_operation_granularity_and_bucket", [
@@ -72,10 +79,14 @@ const schema = defineSchema({
       "granularity",
       "bucketStartAt",
     ]),
-  trackingSources: defineTable(v.any()).index("by_workspace_and_created_at", [
-    "workspaceId",
-    "createdAt",
-  ]),
+  trackingSources: defineTable(v.any())
+    .index("by_workspace_and_created_at", ["workspaceId", "createdAt"])
+    .index("by_workspace_status_and_created_at", [
+      "workspaceId",
+      "status",
+      "createdAt",
+    ])
+    .index("by_keyword_and_source_type", ["keywordId", "sourceType"]),
   usageCycles: defineTable(v.any()).index(
     "by_workspace_status_and_period_end",
     ["workspaceId", "status", "periodEndAt"],
@@ -882,44 +893,94 @@ describe("admin account deletion controls", () => {
         updatedAt: now + 1,
       })
       const keywordId = await ctx.db.insert("keywords", {
+        activationPriority: 0,
         createdAt: now - 1,
-        deletedAt: undefined,
+        createdByUserId: bootstrap.userId,
+        normalizedPhrase: "recovery keyword",
+        phrase: "Recovery keyword",
+        platforms: ["x"],
         status: "active",
         updatedAt: now - 1,
         workspaceId: bootstrap.workspaceId,
       })
       const sourceId = await ctx.db.insert("trackingSources", {
+        backoffMs: 0,
+        checkpointVersion: 0,
+        consecutiveFailures: 0,
         createdAt: now - 1,
         deletionPausedAt: now,
+        intervalMs: 300_000,
         keywordId,
+        leaseVersion: 0,
+        nextRunAt: now,
         pauseReason: "user",
+        providerQuery: "Recovery keyword",
+        sourceType: "x",
         status: "paused",
+        totalFailures: 0,
         updatedAt: now + 1,
         workspaceId: bootstrap.workspaceId,
       })
-      const userPausedSourceId = await ctx.db.insert("trackingSources", {
+      const userPausedKeywordId = await ctx.db.insert("keywords", {
+        activationPriority: 1,
         createdAt: now,
-        keywordId,
+        createdByUserId: bootstrap.userId,
+        normalizedPhrase: "user paused keyword",
         pauseReason: "user",
+        phrase: "User paused keyword",
+        platforms: ["reddit"],
         status: "paused",
         updatedAt: now,
         workspaceId: bootstrap.workspaceId,
       })
+      const userPausedSourceId = await ctx.db.insert("trackingSources", {
+        backoffMs: 0,
+        checkpointVersion: 0,
+        consecutiveFailures: 0,
+        createdAt: now,
+        intervalMs: 300_000,
+        keywordId: userPausedKeywordId,
+        leaseVersion: 0,
+        nextRunAt: now,
+        pauseReason: "user",
+        providerQuery: "User paused keyword",
+        sourceType: "reddit_posts",
+        status: "paused",
+        totalFailures: 0,
+        updatedAt: now,
+        workspaceId: bootstrap.workspaceId,
+      })
       const subscriptionId = await ctx.db.insert("subscriptions", {
+        cancelAtPeriodEnd: false,
+        createdAt: now,
         currentPeriodEnd: now + 86_400_000,
         currentPeriodStart: now - 86_400_000,
         entitlementStatus: "active",
         lastSyncedAt: now,
+        planId: "starter",
+        provider: "creem",
+        providerCustomerId: "recovery-customer",
+        providerSubscriptionId: "recovery-subscription",
         status: "active",
+        updatedAt: now,
         workspaceId: bootstrap.workspaceId,
       })
       await ctx.db.insert("usageCycles", {
+        createdAt: now,
+        idempotencyKey: "recovery-cycle",
+        keywordLimit: 3,
         mentionLimit: 100,
         mentionsUsed: 5,
         periodEndAt: now + 86_400_000,
         periodStartAt: now - 86_400_000,
+        planSnapshot: {
+          keywordLimit: 3,
+          mentionLimit: 100,
+          planId: "starter",
+        },
         status: "open",
         subscriptionId,
+        updatedAt: now,
         workspaceId: bootstrap.workspaceId,
       })
       return {

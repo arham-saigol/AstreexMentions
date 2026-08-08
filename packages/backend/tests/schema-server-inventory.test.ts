@@ -11,6 +11,8 @@ const REQUIRED_TABLES = [
   "billingCheckouts",
   "billingEvents",
   "usageCycles",
+  "freeEvaluationGrants",
+  "onboardingResearch",
   "keywords",
   "trackingSources",
   "trackingProviderPages",
@@ -295,6 +297,14 @@ describe("complete Convex schema", () => {
       "dispatch persisted tracking schedules": expect.objectContaining({
         name: "scheduling/internal:dispatchDueTrackingSources",
         schedule: { minutes: 1, type: "interval" },
+      }),
+      "purge expired free evaluation mentions": expect.objectContaining({
+        name: "retention:purgeExpiredFreeMentions",
+        schedule: { hours: 1, type: "interval" },
+      }),
+      "reconcile expired monitoring access": expect.objectContaining({
+        name: "billing/accessReconciliation:reconcileExpiredMonitoringAccess",
+        schedule: { minutes: 5, type: "interval" },
       }),
       "retry persisted Creem billing events": expect.objectContaining({
         name: "billing/internal:dispatchPendingCreemBillingEvents",

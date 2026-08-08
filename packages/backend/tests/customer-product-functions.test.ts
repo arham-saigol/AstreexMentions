@@ -76,6 +76,9 @@ const customerTestSchema = defineSchema({
     "workspaceId",
     "userId",
   ]),
+  freeEvaluationGrants: defineTable(v.any()).index("by_workspace", [
+    "workspaceId",
+  ]),
   keywords: defineTable(v.any())
     .index("by_workspace_status_and_created_at", [
       "workspaceId",
@@ -289,15 +292,15 @@ describe("customer user and workspace functions", () => {
   it("derives billing context without a client-supplied workspace id", async () => {
     const { customer } = await bootstrappedCustomer()
 
-    await expect(customer.query(getBillingOverview, {})).resolves.toMatchObject(
-      {
-        providerState: expect.stringMatching(
-          /^(configured|provider_unconfigured)$/u,
-        ),
-        subscription: null,
-        usage: null,
-      },
-    )
+    await expect(
+      customer.query(getBillingOverview, { now: Date.now() }),
+    ).resolves.toMatchObject({
+      providerState: expect.stringMatching(
+        /^(configured|provider_unconfigured)$/u,
+      ),
+      subscription: null,
+      usage: null,
+    })
   })
 
   it("uses the server-materialized entitlement status", async () => {
@@ -321,11 +324,11 @@ describe("customer user and workspace functions", () => {
       })
     })
 
-    await expect(customer.query(getBillingOverview, {})).resolves.toMatchObject(
-      {
-        subscription: { entitlementStatus: "inactive" },
-      },
-    )
+    await expect(
+      customer.query(getBillingOverview, { now }),
+    ).resolves.toMatchObject({
+      subscription: { entitlementStatus: "inactive" },
+    })
   })
 
   it("stages portal-blocked deletion before scheduling the inactive job", async () => {

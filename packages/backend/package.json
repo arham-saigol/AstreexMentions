@@ -20,6 +20,7 @@
   "dependencies": {
     "@astreex/domain": "workspace:*",
     "@astreex/email": "workspace:*",
+    "@convex-dev/rate-limiter": "^0.3.2",
     "@js-temporal/polyfill": "^0.5.1",
     "convex": "^1.42.0",
     "convex-helpers": "^0.1.120",

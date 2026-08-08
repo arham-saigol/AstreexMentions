@@ -76,9 +76,11 @@ const WORKSPACE_INDEXED_PURGE_STAGES = [
   "email_outbox",
   "email_webhook_events",
   "feature_requests",
+  "free_evaluation_grants",
   "keywords",
   "mention_keyword_matches",
   "mentions",
+  "onboarding_research",
   "provider_runs",
   "saved_views",
   "subscriptions",
@@ -586,6 +588,11 @@ async function workspaceRows(
           q.eq("workspaceId", workspaceId),
         )
         .take(limit)
+    case "free_evaluation_grants":
+      return await db
+        .query("freeEvaluationGrants")
+        .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+        .take(limit)
     case "feature_requests":
       return await db
         .query("featureRequests")
@@ -613,6 +620,11 @@ async function workspaceRows(
         .withIndex("by_workspace_and_published_at", (q) =>
           q.eq("workspaceId", workspaceId),
         )
+        .take(limit)
+    case "onboarding_research":
+      return await db
+        .query("onboardingResearch")
+        .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
         .take(limit)
     case "provider_runs":
       return await db

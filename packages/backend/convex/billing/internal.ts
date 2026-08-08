@@ -18,10 +18,8 @@ import {
   providerRunIsStale,
 } from "../lib/billingDeletionGuard"
 import { withoutUndefinedValues } from "../lib/jobRuntime"
-import {
-  syncUsagePausedWorkspaceMetric,
-  transitionSubscriptionMetrics,
-} from "../lib/operationalMetrics"
+import { transitionSubscriptionMetrics } from "../lib/operationalMetrics"
+import { reconcileWorkspaceKeywords } from "../keywords"
 import { recordProviderMetricBuckets } from "../lib/providerMetricBuckets"
 import {
   env,
@@ -31,7 +29,6 @@ import {
   type QueryCtx,
 } from "../_generated/server"
 import type { Doc, Id } from "../_generated/dataModel"
-import { finalizeInvalidatedTrackingProviderRun } from "../scheduling/providerRuns"
 import {
   isProviderUnconfigured,
   readCreemProductAllowlist,
@@ -56,7 +53,6 @@ const BILLING_PLAN_IDS = ["starter", "growth", "scale"] as const
 const CHECKOUT_RECORD_TTL_MS = 24 * 60 * 60 * 1_000
 const WEBHOOK_RETRY_DELAY_MS = 30_000
 const MAX_STALE_CREEM_OPERATIONS_PER_DISPATCH = 16
-const MAX_WORKSPACE_KEYWORDS = 10
 const POST_PURGE_DELETION_PHASES = new Set([
   "verify_data",
   "identity_delete",
@@ -396,124 +392,6 @@ async function hasPurgedWorkspaceTombstone(
   )
 }
 
-async function synchronizeTrackingSourcesForBilling(
-  ctx: GenericMutationContext,
-  input: {
-    entitlementStatus: "active" | "inactive"
-    mentionLimit: number
-    mentionsUsed: number
-    now: number
-    workspaceId: WorkspaceId
-  },
-): Promise<void> {
-  if (input.entitlementStatus === "inactive") {
-    const activeSources = await ctx.db
-      .query("trackingSources")
-      .withIndex("by_workspace_status_and_created_at", (q) =>
-        q.eq("workspaceId", input.workspaceId).eq("status", "active"),
-      )
-      .collect()
-    for (const source of activeSources) {
-      await finalizeInvalidatedTrackingProviderRun(ctx, {
-        errorCode: "source_paused",
-        errorMessage: "Billing entitlement became inactive",
-        now: input.now,
-        source,
-      })
-      await ctx.db.patch("trackingSources", source._id, {
-        leaseExpiresAt: undefined,
-        leaseToken: undefined,
-        pauseReason: "paid",
-        status: "paused",
-        updatedAt: input.now,
-      })
-    }
-    await syncUsagePausedWorkspaceMetric(ctx, input.workspaceId, input.now)
-    return
-  }
-
-  const canConsumeMentions = input.mentionsUsed < input.mentionLimit
-  const pausedSources = await ctx.db
-    .query("trackingSources")
-    .withIndex("by_workspace_status_and_created_at", (q) =>
-      q.eq("workspaceId", input.workspaceId).eq("status", "paused"),
-    )
-    .collect()
-  for (const source of pausedSources) {
-    const pauseReason = source.pauseReason
-    if (
-      pauseReason !== "paid" &&
-      !(pauseReason === "usage" && canConsumeMentions)
-    ) {
-      continue
-    }
-    await ctx.db.patch("trackingSources", source._id, {
-      pauseReason: undefined,
-      status: "active",
-      updatedAt: input.now,
-    })
-  }
-  await syncUsagePausedWorkspaceMetric(ctx, input.workspaceId, input.now)
-}
-
-async function reconcileKeywordLimit(
-  ctx: GenericMutationContext,
-  input: {
-    keywordLimit: number
-    now: number
-    workspaceId: WorkspaceId
-  },
-): Promise<void> {
-  const activeKeywords = await ctx.db
-    .query("keywords")
-    .withIndex("by_workspace_status_and_created_at", (q) =>
-      q.eq("workspaceId", input.workspaceId).eq("status", "active"),
-    )
-    .order("asc")
-    .take(MAX_WORKSPACE_KEYWORDS + 1)
-  if (activeKeywords.length > MAX_WORKSPACE_KEYWORDS) {
-    throw new RangeError(
-      "Workspace keyword count exceeds the supported maximum",
-    )
-  }
-
-  for (const keyword of activeKeywords.slice(input.keywordLimit)) {
-    await ctx.db.patch("keywords", keyword._id, {
-      pausedAt: input.now,
-      status: "paused",
-      updatedAt: input.now,
-    })
-    const sources = (
-      await Promise.all(
-        (["active", "paused", "error"] as const).map(
-          async (status) =>
-            await ctx.db
-              .query("trackingSources")
-              .withIndex("by_keyword_and_status", (q) =>
-                q.eq("keywordId", keyword._id).eq("status", status),
-              )
-              .take(5),
-        ),
-      )
-    ).flat()
-    for (const source of sources) {
-      await finalizeInvalidatedTrackingProviderRun(ctx, {
-        errorCode: "source_paused",
-        errorMessage: "Keyword was paused to enforce the plan limit",
-        now: input.now,
-        source,
-      })
-      await ctx.db.patch("trackingSources", source._id, {
-        leaseExpiresAt: undefined,
-        leaseToken: undefined,
-        pauseReason: "user",
-        status: "paused",
-        updatedAt: input.now,
-      })
-    }
-  }
-}
-
 async function persistSubscriptionTransition(
   ctx: GenericMutationContext,
   input: {
@@ -614,15 +492,7 @@ async function persistSubscriptionTransition(
     }
   }
 
-  await reconcileKeywordLimit(ctx, {
-    keywordLimit: transition.usageCycle.keywordLimit,
-    now: input.providerCreatedAt,
-    workspaceId: input.workspaceId,
-  })
-  await synchronizeTrackingSourcesForBilling(ctx, {
-    entitlementStatus: transition.subscription.entitlementStatus,
-    mentionLimit: transition.usageCycle.mentionLimit,
-    mentionsUsed: transition.usageCycle.mentionsUsed,
+  await reconcileWorkspaceKeywords(ctx, {
     now: input.providerCreatedAt,
     workspaceId: input.workspaceId,
   })

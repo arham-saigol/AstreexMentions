@@ -4,6 +4,7 @@ import { api } from "@astreex/backend/api"
 import { useMutation, useQuery } from "convex/react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 
+import { useQueryClock } from "@/lib/use-query-clock"
 import {
   type BillingOverviewResult,
   type CurrentWorkspaceResult,
@@ -38,6 +39,7 @@ export function useProductBootstrap(
   convexAuthenticated: boolean,
 ): ProductBootstrapState {
   const bootstrapCurrentUser = useMutation(api.users.bootstrapCurrentUser)
+  const now = useQueryClock()
   const [bootstrap, setBootstrap] = useState<BootstrapAttempt>({
     attempt: 0,
     state: "loading",
@@ -86,7 +88,7 @@ export function useProductBootstrap(
   )
   const billingOverviewValue = useQuery(
     api.billing.customer.getBillingOverview,
-    queryEnabled ? {} : "skip",
+    queryEnabled ? { now } : "skip",
   )
 
   const retry = useCallback(() => {

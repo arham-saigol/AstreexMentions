@@ -97,6 +97,13 @@ function sourceState(source: DisplayTrackingSource, monitoringActive: boolean) {
   }
 
   switch (source.pauseReason) {
+    case "capacity":
+      return {
+        label: "Plan capacity",
+        description:
+          "This keyword is saved but does not occupy an active plan slot.",
+        variant: "outline" as const,
+      }
     case "usage":
       return {
         label: "Usage limit",
@@ -152,9 +159,13 @@ function KeywordStatus({
   }
   if (keyword.status === "paused") {
     return (
-      <Badge variant="muted">
+      <Badge variant={keyword.pauseReason === "capacity" ? "outline" : "muted"}>
         <PauseIcon aria-hidden="true" />
-        Paused
+        {keyword.pauseReason === "capacity"
+          ? "Capacity paused"
+          : keyword.pauseReason === "payment"
+            ? "Awaiting access"
+            : "Paused"}
       </Badge>
     )
   }
@@ -213,6 +224,11 @@ export function KeywordRow({
               monitoringActive={monitoringActive}
             />
           </div>
+          {keyword.description && (
+            <p className="text-muted-foreground mt-2 max-w-2xl text-sm leading-6">
+              {keyword.description}
+            </p>
+          )}
           <div className="mt-3 flex flex-wrap gap-2" aria-label="Platforms">
             {keyword.platforms.map((platform) => (
               <span

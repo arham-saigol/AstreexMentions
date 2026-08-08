@@ -29,17 +29,19 @@ import { type KeywordItem, type Platform } from "@/lib/keywords"
 import { useQueryClock } from "@/lib/use-query-clock"
 
 function KeywordUsage({
-  count,
+  activeCount,
+  configuredCount,
   limit,
-  atLimit,
 }: {
-  count: number
+  activeCount: number
+  configuredCount: number
   limit: number | null
-  atLimit: boolean
 }) {
   const percentage =
-    limit === null || limit <= 0 ? 0 : Math.min(100, (count / limit) * 100)
-  const remaining = limit === null ? null : Math.max(0, limit - count)
+    limit === null || limit <= 0
+      ? 0
+      : Math.min(100, (activeCount / limit) * 100)
+  const remaining = limit === null ? null : Math.max(0, limit - activeCount)
 
   return (
     <section
@@ -55,7 +57,9 @@ function KeywordUsage({
             Keyword usage
           </h2>
           <span className="text-foreground text-sm font-semibold tabular-nums">
-            {limit === null ? `${count} configured` : `${count} / ${limit}`}
+            {limit === null
+              ? `${configuredCount} configured`
+              : `${activeCount} / ${limit} active`}
           </span>
         </div>
         {limit === null ? (
@@ -68,12 +72,12 @@ function KeywordUsage({
             <Progress
               value={percentage}
               className="mt-3"
-              aria-label={`${count} of ${limit} keyword slots used`}
+              aria-label={`${activeCount} of ${limit} active keyword slots used`}
             />
             <p className="text-muted-foreground mt-2 text-xs leading-5">
-              {atLimit
-                ? "No keyword slots remain. Editing platforms does not consume another slot."
-                : `${remaining} keyword slot${remaining === 1 ? "" : "s"} remaining. One keyword counts once across all selected platforms.`}
+              {remaining === 0
+                ? `${configuredCount - activeCount} saved keyword${configuredCount - activeCount === 1 ? " is" : "s are"} paused by plan capacity.`
+                : `${remaining} active slot${remaining === 1 ? "" : "s"} remaining. One keyword counts once across all selected platforms.`}
             </p>
           </>
         )}
@@ -108,11 +112,12 @@ export function KeywordsScreen() {
   const loading = listValue === undefined || summaryValue === undefined
   const keywords = listValue ?? []
   const summary = summaryValue ?? null
-  const limit = summary?.limit ?? billing.usage?.keywordLimit ?? null
-  const atLimit =
-    summary?.canCreate === false ||
-    summary?.limitReached === true ||
-    (limit !== null && keywords.length >= limit)
+  const limit =
+    summary?.activeLimit ??
+    billing.usage?.keywordLimit ??
+    billing.evaluation?.keywordLimit ??
+    null
+  const atLimit = summary?.canCreate === false
   const usagePaused =
     summary?.monitoringState === "usage_limited" ||
     Boolean(
@@ -180,7 +185,11 @@ export function KeywordsScreen() {
       </div>
 
       {!loading && (
-        <KeywordUsage count={keywords.length} limit={limit} atLimit={atLimit} />
+        <KeywordUsage
+          activeCount={summary?.activeCount ?? 0}
+          configuredCount={keywords.length}
+          limit={limit}
+        />
       )}
 
       <div className="mt-6 space-y-5">
@@ -236,6 +245,7 @@ export function KeywordsScreen() {
           open
           onOpenChange={setFormOpen}
           onSubmit={async (value: {
+            description?: string
             phrase: string
             platforms: Platform[]
           }) => {

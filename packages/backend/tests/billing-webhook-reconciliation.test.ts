@@ -399,7 +399,7 @@ describe("Creem webhook reconciliation", () => {
     ])
     expect(state.sources).toHaveLength(2)
     expect(
-      state.sources.every(({ pauseReason }) => pauseReason === "user"),
+      state.sources.every(({ pauseReason }) => pauseReason === "capacity"),
     ).toBe(true)
     expect(state.usage).toMatchObject({ keywordLimit: 3 })
   })

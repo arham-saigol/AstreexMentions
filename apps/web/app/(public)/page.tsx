@@ -111,8 +111,8 @@ export default function HomePage() {
             </h1>
             <p className="t-stagger-line t-stagger-line--2 text-muted-foreground mt-7 max-w-[52ch] text-lg leading-[1.6]">
               Track keywords across X, Reddit, and Hacker News. Astreex sorts
-              each mention into questions, complaints, praise, bugs, and
-              feature requests, so you know where to look first.
+              each mention into questions, complaints, praise, bugs, and feature
+              requests, so you know where to look first.
             </p>
             <div className="mt-9 flex flex-wrap items-center gap-3">
               <PressButton href="/sign-up">
@@ -262,7 +262,8 @@ export default function HomePage() {
           </h2>
           <p className="text-muted-foreground mt-4 max-w-2xl text-base leading-7">
             Every plan includes all product features. Choose how many keywords
-            and mentions you want to monitor each month.
+            and mentions you want to monitor each month. First 100 mentions
+            free.
           </p>
           <div className="mt-10 grid gap-4 lg:grid-cols-3">
             {PLAN_DEFINITIONS.map((plan, index) => {

@@ -14,6 +14,7 @@ export const METRIC_PROVIDERS = [
   "deepseek",
   "resend",
   "creem",
+  "tinyfish",
 ] as const
 
 export type MetricProvider = (typeof METRIC_PROVIDERS)[number]

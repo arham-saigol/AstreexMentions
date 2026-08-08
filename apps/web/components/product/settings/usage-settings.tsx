@@ -24,7 +24,8 @@ function formatDate(timestamp: number): string {
 export function UsageSettings() {
   const { access, billing } = useProductContext()
   const keywordValue = useQuery(api.keywords.listKeywords, {})
-  const usage = billing.usage
+  const usage = billing.usage ?? billing.evaluation
+  const freeEvaluation = billing.usage === null && billing.evaluation !== null
   const allowance = usage?.mentionLimit ?? 0
   const used = usage?.mentionsUsed ?? 0
   const remaining = Math.max(0, allowance - used)
@@ -68,7 +69,9 @@ export function UsageSettings() {
     if (allowance > 0 && used >= allowance) {
       return {
         label: "Limit reached",
-        description: "Collection is paused until the usage cycle resets.",
+        description: freeEvaluation
+          ? "The one-time evaluation allowance is exhausted. Upgrade to resume collection."
+          : "Collection is paused until the usage cycle resets.",
         icon: WarningCircleIcon,
       }
     }
@@ -91,7 +94,9 @@ export function UsageSettings() {
               Mention usage
             </h4>
             <p className="text-muted-foreground mt-1 text-sm leading-6">
-              Usage counts accepted mentions in the current billing cycle.
+              {freeEvaluation
+                ? "Usage counts newly accepted mentions in the one-time free evaluation."
+                : "Usage counts accepted mentions in the current billing cycle."}
             </p>
           </div>
           <Badge variant={usage ? "outline" : "muted"}>
@@ -137,7 +142,9 @@ export function UsageSettings() {
                 aria-hidden="true"
                 className="size-4"
               />
-              Resets {formatDate(usage.periodEndAt)}
+              {"periodEndAt" in usage
+                ? `Resets ${formatDate(usage.periodEndAt)}`
+                : "One-time allowance; it does not reset"}
             </p>
           </>
         ) : (
@@ -146,8 +153,8 @@ export function UsageSettings() {
               Usage is not available.
             </p>
             <p className="text-muted-foreground mt-1 text-xs leading-5">
-              A paid usage cycle has not been created, so Astreex is not
-              displaying a fabricated allowance or reset date.
+              Start the free evaluation or activate a paid plan to receive a
+              monitoring allowance.
             </p>
           </div>
         )}

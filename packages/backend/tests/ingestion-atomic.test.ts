@@ -59,6 +59,9 @@ const ingestionTestSchema = defineSchema({
   emailOutbox: defineTable(v.any()).index("by_idempotency_key", [
     "idempotencyKey",
   ]),
+  freeEvaluationGrants: defineTable(v.any()).index("by_workspace", [
+    "workspaceId",
+  ]),
   keywords: defineTable(v.any()),
   mentionKeywordMatches: defineTable(v.any()).index("by_mention_and_keyword", [
     "mentionId",
@@ -83,6 +86,10 @@ const ingestionTestSchema = defineSchema({
   ),
   providerRuns: defineTable(v.any()).index("by_idempotency_key", [
     "idempotencyKey",
+  ]),
+  subscriptions: defineTable(v.any()).index("by_workspace_and_last_synced_at", [
+    "workspaceId",
+    "lastSyncedAt",
   ]),
   systemMetricBuckets: defineTable(v.any()).index(
     "by_metric_scope_workspace_granularity_and_bucket",
@@ -147,6 +154,21 @@ async function seedWorkspace(
     })
     await ctx.db.patch("users", userId, { personalWorkspaceId: workspaceId })
 
+    const subscriptionId = await ctx.db.insert("subscriptions", {
+      cancelAtPeriodEnd: false,
+      createdAt: NOW - 8_500,
+      currentPeriodEnd: NOW + 30 * 24 * 60 * 60 * 1_000,
+      currentPeriodStart: NOW - 24 * 60 * 60 * 1_000,
+      entitlementStatus: "active",
+      lastSyncedAt: NOW - 8_500,
+      planId: "growth",
+      provider: "creem",
+      providerCustomerId: `customer:${String(workspaceId)}`,
+      providerSubscriptionId: `subscription:${String(workspaceId)}`,
+      status: "active",
+      updatedAt: NOW - 8_500,
+      workspaceId,
+    })
     const usageCycleId = await ctx.db.insert("usageCycles", {
       createdAt: NOW - 8_000,
       idempotencyKey: `usage:${String(workspaceId)}:2026-07`,
@@ -161,6 +183,7 @@ async function seedWorkspace(
         planId: "growth",
       },
       status: "open",
+      subscriptionId,
       updatedAt: NOW - 8_000,
       workspaceId,
     })
@@ -537,6 +560,79 @@ describe("serializable atomic ingestion", () => {
       mentionsUsed: 8,
       warning80SentAt: NOW,
     })
+  })
+
+  it("commits the 100th free mention once, sets retention, and holds later provider results", async () => {
+    const t = createBackendTest()
+    const seeded = await seedWorkspace(t, { mentionLimit: 100 })
+    const grantId = await t.run(async (ctx) => {
+      const cycles = await ctx.db.query("usageCycles").collect()
+      for (const cycle of cycles) await ctx.db.delete("usageCycles", cycle._id)
+      const subscriptions = await ctx.db.query("subscriptions").collect()
+      for (const subscription of subscriptions) {
+        await ctx.db.delete("subscriptions", subscription._id)
+      }
+      return await ctx.db.insert("freeEvaluationGrants", {
+        activatedAt: NOW - 10_000,
+        createdAt: NOW - 10_000,
+        mentionLimit: 100,
+        mentionsUsed: 99,
+        updatedAt: NOW - 10_000,
+        workspaceId: seeded.workspaceId,
+      })
+    })
+
+    await expect(
+      applyChunk(
+        t,
+        chunk(seeded, {
+          candidates: [
+            candidate("providerCandidate"),
+            candidate("secondProviderCandidate"),
+          ],
+          startPosition: 5,
+        }),
+      ),
+    ).resolves.toMatchObject({
+      checkpoint: "hold",
+      inserted: 1,
+      state: "usage_exhausted",
+      unprocessedPosition: 6,
+      usage: { exhausted: true, mentionLimit: 100, mentionsUsed: 100 },
+    })
+
+    const state = await t.run(async (ctx) => ({
+      grant: await ctx.db.get("freeEvaluationGrants", grantId),
+      mentions: await ctx.db.query("mentions").collect(),
+      sources: await ctx.db.query("trackingSources").collect(),
+    }))
+    expect(state.grant).toMatchObject({ mentionsUsed: 100, exhaustedAt: NOW })
+    expect(state.mentions).toHaveLength(1)
+    expect(state.mentions[0]?.retentionExpiresAt).toBe(
+      NOW + 60 * 24 * 60 * 60 * 1_000,
+    )
+    expect(
+      state.sources.every(
+        (source) =>
+          source.status === "paused" && source.pauseReason === "usage",
+      ),
+    ).toBe(true)
+
+    await expect(
+      applyChunk(
+        t,
+        chunk(seeded, { candidates: [candidate("providerCandidate")] }),
+        NOW + 1,
+      ),
+    ).resolves.toMatchObject({ inserted: 0, rediscovered: 1 })
+    const replayed = await t.run(async (ctx) => ({
+      grant: await ctx.db.get("freeEvaluationGrants", grantId),
+      mentions: await ctx.db.query("mentions").collect(),
+    }))
+    expect(replayed.grant?.mentionsUsed).toBe(100)
+    expect(replayed.mentions[0]?.retentionExpiresAt).toBe(
+      NOW + 60 * 24 * 60 * 60 * 1_000,
+    )
   })
 
   it("serializes concurrent unique candidates so only one can consume the last slot", async () => {

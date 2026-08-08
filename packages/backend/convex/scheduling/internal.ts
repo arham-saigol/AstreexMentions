@@ -7,6 +7,7 @@ import {
   type IngestionChunkResult,
 } from "../ingestion/service"
 import { MAX_INGESTION_CHUNK_SIZE } from "../ingestion/contracts"
+import { resolveWorkspaceAllowance } from "../lib/workspaceAccess"
 import {
   env,
   internalMutation,
@@ -75,14 +76,6 @@ function sourceTypeFromRow(row: Doc<"trackingSources">): TrackingSourceType {
     throw new TypeError("Tracking source has an invalid sourceType")
   }
   return sourceType
-}
-
-function planIdFromRow(row: Doc<"subscriptions">): PlanId {
-  const planId = row.planId
-  if (planId !== "starter" && planId !== "growth" && planId !== "scale") {
-    throw new TypeError("Subscription has an invalid planId")
-  }
-  return planId
 }
 
 function scheduleFromRow(row: Doc<"trackingSources">): TrackingSourceSchedule {
@@ -165,49 +158,6 @@ function operationForSourceType(sourceType: TrackingSourceType): string {
   }
 }
 
-async function latestWorkspaceSubscription(
-  db: DatabaseReader,
-  workspaceId: WorkspaceId,
-): Promise<Doc<"subscriptions"> | null> {
-  const subscriptions = await db
-    .query("subscriptions")
-    .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-    .collect()
-
-  return (
-    subscriptions.sort(
-      (left, right) =>
-        (right.lastSyncedAt as number) - (left.lastSyncedAt as number),
-    )[0] ?? null
-  )
-}
-
-async function currentUsageCycle(
-  db: DatabaseReader,
-  workspaceId: WorkspaceId,
-  now: number,
-): Promise<Doc<"usageCycles"> | null> {
-  const cycles = await db
-    .query("usageCycles")
-    .withIndex("by_workspace_status_and_period_end", (q) =>
-      q.eq("workspaceId", workspaceId).eq("status", "open"),
-    )
-    .collect()
-
-  return (
-    cycles
-      .filter(
-        (cycle) =>
-          (cycle.periodStartAt as number) <= now &&
-          (cycle.periodEndAt as number) > now,
-      )
-      .sort(
-        (left, right) =>
-          (right.periodStartAt as number) - (left.periodStartAt as number),
-      )[0] ?? null
-  )
-}
-
 type TrackingEligibility =
   | { state: "keyword_inactive" }
   | { state: "paid_inactive" }
@@ -245,11 +195,10 @@ async function readTrackingEligibility(
 
   const workspaceId = source.workspaceId as WorkspaceId
   const keywordId = source.keywordId as KeywordId
-  const [workspace, keyword, subscription, usageCycle] = await Promise.all([
+  const [workspace, keyword, allowance] = await Promise.all([
     db.get("workspaces", workspaceId),
     db.get("keywords", keywordId),
-    latestWorkspaceSubscription(db, workspaceId),
-    currentUsageCycle(db, workspaceId, now),
+    resolveWorkspaceAllowance({ db }, workspaceId, now),
   ])
   const sourceType = sourceTypeFromRow(source)
   const platform = platformForSourceType(sourceType)
@@ -272,30 +221,19 @@ async function readTrackingEligibility(
     return { state: "keyword_inactive" }
   }
 
-  if (
-    !subscription ||
-    subscription.workspaceId !== workspaceId ||
-    subscription.entitlementStatus !== "active" ||
-    (subscription.currentPeriodStart as number) > now ||
-    (subscription.currentPeriodEnd as number) <= now
-  ) {
-    return { state: "paid_inactive" }
+  if (allowance.kind === "none") {
+    return {
+      state:
+        allowance.pauseReason === "usage" ? "usage_exhausted" : "paid_inactive",
+    }
   }
-
-  if (!usageCycle) {
-    return { state: "usage_exhausted" }
-  }
-  const remainingMentions = Math.max(
-    0,
-    (usageCycle.mentionLimit as number) - (usageCycle.mentionsUsed as number),
-  )
-  if (remainingMentions === 0) {
+  if (allowance.exhausted) {
     return { state: "usage_exhausted" }
   }
 
   const schedule = scheduleFromRow(source)
   const window = initialCheckpointWindow({ now, source: schedule })
-  const planId = planIdFromRow(subscription)
+  const planId = allowance.planId
   const pendingProviderPage = await db
     .query("trackingProviderPages")
     .withIndex("by_source_ready_and_batch", (q) =>
