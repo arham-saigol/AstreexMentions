@@ -722,12 +722,18 @@ export const dispatchDueMentionAnalysisJobs = internalMutation({
         snapshot.context,
       )
       if (eligible === null) {
-        blockedCatalog += claimable.length
-        for (let index = queue.length - 1; index >= 0; index -= 1) {
-          if (queue[index]!.workspaceId === workspaceId) {
-            blockedCatalog += 1
-            queue.splice(index, 1)
-          }
+        const [oversized, ...remaining] = claimable
+        if (oversized) {
+          blockedCatalog += 1
+          await markJobDead(
+            ctx,
+            oversized.row,
+            "analysis_prompt_too_large",
+            now,
+          )
+        }
+        for (const { row } of remaining) {
+          queue.push(row)
         }
         continue
       }

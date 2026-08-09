@@ -652,7 +652,7 @@ describe("durable DeepSeek mention analysis worker", () => {
     expect(systemPrompt).not.toContain(fixture.disabledCategory.description)
   })
 
-  it("leaves jobs pending when one mention cannot fit the analysis prompt", async () => {
+  it("fails open when one mention cannot fit the analysis prompt", async () => {
     const t = createBackendTest()
     const seeded = await seedMentionAnalysis(t, { mentionCount: 1 })
     await t.run(async (ctx) => {
@@ -677,7 +677,18 @@ describe("durable DeepSeek mention analysis worker", () => {
     const job = await t.run(
       async (ctx) => await ctx.db.get("mentionAnalysisJobs", seeded.jobIds[0]!),
     )
-    expect(job).toMatchObject({ attempts: 0, status: "pending" })
+    expect(job).toMatchObject({
+      attempts: 0,
+      lastError: "analysis_prompt_too_large",
+      status: "dead",
+    })
+    const mention = await t.run(
+      async (ctx) => await ctx.db.get("mentions", seeded.mentionIds[0]!),
+    )
+    expect(mention).toMatchObject({
+      analysisState: "failed",
+      feedState: "visible",
+    })
   })
 
   it("blocks a workspace snapshot unless the enabled permanent Other category is present", async () => {
