@@ -52,7 +52,12 @@ const testSchema = defineSchema({
     "by_workspace_deleted_and_updated_at",
     ["workspaceId", "deletedAt", "updatedAt"],
   ),
-  subscriptions: defineTable(v.any()).index("by_workspace", ["workspaceId"]),
+  freeEvaluationGrants: defineTable(v.any()).index("by_workspace", [
+    "workspaceId",
+  ]),
+  subscriptions: defineTable(v.any())
+    .index("by_workspace", ["workspaceId"])
+    .index("by_workspace_and_last_synced_at", ["workspaceId", "lastSyncedAt"]),
   systemMetricBuckets: defineTable(v.any()).index(
     "by_metric_scope_workspace_granularity_and_bucket",
     ["metric", "scope", "workspaceId", "granularity", "bucketStartAt"],
@@ -88,7 +93,11 @@ type MentionId = GenericId<"mentions">
 
 const createKeywordReference = makeFunctionReference<
   "mutation",
-  { phrase: string; platforms: Array<"x" | "reddit" | "hacker_news"> },
+  {
+    description?: string
+    phrase: string
+    platforms: Array<"x" | "reddit" | "hacker_news">
+  },
   unknown
 >("keywords:createKeyword")
 const listKeywordsReference = makeFunctionReference<"query", object, unknown>(
@@ -144,7 +153,7 @@ const listMentionsReference = makeFunctionReference<
 >("mentions:listMentions")
 const getMentionReference = makeFunctionReference<
   "query",
-  { mentionId: MentionId },
+  { mentionId: MentionId; now: number },
   unknown
 >("mentions:getMention")
 const updateMentionStatusReference = makeFunctionReference<
@@ -164,6 +173,7 @@ type SeededCustomer = {
 async function seedCustomer(
   t: BackendTest,
   input: {
+    evaluation?: boolean
     keywordLimit?: number
     mentionLimit?: number
     mentionsUsed?: number
@@ -201,6 +211,17 @@ async function seedCustomer(
       userId,
       workspaceId,
     })
+
+    if (input.evaluation) {
+      await ctx.db.insert("freeEvaluationGrants", {
+        activatedAt: now - 7_000,
+        createdAt: now - 7_000,
+        mentionLimit: 100,
+        mentionsUsed: 0,
+        updatedAt: now - 7_000,
+        workspaceId,
+      })
+    }
 
     let subscriptionId: GenericId<"subscriptions"> | undefined
     if (input.paid) {
@@ -253,7 +274,9 @@ async function seedCustomer(
 
 function keywordResult(value: unknown) {
   return value as {
+    description: string | null
     id: KeywordId
+    pauseReason: string | null
     phrase: string
     platforms: string[]
     sources: Array<{
@@ -277,9 +300,13 @@ function mentionPage(value: unknown) {
 }
 
 describe("keyword Convex functions", () => {
-  it("creates one unpaid keyword with independent scheduled Reddit sources", async () => {
+  it("creates one free-evaluation keyword with independent scheduled Reddit sources", async () => {
     const t = createBackendTest()
-    const customer = await seedCustomer(t, { paid: false, suffix: "draft" })
+    const customer = await seedCustomer(t, {
+      evaluation: true,
+      paid: false,
+      suffix: "evaluation",
+    })
 
     const created = keywordResult(
       await customer.client.mutation(createKeywordReference, {
@@ -299,7 +326,7 @@ describe("keyword Convex functions", () => {
     ])
     expect(created.sources).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ pauseReason: "paid", status: "paused" }),
+        expect.objectContaining({ pauseReason: null, status: "active" }),
       ]),
     )
     expect(created.sources.every((source) => source.intervalMs > 0)).toBe(true)
@@ -336,8 +363,8 @@ describe("keyword Convex functions", () => {
     expect(summary).toMatchObject({
       canCreate: true,
       count: 1,
-      limit: 10,
-      monitoringState: "unpaid",
+      limit: 1,
+      monitoringState: "active",
       remaining: 9,
     })
   })
@@ -382,15 +409,19 @@ describe("keyword Convex functions", () => {
       true,
     )
 
-    await expect(
-      customer.client.mutation(createKeywordReference, {
+    const overflow = keywordResult(
+      await customer.client.mutation(createKeywordReference, {
         phrase: "Second keyword",
         platforms: ["x"],
       }),
-    ).rejects.toMatchObject({ data: { code: "KEYWORD_LIMIT_REACHED" } })
+    )
+    expect(overflow).toMatchObject({
+      pauseReason: "capacity",
+      status: "paused",
+    })
     expect(
       (await customer.client.query(listKeywordsReference, {})) as unknown[],
-    ).toHaveLength(1)
+    ).toHaveLength(2)
   })
 
   it("does not resume a paused keyword beyond the active plan limit", async () => {
@@ -424,6 +455,56 @@ describe("keyword Convex functions", () => {
         keywordId: pausedKeywordId,
       }),
     ).rejects.toMatchObject({ data: { code: "KEYWORD_LIMIT_REACHED" } })
+  })
+
+  it("persists free keyword context and requires an explicit slot swap", async () => {
+    const t = createBackendTest()
+    const customer = await seedCustomer(t, {
+      evaluation: true,
+      paid: false,
+      suffix: "free-slot-swap",
+    })
+    const first = keywordResult(
+      await customer.client.mutation(createKeywordReference, {
+        description: "The primary company name.",
+        phrase: "Primary signal",
+        platforms: ["x"],
+      }),
+    )
+    const second = keywordResult(
+      await customer.client.mutation(createKeywordReference, {
+        description: "A product name worth monitoring.",
+        phrase: "Product signal",
+        platforms: ["reddit"],
+      }),
+    )
+    expect(first).toMatchObject({
+      description: "The primary company name.",
+      status: "active",
+    })
+    expect(second).toMatchObject({
+      description: "A product name worth monitoring.",
+      pauseReason: "capacity",
+      status: "paused",
+    })
+    await expect(
+      customer.client.mutation(resumeKeywordReference, {
+        keywordId: second.id,
+      }),
+    ).rejects.toMatchObject({ data: { code: "KEYWORD_LIMIT_REACHED" } })
+
+    await customer.client.mutation(pauseKeywordReference, {
+      keywordId: first.id,
+    })
+    const resumed = keywordResult(
+      await customer.client.mutation(resumeKeywordReference, {
+        keywordId: second.id,
+      }),
+    )
+    expect(resumed.status).toBe("active")
+    expect(resumed.sources.every((source) => source.status === "active")).toBe(
+      true,
+    )
   })
 
   it("reactivates an errored source after its provider query is corrected", async () => {
@@ -473,6 +554,57 @@ describe("keyword Convex functions", () => {
     expect(corrected).not.toHaveProperty("backoffUntil")
     expect(corrected).not.toHaveProperty("lastError")
     expect(corrected).not.toHaveProperty("pauseReason")
+  })
+
+  it("clears partial provider checkpoints when a removed source is reactivated", async () => {
+    const t = createBackendTest()
+    const customer = await seedCustomer(t, {
+      paid: true,
+      suffix: "source-reactivation",
+    })
+    const created = keywordResult(
+      await customer.client.mutation(createKeywordReference, {
+        phrase: "Source reactivation",
+        platforms: ["reddit"],
+      }),
+    )
+    const sourceId = created.sources[0]!.id
+    await t.run(async (ctx) => {
+      await ctx.db.patch("trackingSources", sourceId, {
+        inProgressCursor: "stale-cursor",
+        inProgressPage: 3,
+        inProgressWindowEndAt: Date.now(),
+        inProgressWindowStartAt: Date.now() - 60_000,
+      })
+    })
+
+    await customer.client.mutation(updateKeywordReference, {
+      keywordId: created.id,
+      phrase: created.phrase,
+      platforms: ["x"],
+    })
+    const removed = await t.run(
+      async (ctx) => await ctx.db.get("trackingSources", sourceId),
+    )
+    expect(removed).toMatchObject({ status: "deleted" })
+    expect(removed).not.toHaveProperty("inProgressCursor")
+    expect(removed).not.toHaveProperty("inProgressPage")
+    expect(removed).not.toHaveProperty("inProgressWindowEndAt")
+    expect(removed).not.toHaveProperty("inProgressWindowStartAt")
+
+    await customer.client.mutation(updateKeywordReference, {
+      keywordId: created.id,
+      phrase: created.phrase,
+      platforms: ["reddit"],
+    })
+    const reactivated = await t.run(
+      async (ctx) => await ctx.db.get("trackingSources", sourceId),
+    )
+    expect(reactivated).toMatchObject({ status: "active" })
+    expect(reactivated).not.toHaveProperty("inProgressCursor")
+    expect(reactivated).not.toHaveProperty("inProgressPage")
+    expect(reactivated).not.toHaveProperty("inProgressWindowEndAt")
+    expect(reactivated).not.toHaveProperty("inProgressWindowStartAt")
   })
 
   it("keeps keyword status and source status reversible before soft deletion", async () => {
@@ -938,6 +1070,7 @@ describe("mention Convex functions", () => {
     await expect(
       secondCustomer.client.query(getMentionReference, {
         mentionId: seeded.mentionIds[0]!,
+        now: Date.now(),
       }),
     ).rejects.toMatchObject({ data: { code: "MENTION_NOT_FOUND" } })
   })

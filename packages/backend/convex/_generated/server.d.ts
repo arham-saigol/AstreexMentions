@@ -29,6 +29,8 @@ type Env = {
   readonly CLERK_SECRET_KEY: string | undefined;
   readonly CLERK_TIMEOUT_MS: string | undefined;
   readonly DELETION_IDENTITY_FENCE_MS: string | undefined;
+  readonly TINYFISH_API_KEY: string | undefined;
+  readonly TINYFISH_TIMEOUT_MS: string | undefined;
 };
 
 /**

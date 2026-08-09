@@ -444,8 +444,14 @@ export declare const api: {
       getBillingOverview: FunctionReference<
         "query",
         "public",
-        {},
+        { now: number },
         {
+          accessKind: "paid" | "free" | "none";
+          evaluation: {
+            keywordLimit: number;
+            mentionLimit: number;
+            mentionsUsed: number;
+          } | null;
           missing?: Array<string>;
           providerState: "configured" | "provider_unconfigured";
           subscription: {
@@ -705,10 +711,16 @@ export declare const api: {
     createKeyword: FunctionReference<
       "mutation",
       "public",
-      { phrase: string; platforms: Array<"x" | "reddit" | "hacker_news"> },
+      {
+        description?: string;
+        phrase: string;
+        platforms: Array<"x" | "reddit" | "hacker_news">;
+      },
       {
         createdAt: number;
+        description: string | null;
         id: Id<"keywords">;
+        pauseReason: "user" | "capacity" | "payment" | null;
         pausedAt: number | null;
         phrase: string;
         platforms: Array<"x" | "reddit" | "hacker_news">;
@@ -718,7 +730,7 @@ export declare const api: {
           lastCheckedAt: number | null;
           lastError: string | null;
           nextExpectedAt: number | null;
-          pauseReason: "paid" | "user" | "usage" | "config" | null;
+          pauseReason: "paid" | "user" | "capacity" | "usage" | "config" | null;
           sourceType: "x" | "reddit_posts" | "reddit_comments" | "hacker_news";
           status: "active" | "paused" | "error" | "deleted";
         }>;
@@ -754,7 +766,9 @@ export declare const api: {
       {},
       Array<{
         createdAt: number;
+        description: string | null;
         id: Id<"keywords">;
+        pauseReason: "user" | "capacity" | "payment" | null;
         pausedAt: number | null;
         phrase: string;
         platforms: Array<"x" | "reddit" | "hacker_news">;
@@ -764,7 +778,7 @@ export declare const api: {
           lastCheckedAt: number | null;
           lastError: string | null;
           nextExpectedAt: number | null;
-          pauseReason: "paid" | "user" | "usage" | "config" | null;
+          pauseReason: "paid" | "user" | "capacity" | "usage" | "config" | null;
           sourceType: "x" | "reddit_posts" | "reddit_comments" | "hacker_news";
           status: "active" | "paused" | "error" | "deleted";
         }>;
@@ -778,7 +792,9 @@ export declare const api: {
       { keywordId: Id<"keywords"> },
       {
         createdAt: number;
+        description: string | null;
         id: Id<"keywords">;
+        pauseReason: "user" | "capacity" | "payment" | null;
         pausedAt: number | null;
         phrase: string;
         platforms: Array<"x" | "reddit" | "hacker_news">;
@@ -788,7 +804,7 @@ export declare const api: {
           lastCheckedAt: number | null;
           lastError: string | null;
           nextExpectedAt: number | null;
-          pauseReason: "paid" | "user" | "usage" | "config" | null;
+          pauseReason: "paid" | "user" | "capacity" | "usage" | "config" | null;
           sourceType: "x" | "reddit_posts" | "reddit_comments" | "hacker_news";
           status: "active" | "paused" | "error" | "deleted";
         }>;
@@ -802,7 +818,9 @@ export declare const api: {
       { keywordId: Id<"keywords"> },
       {
         createdAt: number;
+        description: string | null;
         id: Id<"keywords">;
+        pauseReason: "user" | "capacity" | "payment" | null;
         pausedAt: number | null;
         phrase: string;
         platforms: Array<"x" | "reddit" | "hacker_news">;
@@ -812,7 +830,7 @@ export declare const api: {
           lastCheckedAt: number | null;
           lastError: string | null;
           nextExpectedAt: number | null;
-          pauseReason: "paid" | "user" | "usage" | "config" | null;
+          pauseReason: "paid" | "user" | "capacity" | "usage" | "config" | null;
           sourceType: "x" | "reddit_posts" | "reddit_comments" | "hacker_news";
           status: "active" | "paused" | "error" | "deleted";
         }>;
@@ -824,13 +842,16 @@ export declare const api: {
       "mutation",
       "public",
       {
+        description?: string;
         keywordId: Id<"keywords">;
         phrase: string;
         platforms: Array<"x" | "reddit" | "hacker_news">;
       },
       {
         createdAt: number;
+        description: string | null;
         id: Id<"keywords">;
+        pauseReason: "user" | "capacity" | "payment" | null;
         pausedAt: number | null;
         phrase: string;
         platforms: Array<"x" | "reddit" | "hacker_news">;
@@ -840,7 +861,7 @@ export declare const api: {
           lastCheckedAt: number | null;
           lastError: string | null;
           nextExpectedAt: number | null;
-          pauseReason: "paid" | "user" | "usage" | "config" | null;
+          pauseReason: "paid" | "user" | "capacity" | "usage" | "config" | null;
           sourceType: "x" | "reddit_posts" | "reddit_comments" | "hacker_news";
           status: "active" | "paused" | "error" | "deleted";
         }>;
@@ -853,7 +874,7 @@ export declare const api: {
     getMention: FunctionReference<
       "query",
       "public",
-      { mentionId: Id<"mentions"> },
+      { mentionId: Id<"mentions">; now: number },
       {
         authorDisplayName?: string;
         authorHandle?: string;
@@ -964,33 +985,45 @@ export declare const api: {
       "mutation",
       "public",
       {
-        categories: Array<{
-          categoryId: Id<"categories">;
-          colorToken:
-            | "blue"
-            | "orange"
-            | "green"
-            | "red"
-            | "purple"
-            | "yellow"
-            | "gray"
-            | "pink"
-            | "cyan"
-            | "slate";
-          description: string;
-          enabled: boolean;
-        }>;
+        accessPath: "free" | "starter" | "growth" | "scale";
+        companyDescription: string;
         keywords: Array<{
+          brandCandidate?: boolean;
+          description?: string;
           phrase: string;
           platforms: Array<"x" | "reddit" | "hacker_news">;
+          selectionOrder: number;
         }>;
         workspaceName: string;
       },
       {
+        activeCount: number;
         keywordCount: number;
         keywordIds: Array<Id<"keywords">>;
+        pausedCount: number;
         workspaceName: string;
       }
+    >;
+  };
+  onboardingDiscovery: {
+    researchCompany: FunctionReference<
+      "action",
+      "public",
+      { manualDescription?: string; websiteUrl?: string },
+      | {
+          companyDescription: string;
+          state: "completed";
+          suggestions: Array<{
+            brandCandidate: boolean;
+            description: string;
+            phrase: string;
+            platforms: Array<"x" | "reddit" | "hacker_news">;
+          }>;
+        }
+      | { state: "in_progress" }
+      | { state: "rate_limited" }
+      | { message: string; state: "provider_unconfigured" }
+      | { message: string; retryable: boolean; state: "failed" }
     >;
   };
   savedViews: {
@@ -1292,6 +1325,14 @@ export declare const api: {
  */
 export declare const internal: {
   billing: {
+    accessReconciliation: {
+      reconcileExpiredMonitoringAccess: FunctionReference<
+        "mutation",
+        "internal",
+        { now?: number },
+        { reconciled: number; state: "completed" }
+      >;
+    };
     internal: {
       applyIncompleteCreemBillingEvent: FunctionReference<
         "mutation",
@@ -1811,6 +1852,61 @@ export declare const internal: {
       >;
     };
   };
+  onboardingResearchInternal: {
+    beginResearch: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        inputFingerprint: string;
+        manualDescription?: string;
+        websiteUrl?: string;
+        workspaceId: Id<"workspaces">;
+      },
+      | { researchId: Id<"onboardingResearch">; state: "completed" }
+      | { researchId: Id<"onboardingResearch">; state: "running" }
+      | { state: "rate_limited" }
+      | { researchId: Id<"onboardingResearch">; state: "started" }
+    >;
+    completeResearch: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        companyDescription: string;
+        durationMs: number;
+        inputFingerprint: string;
+        researchId: Id<"onboardingResearch">;
+        suggestionsJson: string;
+        workspaceId: Id<"workspaces">;
+      },
+      any
+    >;
+    failResearch: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        durationMs: number;
+        errorCode: string;
+        inputFingerprint: string;
+        researchId: Id<"onboardingResearch">;
+        workspaceId: Id<"workspaces">;
+      },
+      any
+    >;
+    loadResearch: FunctionReference<
+      "query",
+      "internal",
+      { researchId: Id<"onboardingResearch">; workspaceId: Id<"workspaces"> },
+      any
+    >;
+  };
+  retention: {
+    purgeExpiredFreeMentions: FunctionReference<
+      "mutation",
+      "internal",
+      { now?: number },
+      { deleted: number; state: "completed" }
+    >;
+  };
   scheduling: {
     actions: {
       executeTrackingSource: FunctionReference<
@@ -1931,4 +2027,6 @@ export declare const internal: {
   };
 };
 
-export declare const components: {};
+export declare const components: {
+  rateLimiter: import("@convex-dev/rate-limiter/_generated/component.js").ComponentApi<"rateLimiter">;
+};

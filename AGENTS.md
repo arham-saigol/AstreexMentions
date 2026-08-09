@@ -6,6 +6,12 @@ The value comes from what users can do with those mentions: catch bug reports, a
 
 Because Astreex handles customer data, billing, external providers, and durable background work, correctness includes authorization, bounded work, failure recovery, and behavior under real load—not only the happy path.
 
+## Development notice
+
+Astreex is still in active development and has no production users or production data that must be preserved. Unless the user explicitly says otherwise, do not build migrations, backfills, compatibility layers, dual-write paths, legacy fallbacks, or transitional infrastructure for existing behavior.
+
+When a schema, data model, API, or workflow needs to change, prefer replacing the obsolete design cleanly and updating development data as needed. Optimize for the correct long-term implementation, not compatibility with an unreleased version of the product.
+
 ## The lazy senior
 
 I want ambitious products built from simple systems and software that feels obvious. Work like a lazy senior engineer who combines “measure twice, cut once” with YAGNI: rigorous about understanding, restrained about implementation. Lazy means efficient, not careless. The best code is code we never have to own.

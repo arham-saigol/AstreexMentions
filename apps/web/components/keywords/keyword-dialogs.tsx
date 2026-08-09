@@ -31,6 +31,7 @@ import {
 } from "@astreex/ui/components/dialog"
 import { Input } from "@astreex/ui/components/input"
 import { Label } from "@astreex/ui/components/label"
+import { Textarea } from "@astreex/ui/components/textarea"
 import { cn } from "@astreex/ui/lib/utils"
 import { useId, useState, type FormEvent } from "react"
 
@@ -52,6 +53,7 @@ function PlatformIcon({ platform }: { platform: Platform }) {
 }
 
 type KeywordFormValue = {
+  description?: string
   phrase: string
   platforms: Platform[]
 }
@@ -74,6 +76,7 @@ export function KeywordFormDialog({
   const phraseId = useId()
   const errorId = useId()
   const [phrase, setPhrase] = useState(keyword?.phrase ?? "")
+  const [description, setDescription] = useState(keyword?.description ?? "")
   const [platforms, setPlatforms] = useState<Platform[]>(
     keyword?.platforms ?? ["x"],
   )
@@ -119,7 +122,11 @@ export function KeywordFormDialog({
     setPending(true)
     setError(null)
     try {
-      await onSubmit({ phrase: normalizedPhrase, platforms })
+      await onSubmit({
+        ...(description.trim() ? { description: description.trim() } : {}),
+        phrase: normalizedPhrase,
+        platforms,
+      })
       onOpenChange(false)
     } catch (submissionError) {
       setError(
@@ -173,6 +180,26 @@ export function KeywordFormDialog({
               Matching is managed by the configured providers. Use the precise
               wording customers are likely to use.
             </p>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between gap-3">
+              <Label htmlFor={`${phraseId}-description`}>
+                Relevance description{" "}
+                <span className="font-normal">(optional)</span>
+              </Label>
+              <span className="text-muted-foreground text-xs tabular-nums">
+                {description.length}/160
+              </span>
+            </div>
+            <Textarea
+              id={`${phraseId}-description`}
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              className="mt-2 min-h-20"
+              maxLength={160}
+              placeholder="Context for categorization"
+            />
           </div>
 
           <fieldset>
@@ -229,8 +256,8 @@ export function KeywordFormDialog({
                 className="text-muted-foreground mt-0.5 size-4 shrink-0"
               />
               <p className="text-muted-foreground text-xs leading-5">
-                This configuration will remain a draft. Monitoring starts after
-                your subscription is active.
+                This keyword will remain configured but inactive until
+                monitoring access is available.
               </p>
             </div>
           )}

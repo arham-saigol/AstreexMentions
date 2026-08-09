@@ -20,14 +20,23 @@ export function decideProductAccess(
   billing: BillingOverviewResult,
 ): ProductAccess {
   const subscription = billing.subscription
-  const active = subscription?.entitlementStatus === "active"
+  const paidActive = billing.accessKind === "paid" && subscription !== null
 
-  if (active) {
+  if (paidActive) {
     return {
       billingSetupRequired: false,
       destination: "/app/mentions",
       mode: "active",
       planId: subscription.planId,
+    }
+  }
+
+  if (billing.evaluation && workspace.onboardingComplete) {
+    return {
+      billingSetupRequired: false,
+      destination: "/app/mentions",
+      mode: "active",
+      planId: null,
     }
   }
 

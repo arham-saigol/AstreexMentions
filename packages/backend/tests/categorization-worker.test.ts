@@ -29,6 +29,11 @@ const categorizationTestSchema = defineSchema({
     .index("by_idempotency_key", ["idempotencyKey"])
     .index("by_status_and_next_attempt_at", ["status", "nextAttemptAt"])
     .index("by_status_and_lease_expires_at", ["status", "leaseExpiresAt"]),
+  keywords: defineTable(v.any()),
+  mentionKeywordMatches: defineTable(v.any()).index(
+    "by_workspace_and_mention",
+    ["workspaceId", "mentionId"],
+  ),
   mentions: defineTable(v.any()),
   providerMetricBuckets: defineTable(v.any()).index(
     "by_provider_operation_granularity_and_bucket",

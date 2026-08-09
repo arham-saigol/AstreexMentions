@@ -13,6 +13,11 @@ import { type MutationCtx } from "../_generated/server"
 import type { Doc, Id, TableNames } from "../_generated/dataModel"
 import { finalizeInvalidatedTrackingProviderRun } from "../scheduling/providerRuns"
 import { incrementDailySystemMetric } from "../lib/systemMetricBuckets"
+import {
+  FREE_MENTION_RETENTION_MS,
+  resolveWorkspaceAllowance,
+  type WorkspaceAllowance,
+} from "../lib/workspaceAccess"
 import type { IngestionCandidate, IngestionChunk } from "./contracts"
 import {
   buildUsageWarningEmail,
@@ -148,49 +153,19 @@ function assertCandidateMatchesSource(
   }
 }
 
-async function currentUsageCycle(
+async function currentAllowance(
   ctx: MutationCtx,
   workspaceId: WorkspaceId,
   now: number,
-): Promise<Doc<"usageCycles">> {
-  const cycles = await ctx.db
-    .query("usageCycles")
-    .withIndex("by_workspace_status_and_period_end", (q) =>
-      q.eq("workspaceId", workspaceId).eq("status", "open"),
-    )
-    .collect()
-  const current = cycles
-    .filter(
-      (cycle) =>
-        (cycle.periodStartAt as number) <= now &&
-        (cycle.periodEndAt as number) > now,
-    )
-    .sort(
-      (left, right) =>
-        (right.periodStartAt as number) - (left.periodStartAt as number),
-    )[0]
-
-  if (!current) {
+): Promise<Exclude<WorkspaceAllowance, { kind: "none" }>> {
+  const allowance = await resolveWorkspaceAllowance(ctx, workspaceId, now)
+  if (allowance.kind === "none") {
     throw new IngestionInvariantError(
       "USAGE_CYCLE_NOT_FOUND",
-      "No current open usage cycle exists for the workspace",
+      "No effective monitoring allowance exists for the workspace",
     )
   }
-  const mentionLimit = current.mentionLimit
-  const mentionsUsed = current.mentionsUsed
-  if (
-    !Number.isSafeInteger(mentionLimit) ||
-    (mentionLimit as number) < 0 ||
-    !Number.isSafeInteger(mentionsUsed) ||
-    (mentionsUsed as number) < 0 ||
-    (mentionsUsed as number) > (mentionLimit as number)
-  ) {
-    throw new IngestionInvariantError(
-      "USAGE_CYCLE_INVALID",
-      "Current usage cycle has invalid mention counters",
-    )
-  }
-  return current
+  return allowance
 }
 
 async function findExistingMention(
@@ -570,12 +545,17 @@ export async function applyIngestionChunkAtomically(
     )
   }
 
-  const usageCycle = await currentUsageCycle(ctx, workspaceId, options.now)
-  const usageCycleId = usageCycle._id as UsageCycleId
-  const mentionLimit = usageCycle.mentionLimit as number
-  let mentionsUsed = usageCycle.mentionsUsed as number
-  let sent80At = usageCycle.warning80SentAt as number | undefined
-  let sent100At = usageCycle.warning100SentAt as number | undefined
+  const allowance = await currentAllowance(ctx, workspaceId, options.now)
+  const usageCycleId =
+    allowance.kind === "paid"
+      ? (allowance.cycle._id as UsageCycleId)
+      : undefined
+  const mentionLimit = allowance.mentionLimit
+  let mentionsUsed = allowance.mentionsUsed
+  let sent80At =
+    allowance.kind === "paid" ? allowance.cycle.warning80SentAt : undefined
+  let sent100At =
+    allowance.kind === "paid" ? allowance.cycle.warning100SentAt : undefined
   const sourceType = sourceTypeFromRow(source)
   let associationsAdded = 0
   let categorizationJobsEnqueued = 0
@@ -660,6 +640,10 @@ export async function applyIngestionChunkAtomically(
         firstSeenAt: options.now,
         language: candidate.language,
         lastMatchedAt: options.now,
+        retentionExpiresAt:
+          allowance.kind === "free"
+            ? options.now + FREE_MENTION_RETENTION_MS
+            : undefined,
         likeCount: candidate.likeCount,
         platform: candidate.platform,
         pointCount: candidate.pointCount,
@@ -678,10 +662,21 @@ export async function applyIngestionChunkAtomically(
     )) as MentionId
 
     mentionsUsed += 1
-    await ctx.db.patch("usageCycles", usageCycleId, {
-      mentionsUsed,
-      updatedAt: options.now,
-    })
+    if (allowance.kind === "paid") {
+      await ctx.db.patch("usageCycles", usageCycleId!, {
+        mentionsUsed,
+        updatedAt: options.now,
+      })
+    } else {
+      await ctx.db.patch("freeEvaluationGrants", allowance.grant._id, {
+        exhaustedAt:
+          mentionsUsed >= mentionLimit
+            ? (allowance.grant.exhaustedAt ?? options.now)
+            : undefined,
+        mentionsUsed,
+        updatedAt: options.now,
+      })
+    }
     if (
       await ensureCategorizationJob(
         ctx,
@@ -707,12 +702,15 @@ export async function applyIngestionChunkAtomically(
       options.now,
     )
 
-    const thresholds = usageWarningThresholdsToEnqueue({
-      mentionLimit,
-      mentionsUsed,
-      sent100At,
-      sent80At,
-    })
+    const thresholds =
+      allowance.kind === "paid"
+        ? usageWarningThresholdsToEnqueue({
+            mentionLimit,
+            mentionsUsed,
+            sent100At,
+            sent80At,
+          })
+        : []
     for (const threshold of thresholds) {
       if (
         await ensureUsageWarningEmail(
@@ -724,7 +722,7 @@ export async function applyIngestionChunkAtomically(
             mentionsUsed,
             owner,
             threshold,
-            usageCycleId,
+            usageCycleId: usageCycleId!,
             workspace,
             workspaceId,
           },
@@ -735,13 +733,13 @@ export async function applyIngestionChunkAtomically(
       }
       if (threshold === 80) {
         sent80At = options.now
-        await ctx.db.patch("usageCycles", usageCycleId, {
+        await ctx.db.patch("usageCycles", usageCycleId!, {
           warning80SentAt: options.now,
           updatedAt: options.now,
         })
       } else {
         sent100At = options.now
-        await ctx.db.patch("usageCycles", usageCycleId, {
+        await ctx.db.patch("usageCycles", usageCycleId!, {
           warning100SentAt: options.now,
           updatedAt: options.now,
         })

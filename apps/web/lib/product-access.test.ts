@@ -22,6 +22,8 @@ const workspace: CurrentWorkspaceResult = {
 }
 
 const billing: BillingOverviewResult = {
+  accessKind: "none",
+  evaluation: null,
   providerState: "configured",
   subscription: null,
   usage: null,
@@ -46,9 +48,32 @@ describe("decideProductAccess", () => {
     })
   })
 
+  it("routes a completed free evaluation workspace to the active app", () => {
+    expect(
+      decideProductAccess(
+        { ...workspace, onboardingComplete: true },
+        {
+          ...billing,
+          accessKind: "free",
+          evaluation: {
+            keywordLimit: 1,
+            mentionLimit: 100,
+            mentionsUsed: 100,
+          },
+        },
+      ),
+    ).toEqual({
+      billingSetupRequired: false,
+      destination: "/app/mentions",
+      mode: "active",
+      planId: null,
+    })
+  })
+
   it("routes active subscriptions to mentions", () => {
     const access = decideProductAccess(workspace, {
       ...billing,
+      accessKind: "paid",
       subscription: {
         cancelAtPeriodEnd: false,
         currentPeriodEnd: 2,
@@ -101,6 +126,7 @@ describe("productRedirectForPath", () => {
     )
     const active = decideProductAccess(workspace, {
       ...billing,
+      accessKind: "paid",
       subscription: {
         cancelAtPeriodEnd: false,
         currentPeriodEnd: 2,

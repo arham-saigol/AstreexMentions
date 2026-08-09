@@ -15,6 +15,7 @@ import {
   readCreemUpgradeConfiguration,
 } from "./config"
 import { subscriptionStatusAllowsCheckout } from "./lifecycle"
+import { resolveWorkspaceAllowance } from "../lib/workspaceAccess"
 
 const planIdValidator = v.union(
   v.literal("starter"),
@@ -29,6 +30,15 @@ const providerUnconfiguredValidator = v.object({
   state: v.literal("provider_unconfigured"),
 })
 const billingOverviewValidator = v.object({
+  accessKind: v.union(v.literal("paid"), v.literal("free"), v.literal("none")),
+  evaluation: v.union(
+    v.object({
+      keywordLimit: v.number(),
+      mentionLimit: v.number(),
+      mentionsUsed: v.number(),
+    }),
+    v.null(),
+  ),
   missing: v.optional(v.array(v.string())),
   providerState: v.union(
     v.literal("configured"),
@@ -138,53 +148,58 @@ const PLAN_RANK = {
 } as const
 
 export const getBillingOverview = customerQuery({
-  args: {},
+  args: { now: v.number() },
   returns: billingOverviewValidator,
-  handler: async (ctx) => {
-    const subscriptions = await ctx.db
-      .query("subscriptions")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", ctx.workspace.id))
-      .collect()
-    const subscription =
-      subscriptions.sort(
-        (left, right) =>
-          (right.lastSyncedAt as number) - (left.lastSyncedAt as number),
-      )[0] ?? null
-    const cycles = await ctx.db
-      .query("usageCycles")
-      .withIndex("by_workspace_status_and_period_end", (q) =>
-        q.eq("workspaceId", ctx.workspace.id).eq("status", "open"),
-      )
-      .collect()
-    const usageCycle =
-      cycles.sort(
-        (left, right) =>
-          (right.periodStartAt as number) - (left.periodStartAt as number),
-      )[0] ?? null
+  handler: async (ctx, args) => {
+    if (!Number.isSafeInteger(args.now) || args.now < 0) {
+      billingError("INVALID_BILLING_INPUT", "Current time is invalid")
+    }
+    const [subscription, allowance] = await Promise.all([
+      ctx.db
+        .query("subscriptions")
+        .withIndex("by_workspace_and_last_synced_at", (q) =>
+          q.eq("workspaceId", ctx.workspace.id),
+        )
+        .order("desc")
+        .first(),
+      resolveWorkspaceAllowance(ctx, ctx.workspace.id, args.now),
+    ])
     const providerConfiguration = readCreemApiConfiguration(env)
+    const displayedSubscription =
+      allowance.kind === "paid" ? allowance.subscription : subscription
 
     return {
+      accessKind: allowance.kind,
+      evaluation:
+        allowance.kind === "free"
+          ? {
+              keywordLimit: allowance.keywordLimit,
+              mentionLimit: allowance.mentionLimit,
+              mentionsUsed: allowance.mentionsUsed,
+            }
+          : null,
       providerState: providerConfiguration.state,
-      subscription: subscription
+      subscription: displayedSubscription
         ? {
-            cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
-            currentPeriodEnd: subscription.currentPeriodEnd,
-            currentPeriodStart: subscription.currentPeriodStart,
-            entitlementStatus: subscription.entitlementStatus as
+            cancelAtPeriodEnd: displayedSubscription.cancelAtPeriodEnd,
+            currentPeriodEnd: displayedSubscription.currentPeriodEnd,
+            currentPeriodStart: displayedSubscription.currentPeriodStart,
+            entitlementStatus: displayedSubscription.entitlementStatus as
               "active" | "inactive",
-            planId: subscription.planId,
-            status: subscription.status,
+            planId: displayedSubscription.planId,
+            status: displayedSubscription.status,
           }
         : null,
-      usage: usageCycle
-        ? {
-            keywordLimit: usageCycle.keywordLimit,
-            mentionLimit: usageCycle.mentionLimit,
-            mentionsUsed: usageCycle.mentionsUsed,
-            periodEndAt: usageCycle.periodEndAt,
-            periodStartAt: usageCycle.periodStartAt,
-          }
-        : null,
+      usage:
+        allowance.kind === "paid"
+          ? {
+              keywordLimit: allowance.keywordLimit,
+              mentionLimit: allowance.mentionLimit,
+              mentionsUsed: allowance.mentionsUsed,
+              periodEndAt: allowance.cycle.periodEndAt,
+              periodStartAt: allowance.cycle.periodStartAt,
+            }
+          : null,
       ...(providerConfiguration.state === "provider_unconfigured"
         ? { missing: [...providerConfiguration.missing] }
         : {}),

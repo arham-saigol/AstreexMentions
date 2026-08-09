@@ -516,6 +516,8 @@ export type DataModel = {
         | "keywords"
         | "categories"
         | "usage_cycles"
+        | "free_evaluation_grants"
+        | "onboarding_research"
         | "billing_checkouts"
         | "subscriptions"
         | "provider_runs"
@@ -1003,12 +1005,46 @@ export type DataModel = {
     };
     vectorIndexes: {};
   };
+  freeEvaluationGrants: {
+    document: {
+      activatedAt: number;
+      createdAt: number;
+      exhaustedAt?: number;
+      mentionLimit: number;
+      mentionsUsed: number;
+      updatedAt: number;
+      workspaceId: Id<"workspaces">;
+      _id: Id<"freeEvaluationGrants">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "activatedAt"
+      | "createdAt"
+      | "exhaustedAt"
+      | "mentionLimit"
+      | "mentionsUsed"
+      | "updatedAt"
+      | "workspaceId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_workspace: ["workspaceId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   keywords: {
     document: {
+      activationPriority?: number;
+      brandCandidate?: boolean;
       createdAt: number;
       createdByUserId: Id<"users">;
       deletedAt?: number;
+      description?: string;
       normalizedPhrase: string;
+      pauseReason?: "user" | "capacity" | "payment";
       pausedAt?: number;
       phrase: string;
       platforms: Array<"x" | "reddit" | "hacker_news">;
@@ -1021,11 +1057,15 @@ export type DataModel = {
     fieldPaths:
       | "_creationTime"
       | "_id"
+      | "activationPriority"
+      | "brandCandidate"
       | "createdAt"
       | "createdByUserId"
       | "deletedAt"
+      | "description"
       | "normalizedPhrase"
       | "pausedAt"
+      | "pauseReason"
       | "phrase"
       | "platforms"
       | "status"
@@ -1127,6 +1167,7 @@ export type DataModel = {
       quoteCount?: number;
       replyCount?: number;
       repostCount?: number;
+      retentionExpiresAt?: number;
       searchText: string;
       status: "new" | "saved" | "dismissed";
       title?: string;
@@ -1160,6 +1201,7 @@ export type DataModel = {
       | "quoteCount"
       | "replyCount"
       | "repostCount"
+      | "retentionExpiresAt"
       | "searchText"
       | "status"
       | "title"
@@ -1169,6 +1211,7 @@ export type DataModel = {
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
+      by_retention_expires_at: ["retentionExpiresAt", "_creationTime"];
       by_status_and_published_at: ["status", "publishedAt", "_creationTime"];
       by_tracking_source_and_published_at: [
         "trackingSourceId",
@@ -1233,6 +1276,51 @@ export type DataModel = {
     };
     vectorIndexes: {};
   };
+  onboardingResearch: {
+    document: {
+      companyDescription?: string;
+      completedAt?: number;
+      createdAt: number;
+      errorCode?: string;
+      inputFingerprint: string;
+      manualDescription?: string;
+      startedAt: number;
+      status: "running" | "completed" | "failed";
+      suggestionsJson?: string;
+      updatedAt: number;
+      websiteUrl?: string;
+      workspaceId: Id<"workspaces">;
+      _id: Id<"onboardingResearch">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "companyDescription"
+      | "completedAt"
+      | "createdAt"
+      | "errorCode"
+      | "inputFingerprint"
+      | "manualDescription"
+      | "startedAt"
+      | "status"
+      | "suggestionsJson"
+      | "updatedAt"
+      | "websiteUrl"
+      | "workspaceId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_workspace: ["workspaceId", "_creationTime"];
+      by_workspace_and_updated_at: [
+        "workspaceId",
+        "updatedAt",
+        "_creationTime",
+      ];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   providerMetricBuckets: {
     document: {
       bucketEndAt: number;
@@ -1251,7 +1339,8 @@ export type DataModel = {
         | "hacker_news"
         | "deepseek"
         | "resend"
-        | "creem";
+        | "creem"
+        | "tinyfish";
       rateLimitedCount: number;
       requestCount: number;
       retryCount: number;
@@ -1323,7 +1412,8 @@ export type DataModel = {
         | "hacker_news"
         | "deepseek"
         | "resend"
-        | "creem";
+        | "creem"
+        | "tinyfish";
       startedAt: number;
       status: "running" | "succeeded" | "failed";
       trackingSourceId?: Id<"trackingSources">;
@@ -1489,6 +1579,7 @@ export type DataModel = {
       endedAt?: number;
       entitlementStatus: "active" | "inactive";
       lastSyncedAt: number;
+      monitoringAccessReconciledAt?: number;
       planId: "starter" | "growth" | "scale";
       provider: "creem";
       providerCustomerId: string;
@@ -1511,6 +1602,7 @@ export type DataModel = {
       | "endedAt"
       | "entitlementStatus"
       | "lastSyncedAt"
+      | "monitoringAccessReconciledAt"
       | "planId"
       | "provider"
       | "providerCustomerId"
@@ -1523,8 +1615,9 @@ export type DataModel = {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
       by_created_at: ["createdAt", "_creationTime"];
-      by_entitlement_and_period_end: [
+      by_entitlement_reconciled_at_and_period_end: [
         "entitlementStatus",
+        "monitoringAccessReconciledAt",
         "currentPeriodEnd",
         "_creationTime",
       ];
@@ -1717,7 +1810,7 @@ export type DataModel = {
       leaseToken?: string;
       leaseVersion: number;
       nextRunAt: number;
-      pauseReason?: "paid" | "user" | "usage" | "config";
+      pauseReason?: "paid" | "user" | "capacity" | "usage" | "config";
       providerQuery: string;
       settledWatermarkAt?: number;
       settledWatermarkItemId?: string;
@@ -1956,6 +2049,7 @@ export type DataModel = {
   };
   workspaces: {
     document: {
+      companyDescription?: string;
       createdAt: number;
       deletedAt?: number;
       deletionPendingAt?: number;
@@ -1971,6 +2065,7 @@ export type DataModel = {
     fieldPaths:
       | "_creationTime"
       | "_id"
+      | "companyDescription"
       | "createdAt"
       | "deletedAt"
       | "deletionPendingAt"

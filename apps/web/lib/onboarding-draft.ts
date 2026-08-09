@@ -1,100 +1,67 @@
 import { z } from "zod"
 
 const onboardingPlatformSchema = z.enum(["x", "reddit", "hacker_news"])
-const categoryColorTokenSchema = z.enum([
-  "blue",
-  "orange",
-  "green",
-  "red",
-  "purple",
-  "yellow",
-  "gray",
-  "pink",
-  "cyan",
-  "slate",
-])
 
-export const ONBOARDING_STEP_COUNT = 7
 export const MAX_DRAFT_KEYWORDS = 10
 export const CHECKOUT_INTENT_TTL_MS = 24 * 60 * 60 * 1_000
 
-export const onboardingStepSchema = z.number().int().min(1).max(7)
+export const onboardingStepSchema = z.number().int().min(1).max(3)
 
-export const onboardingKeywordDraftSchema = z.object({
-  clientId: z.string().trim().min(1),
-  kind: z.enum(["own", "other"]),
-  phrase: z.string().max(160),
-  platforms: z.array(onboardingPlatformSchema),
-})
+export const onboardingKeywordDraftSchema = z
+  .object({
+    brandCandidate: z.boolean(),
+    clientId: z.string().trim().min(1),
+    description: z.string().trim().max(160),
+    phrase: z.string().trim().min(1).max(160),
+    origin: z.enum(["custom", "suggestion"]),
+    platforms: z.array(onboardingPlatformSchema).min(1),
+    selected: z.boolean(),
+  })
+  .strict()
 
-export const onboardingCategoryDraftSchema = z.object({
-  colorToken: categoryColorTokenSchema,
-  description: z.string().max(300),
-  enabled: z.boolean(),
-  isSystem: z.boolean(),
-  name: z.string().trim().min(1).max(80),
-  serverId: z.string().trim().min(1),
-  systemKey: z
-    .enum([
-      "question",
-      "complaint",
-      "praise",
-      "bug",
-      "feature_request",
-      "competitor_mention",
-      "other",
-    ])
-    .optional(),
-})
-
-const pendingCheckoutSchema = z.object({
-  checkoutId: z.string().trim().min(1).optional(),
-  idempotencyKey: z.string().trim().min(8),
-  planId: z.enum(["starter", "growth", "scale"]),
-  startedAt: z.number().finite().nonnegative(),
-  status: z.string().trim().min(1),
-  url: z
-    .string()
-    .url()
-    .refine((value) => value.startsWith("https://"), {
-      message: "Checkout redirects must use HTTPS.",
-    })
-    .optional(),
-})
+const pendingCheckoutSchema = z
+  .object({
+    checkoutId: z.string().trim().min(1).optional(),
+    idempotencyKey: z.string().trim().min(8),
+    planId: z.enum(["starter", "growth", "scale"]),
+    startedAt: z.number().finite().nonnegative(),
+    status: z.string().trim().min(1),
+    url: z
+      .string()
+      .url()
+      .refine((value) => value.startsWith("https://"), {
+        message: "Checkout redirects must use HTTPS.",
+      })
+      .optional(),
+  })
+  .strict()
 
 export const onboardingDraftSchema = z
   .object({
-    categories: z.array(onboardingCategoryDraftSchema),
     checkout: pendingCheckoutSchema.optional(),
-    configurationSavedAt: z.number().finite().nonnegative().optional(),
+    companyDescription: z.string().trim().max(1_000),
     keywords: z.array(onboardingKeywordDraftSchema).max(MAX_DRAFT_KEYWORDS),
-    selectedPlan: z.enum(["starter", "growth", "scale"]).nullable(),
+    manualDescription: z.string().trim().max(1_000),
+    selectedPlan: z.enum(["free", "starter", "growth", "scale"]).nullable(),
     step: onboardingStepSchema,
-    version: z.literal(1),
-    workspaceName: z.string().max(160),
+    version: z.literal(2),
+    websiteUrl: z.string().trim().max(2_000),
+    workspaceName: z.string().trim().max(160),
   })
+  .strict()
   .superRefine((draft, context) => {
-    if (draft.categories.length === 0) {
-      return
-    }
-
-    const otherCategories = draft.categories.filter(
-      (category) => category.systemKey === "other",
-    )
-    const other = otherCategories[0]
-    if (
-      otherCategories.length !== 1 ||
-      !other ||
-      !other.enabled ||
-      !other.isSystem ||
-      other.name !== "Other"
-    ) {
-      context.addIssue({
-        code: "custom",
-        path: ["categories"],
-        message:
-          "The draft must contain one enabled, immutable Other category.",
-      })
+    const selectedPhrases = new Set<string>()
+    for (const [index, keyword] of draft.keywords.entries()) {
+      if (!keyword.selected) continue
+      const normalized = normalizeKeywordPhrase(keyword.phrase)
+      if (selectedPhrases.has(normalized)) {
+        context.addIssue({
+          code: "custom",
+          message: "Selected keyword phrases must be unique.",
+          path: ["keywords", index, "phrase"],
+        })
+      }
+      selectedPhrases.add(normalized)
     }
   })
 
@@ -102,24 +69,14 @@ export type OnboardingDraft = z.infer<typeof onboardingDraftSchema>
 export type OnboardingKeywordDraft = z.infer<
   typeof onboardingKeywordDraftSchema
 >
-export type OnboardingCategoryDraft = z.infer<
-  typeof onboardingCategoryDraftSchema
->
-export type OnboardingStep = z.infer<typeof onboardingStepSchema>
 
-const completedCheckoutStatuses = new Set(["complete", "completed"])
 const unusableCheckoutStatuses = new Set([
-  ...completedCheckoutStatuses,
+  "complete",
+  "completed",
   "canceled",
   "cancelled",
   "expired",
 ])
-
-export function isCompletedOnboardingCheckout(
-  checkout: NonNullable<OnboardingDraft["checkout"]>,
-): boolean {
-  return completedCheckoutStatuses.has(checkout.status.toLocaleLowerCase("en"))
-}
 
 export function canReuseOnboardingCheckout(
   checkout: NonNullable<OnboardingDraft["checkout"]>,
@@ -136,22 +93,14 @@ export function canReuseOnboardingCheckout(
 
 export function createOnboardingDraft(workspaceName: string): OnboardingDraft {
   return {
-    categories: [],
+    companyDescription: "",
     keywords: [],
+    manualDescription: "",
     selectedPlan: null,
     step: 1,
-    version: 1,
-    workspaceName,
-  }
-}
-
-export function selectOnboardingPlan(
-  draft: OnboardingDraft,
-  planId: NonNullable<OnboardingDraft["selectedPlan"]>,
-): OnboardingDraft {
-  return {
-    ...draft,
-    selectedPlan: planId,
+    version: 2,
+    websiteUrl: "",
+    workspaceName: workspaceName.trim(),
   }
 }
 
@@ -159,8 +108,26 @@ export function normalizeKeywordPhrase(value: string): string {
   return value.trim().replace(/\s+/g, " ").toLocaleLowerCase("en")
 }
 
+export function mergeResearchKeywordDrafts(
+  existing: readonly OnboardingKeywordDraft[],
+  suggestions: readonly OnboardingKeywordDraft[],
+): OnboardingKeywordDraft[] {
+  const custom = existing.filter((keyword) => keyword.origin === "custom")
+  const phrases = new Set(
+    custom.map((keyword) => normalizeKeywordPhrase(keyword.phrase)),
+  )
+  const merged = [...custom]
+  for (const suggestion of suggestions) {
+    const phrase = normalizeKeywordPhrase(suggestion.phrase)
+    if (phrases.has(phrase) || merged.length >= MAX_DRAFT_KEYWORDS) continue
+    phrases.add(phrase)
+    merged.push(suggestion)
+  }
+  return merged
+}
+
 export function draftStorageKey(workspaceId: string): string {
-  return `astreex:onboarding:${workspaceId}:v1`
+  return `astreex:onboarding:${workspaceId}:v2`
 }
 
 export function clearOnboardingDraftStorage(

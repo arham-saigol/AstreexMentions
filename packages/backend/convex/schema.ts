@@ -28,8 +28,15 @@ export const trackingSourceTypeValidator = v.union(
 export const trackingPauseReasonValidator = v.union(
   v.literal("paid"),
   v.literal("user"),
+  v.literal("capacity"),
   v.literal("usage"),
   v.literal("config"),
+)
+
+export const keywordPauseReasonValidator = v.union(
+  v.literal("user"),
+  v.literal("capacity"),
+  v.literal("payment"),
 )
 
 export const mentionStatusValidator = v.union(
@@ -100,6 +107,11 @@ export const jobStatusValidator = v.union(
   v.literal("leased"),
   v.literal("completed"),
   v.literal("dead"),
+)
+export const onboardingResearchStatusValidator = v.union(
+  v.literal("running"),
+  v.literal("completed"),
+  v.literal("failed"),
 )
 
 export const categorySystemKeyValidator = v.union(
@@ -188,6 +200,7 @@ export const providerValidator = v.union(
   v.literal("deepseek"),
   v.literal("resend"),
   v.literal("creem"),
+  v.literal("tinyfish"),
 )
 export const providerRunStatusValidator = v.union(
   v.literal("running"),
@@ -253,6 +266,8 @@ export const deletionPurgeStageValidator = v.union(
   v.literal("keywords"),
   v.literal("categories"),
   v.literal("usage_cycles"),
+  v.literal("free_evaluation_grants"),
+  v.literal("onboarding_research"),
   v.literal("billing_checkouts"),
   v.literal("subscriptions"),
   v.literal("provider_runs"),
@@ -299,6 +314,7 @@ export default defineSchema({
     createdAt: v.number(),
     deletedAt: v.optional(v.number()),
     deletionPendingAt: v.optional(v.number()),
+    companyDescription: v.optional(v.string()),
     kind: workspaceKindValidator,
     lastMentionAt: v.optional(v.number()),
     name: v.string(),
@@ -341,6 +357,7 @@ export default defineSchema({
     endedAt: v.optional(v.number()),
     entitlementStatus: entitlementStatusValidator,
     lastSyncedAt: v.number(),
+    monitoringAccessReconciledAt: v.optional(v.number()),
     planId: planIdValidator,
     provider: v.literal("creem"),
     providerCustomerId: v.string(),
@@ -361,8 +378,9 @@ export default defineSchema({
     .index("by_provider_customer", ["provider", "providerCustomerId"])
     .index("by_provider_subscription", ["provider", "providerSubscriptionId"])
     .index("by_status_and_period_end", ["status", "currentPeriodEnd"])
-    .index("by_entitlement_and_period_end", [
+    .index("by_entitlement_reconciled_at_and_period_end", [
       "entitlementStatus",
+      "monitoringAccessReconciledAt",
       "currentPeriodEnd",
     ])
     .index("by_plan_and_status", ["planId", "status"])
@@ -478,11 +496,42 @@ export default defineSchema({
       "periodStartAt",
     ]),
 
+  freeEvaluationGrants: defineTable({
+    activatedAt: v.number(),
+    createdAt: v.number(),
+    exhaustedAt: v.optional(v.number()),
+    mentionLimit: v.number(),
+    mentionsUsed: v.number(),
+    updatedAt: v.number(),
+    workspaceId: v.id("workspaces"),
+  }).index("by_workspace", ["workspaceId"]),
+
+  onboardingResearch: defineTable({
+    companyDescription: v.optional(v.string()),
+    completedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    errorCode: v.optional(v.string()),
+    inputFingerprint: v.string(),
+    manualDescription: v.optional(v.string()),
+    startedAt: v.number(),
+    status: onboardingResearchStatusValidator,
+    suggestionsJson: v.optional(v.string()),
+    updatedAt: v.number(),
+    websiteUrl: v.optional(v.string()),
+    workspaceId: v.id("workspaces"),
+  })
+    .index("by_workspace", ["workspaceId"])
+    .index("by_workspace_and_updated_at", ["workspaceId", "updatedAt"]),
+
   keywords: defineTable({
+    activationPriority: v.optional(v.number()),
+    brandCandidate: v.optional(v.boolean()),
     createdAt: v.number(),
     createdByUserId: v.id("users"),
     deletedAt: v.optional(v.number()),
+    description: v.optional(v.string()),
     normalizedPhrase: v.string(),
+    pauseReason: v.optional(keywordPauseReasonValidator),
     pausedAt: v.optional(v.number()),
     phrase: v.string(),
     platforms: v.array(platformValidator),
@@ -603,6 +652,7 @@ export default defineSchema({
     fallbackKey: v.optional(v.string()),
     firstSeenAt: v.number(),
     language: v.optional(v.string()),
+    retentionExpiresAt: v.optional(v.number()),
     lastMatchedAt: v.number(),
     likeCount: v.optional(v.number()),
     platform: platformValidator,
@@ -661,6 +711,7 @@ export default defineSchema({
       "trackingSourceId",
       "publishedAt",
     ])
+    .index("by_retention_expires_at", ["retentionExpiresAt"])
     .index("by_status_and_published_at", ["status", "publishedAt"])
     .searchIndex("search_body", {
       searchField: "searchText",

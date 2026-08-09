@@ -1,3 +1,4 @@
+import rateLimiterTest from "@convex-dev/rate-limiter/test"
 import { convexTest } from "convex-test"
 import { makeFunctionReference, type UserIdentity } from "convex/server"
 import type { GenericId } from "convex/values"
@@ -155,7 +156,9 @@ const otherIdentity = {
 } satisfies Partial<UserIdentity>
 
 function createBackendTest() {
-  return convexTest({ modules, schema })
+  const t = convexTest({ modules, schema })
+  rateLimiterTest.register(t)
+  return t
 }
 
 async function bootstrap(

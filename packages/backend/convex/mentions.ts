@@ -1,10 +1,10 @@
 import type { UserIdentity } from "convex/server"
 import { ConvexError, v } from "convex/values"
 
-import { effectiveEntitlementStatus } from "./billing/lifecycle"
 import type { Doc, Id } from "./_generated/dataModel"
 import { authenticatedMutation, authenticatedQuery } from "./lib/authorization"
 import { type MutationCtx, type QueryCtx } from "./_generated/server"
+import { resolveWorkspaceAllowance } from "./lib/workspaceAccess"
 import { resolveCurrentCustomer } from "./users"
 
 const DEFAULT_PAGE_SIZE = 12
@@ -415,10 +415,17 @@ function mentionMatchesFilters(
   row: Doc<"mentions">,
   input: {
     filters: NormalizedMentionFilters
+    now: number
     query: string
   },
 ): boolean {
   const { filters } = input
+  if (
+    row.retentionExpiresAt !== undefined &&
+    row.retentionExpiresAt <= input.now
+  ) {
+    return false
+  }
   if (
     filters.categoryIds.length > 0 &&
     !filters.categoryIds.includes(row.categoryId as CategoryId)
@@ -484,6 +491,7 @@ async function filterMentionRows(
   input: {
     filters: NormalizedMentionFilters
     keywordIds: ReadonlySet<string>
+    now: number
     query: string
   },
 ): Promise<Doc<"mentions">[]> {
@@ -524,9 +532,15 @@ async function mentionForWorkspace(
   ctx: Pick<CustomerDatabaseCtx, "db">,
   workspaceId: WorkspaceId,
   mentionId: MentionId,
+  now: number,
 ): Promise<Doc<"mentions">> {
   const mention = await ctx.db.get("mentions", mentionId)
-  if (!mention || mention.workspaceId !== workspaceId) {
+  if (
+    !mention ||
+    mention.workspaceId !== workspaceId ||
+    (mention.retentionExpiresAt !== undefined &&
+      mention.retentionExpiresAt <= now)
+  ) {
     mentionError("MENTION_NOT_FOUND", "Mention not found")
   }
   return mention
@@ -667,55 +681,11 @@ async function readMentionMonitoringState(
     return "setup_required"
   }
 
-  const subscriptions = await ctx.db
-    .query("subscriptions")
-    .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
-    .collect()
-  const activeSubscription = subscriptions
-    .sort(
-      (left, right) =>
-        (right.lastSyncedAt as number) - (left.lastSyncedAt as number),
-    )
-    .find(
-      (subscription) =>
-        effectiveEntitlementStatus(
-          {
-            currentPeriodEnd: subscription.currentPeriodEnd as number,
-            entitlementStatus: subscription.entitlementStatus as
-              "active" | "inactive",
-            status: subscription.status as string,
-          },
-          now,
-        ) === "active",
-    )
-  if (!activeSubscription) {
+  const allowance = await resolveWorkspaceAllowance(ctx, workspaceId, now)
+  if (allowance.kind === "none") {
     return "paused"
   }
-
-  const cycles = await ctx.db
-    .query("usageCycles")
-    .withIndex("by_workspace_status_and_period_end", (q) =>
-      q.eq("workspaceId", workspaceId).eq("status", "open"),
-    )
-    .collect()
-  const usageCycle = cycles
-    .filter(
-      (cycle) =>
-        (cycle.periodStartAt as number) <= now &&
-        (cycle.periodEndAt as number) > now &&
-        (cycle.subscriptionId === activeSubscription._id ||
-          (cycle.subscriptionId === undefined &&
-            (cycle.planSnapshot as { planId?: unknown } | undefined)?.planId ===
-              activeSubscription.planId)),
-    )
-    .sort(
-      (left, right) =>
-        (right.periodStartAt as number) - (left.periodStartAt as number),
-    )[0]
-  if (
-    !usageCycle ||
-    (usageCycle.mentionsUsed as number) >= (usageCycle.mentionLimit as number)
-  ) {
+  if (allowance.exhausted) {
     return "usage_limited"
   }
 
@@ -782,7 +752,7 @@ export const listMentions = authenticatedQuery({
       ctx,
       customer.workspaceId,
       bufferedRows,
-      { filters, keywordIds, query },
+      { filters, keywordIds, now: args.now, query },
     )
     let continueCursor = cursor?.continueCursor ?? null
     let databaseDone = cursor?.databaseDone ?? false
@@ -814,6 +784,7 @@ export const listMentions = authenticatedQuery({
         ...(await filterMentionRows(ctx, customer.workspaceId, scanned.page, {
           filters,
           keywordIds,
+          now: args.now,
           query,
         })),
       )
@@ -853,14 +824,18 @@ export const listMentions = authenticatedQuery({
 })
 
 export const getMention = authenticatedQuery({
-  args: { mentionId: v.id("mentions") },
+  args: { mentionId: v.id("mentions"), now: v.number() },
   returns: mentionResultValidator,
   handler: async (ctx, args) => {
+    if (!Number.isSafeInteger(args.now) || args.now < 0) {
+      mentionError("INVALID_MENTION_INPUT", "Current time is invalid")
+    }
     const customer = await requireCurrentCustomer(ctx)
     const mention = await mentionForWorkspace(
       ctx,
       customer.workspaceId,
       args.mentionId as MentionId,
+      args.now,
     )
     return await formatMention(ctx, mention)
   },
@@ -875,15 +850,17 @@ export const updateMentionStatus = authenticatedMutation({
   handler: async (ctx, args) => {
     const customer = await requireCurrentCustomer(ctx)
     const mentionId = args.mentionId as MentionId
-    await mentionForWorkspace(ctx, customer.workspaceId, mentionId)
+    const now = Date.now()
+    await mentionForWorkspace(ctx, customer.workspaceId, mentionId, now)
     await ctx.db.patch("mentions", mentionId, {
       status: args.status,
-      updatedAt: Date.now(),
+      updatedAt: now,
     })
     const mention = await mentionForWorkspace(
       ctx,
       customer.workspaceId,
       mentionId,
+      now,
     )
     return await formatMention(ctx, mention)
   },

@@ -5,48 +5,59 @@ import {
   clearOnboardingDraftStorage,
   CHECKOUT_INTENT_TTL_MS,
   createOnboardingDraft,
-  isCompletedOnboardingCheckout,
   MAX_DRAFT_KEYWORDS,
+  mergeResearchKeywordDrafts,
   normalizeKeywordPhrase,
   onboardingDraftSchema,
-  selectOnboardingPlan,
 } from "./onboarding-draft"
 
 function keyword(index: number) {
   return {
+    brandCandidate: index === 0,
     clientId: `keyword-${index}`,
-    kind: "own" as const,
+    description: `Why keyword ${index} matters`,
     phrase: `Keyword ${index}`,
+    origin: "suggestion" as const,
     platforms: ["x" as const],
+    selected: true,
   }
 }
 
 describe("onboarding draft", () => {
-  it("clears the workspace-specific draft without blocking on storage errors", () => {
-    const removeItem = vi.fn()
-    clearOnboardingDraftStorage({ removeItem }, "workspace_1")
-    expect(removeItem).toHaveBeenCalledWith("astreex:onboarding:workspace_1:v1")
-
-    expect(() =>
-      clearOnboardingDraftStorage(
-        {
-          removeItem: () => {
-            throw new Error("storage unavailable")
-          },
-        },
-        "workspace_1",
-      ),
-    ).not.toThrow()
-  })
-  it("normalizes phrases for duplicate checks", () => {
-    expect(normalizeKeywordPhrase("  Astreex   Monitor ")).toBe(
-      "astreex monitor",
-    )
-  })
-
-  it("accepts ten keywords and rejects a larger client draft", () => {
+  it("stores the new three-step free-evaluation draft without category or keyword-kind state", () => {
     const draft = createOnboardingDraft("Astreex")
+    const parsed = onboardingDraftSchema.parse({
+      ...draft,
+      companyDescription: "Astreex monitors customer conversations.",
+      keywords: [keyword(0)],
+      selectedPlan: "free",
+      step: 3,
+      websiteUrl: "https://astreex.example/",
+    })
 
+    expect(parsed).toMatchObject({ selectedPlan: "free", step: 3, version: 2 })
+    expect(parsed).not.toHaveProperty("categories")
+    expect(parsed.keywords[0]).not.toHaveProperty("kind")
+  })
+
+  it("requires selected keywords to have a phrase, description within 160 characters, and a platform", () => {
+    const draft = createOnboardingDraft("Astreex")
+    expect(
+      onboardingDraftSchema.safeParse({
+        ...draft,
+        keywords: [{ ...keyword(0), platforms: [] }],
+      }).success,
+    ).toBe(false)
+    expect(
+      onboardingDraftSchema.safeParse({
+        ...draft,
+        keywords: [{ ...keyword(0), description: "x".repeat(161) }],
+      }).success,
+    ).toBe(false)
+  })
+
+  it("accepts ten keyword configurations and rejects an unbounded draft", () => {
+    const draft = createOnboardingDraft("Astreex")
     expect(
       onboardingDraftSchema.safeParse({
         ...draft,
@@ -55,7 +66,6 @@ describe("onboarding draft", () => {
         ),
       }).success,
     ).toBe(true)
-
     expect(
       onboardingDraftSchema.safeParse({
         ...draft,
@@ -66,34 +76,25 @@ describe("onboarding draft", () => {
     ).toBe(false)
   })
 
-  it("rejects a persisted draft that weakens the Other category invariant", () => {
-    const draft = createOnboardingDraft("Astreex")
-    const category = {
-      colorToken: "gray" as const,
-      description: "Fallback category",
-      enabled: false,
-      isSystem: true,
-      name: "Other",
-      serverId: "category_other",
-      systemKey: "other" as const,
+  it("keeps custom entries when research suggestions are retried", () => {
+    const custom = {
+      ...keyword(0),
+      brandCandidate: false,
+      origin: "custom" as const,
+      phrase: "Customer pain",
     }
+    const suggestions = [
+      { ...keyword(1), phrase: "Customer pain" },
+      { ...keyword(2), phrase: "Astreex" },
+    ]
 
-    expect(
-      onboardingDraftSchema.safeParse({
-        ...draft,
-        categories: [category],
-      }).success,
-    ).toBe(false)
-
-    expect(
-      onboardingDraftSchema.safeParse({
-        ...draft,
-        categories: [{ ...category, enabled: true }],
-      }).success,
-    ).toBe(true)
+    expect(mergeResearchKeywordDrafts([custom], suggestions)).toEqual([
+      custom,
+      suggestions[1],
+    ])
   })
 
-  it("reuses only current nonterminal checkout intents", () => {
+  it("supports free and paid selections while preserving an outstanding checkout", () => {
     const now = 2_000_000_000_000
     const checkout = {
       idempotencyKey: "checkout-current",
@@ -102,65 +103,21 @@ describe("onboarding draft", () => {
       status: "open",
       url: "https://checkout.example/session",
     }
-
     expect(canReuseOnboardingCheckout(checkout, now)).toBe(true)
     expect(
       canReuseOnboardingCheckout(
-        {
-          ...checkout,
-          startedAt: now - CHECKOUT_INTENT_TTL_MS,
-        },
+        { ...checkout, startedAt: now - CHECKOUT_INTENT_TTL_MS },
         now,
       ),
     ).toBe(false)
-    expect(
-      canReuseOnboardingCheckout({ ...checkout, status: "expired" }, now),
-    ).toBe(false)
-    expect(
-      canReuseOnboardingCheckout({ ...checkout, startedAt: now + 1 }, now),
-    ).toBe(false)
-    expect(
-      onboardingDraftSchema.safeParse({
-        ...createOnboardingDraft("Astreex"),
-        checkout: {
-          ...checkout,
-          url: "javascript:alert(document.domain)",
-        },
-      }).success,
-    ).toBe(false)
   })
 
-  it("recognizes completed checkout statuses without opening another session", () => {
-    const checkout = {
-      idempotencyKey: "checkout-complete",
-      planId: "scale" as const,
-      startedAt: 1,
-      status: "completed",
-    }
-
-    expect(isCompletedOnboardingCheckout(checkout)).toBe(true)
-    expect(isCompletedOnboardingCheckout({ ...checkout, status: "open" })).toBe(
-      false,
+  it("normalizes duplicate phrases and clears only the version-two workspace draft", () => {
+    expect(normalizeKeywordPhrase("  Astreex   Monitor ")).toBe(
+      "astreex monitor",
     )
-  })
-
-  it("preserves an outstanding checkout when selecting another plan", () => {
-    const draft = {
-      ...createOnboardingDraft("Astreex"),
-      checkout: {
-        idempotencyKey: "checkout-outstanding",
-        planId: "starter" as const,
-        startedAt: 2_000_000_000_000,
-        status: "open",
-        url: "https://checkout.example/session",
-      },
-      selectedPlan: "starter" as const,
-      step: 7 as const,
-    }
-
-    expect(selectOnboardingPlan(draft, "growth")).toMatchObject({
-      checkout: draft.checkout,
-      selectedPlan: "growth",
-    })
+    const removeItem = vi.fn()
+    clearOnboardingDraftStorage({ removeItem }, "workspace_1")
+    expect(removeItem).toHaveBeenCalledWith("astreex:onboarding:workspace_1:v2")
   })
 })

@@ -41,6 +41,7 @@ const MAX_BATCHES_PER_DISPATCH = 4
 const MAX_WORKSPACES_PER_DISPATCH = 16
 const BLOCKED_CONFIGURATION_RETRY_MS = 5 * 60_000
 const DEEPSEEK_CATEGORIZATION_OPERATION = "chat.completions"
+const MAX_KEYWORD_CONTEXTS_PER_MENTION = 3
 
 type CategorizationJobId = Id<"categorizationJobs">
 type CategoryId = Id<"categories">
@@ -448,16 +449,69 @@ async function currentBatchLease(
   }
 }
 
+async function categorizationMention(
+  db: DatabaseReader,
+  mention: Doc<"mentions">,
+  companyDescription: string | undefined,
+  now: number,
+): Promise<CategorizationMention | null> {
+  if (
+    mention.retentionExpiresAt !== undefined &&
+    mention.retentionExpiresAt <= now
+  ) {
+    return null
+  }
+  const matches = await db
+    .query("mentionKeywordMatches")
+    .withIndex("by_workspace_and_mention", (q) =>
+      q.eq("workspaceId", mention.workspaceId).eq("mentionId", mention._id),
+    )
+    .take(MAX_KEYWORD_CONTEXTS_PER_MENTION)
+  const keywordRows = await Promise.all(
+    matches.map(async (match) => await db.get("keywords", match.keywordId)),
+  )
+  const keywords = keywordRows
+    .filter(
+      (keyword): keyword is Doc<"keywords"> =>
+        keyword !== null && keyword.workspaceId === mention.workspaceId,
+    )
+    .map((keyword) => ({
+      phrase: keyword.phrase,
+      ...(keyword.description === undefined
+        ? {}
+        : { description: keyword.description }),
+    }))
+    .sort((left, right) => left.phrase.localeCompare(right.phrase, "en"))
+  try {
+    return {
+      id: String(mention._id),
+      text: mentionText({
+        body: mention.body,
+        ...(mention.title === undefined ? {} : { title: mention.title }),
+      }),
+      ...(companyDescription ? { companyDescription } : {}),
+      ...(keywords.length ? { keywords } : {}),
+    }
+  } catch {
+    return null
+  }
+}
+
 async function mentionsForBatch(
   db: DatabaseReader,
   batch: LeasedBatch,
+  now: number,
 ): Promise<CategorizationMention[] | null> {
-  const mentionRows = await Promise.all(
-    batch.jobs.map(
-      async (job) => await db.get("mentions", job.mentionId as MentionId),
+  const [workspace, mentionRows] = await Promise.all([
+    db.get("workspaces", batch.workspaceId),
+    Promise.all(
+      batch.jobs.map(
+        async (job) => await db.get("mentions", job.mentionId as MentionId),
+      ),
     ),
-  )
+  ])
   if (
+    !workspace ||
     mentionRows.some(
       (mention, index) =>
         !mention ||
@@ -467,22 +521,24 @@ async function mentionsForBatch(
   ) {
     return null
   }
-
-  try {
-    return mentionRows
+  const mentions = await Promise.all(
+    mentionRows
       .filter((mention): mention is Doc<"mentions"> => mention !== null)
-      .map((mention) => ({
-        id: String(mention._id),
-        text: mentionText({
-          body: mention.body as string,
-          ...(mention.title === undefined
-            ? {}
-            : { title: mention.title as string }),
-        }),
-      }))
-  } catch {
-    return null
-  }
+      .map(
+        async (mention) =>
+          await categorizationMention(
+            db,
+            mention,
+            workspace.companyDescription,
+            now,
+          ),
+      ),
+  )
+  return mentions.some((mention) => mention === null)
+    ? null
+    : mentions.filter(
+        (mention): mention is CategorizationMention => mention !== null,
+      )
 }
 
 async function completeAlreadyCategorizedJob(
@@ -529,6 +585,7 @@ async function claimableRowsWithMentions(
     mention: CategorizationMention
     row: Doc<"categorizationJobs">
   }> = []
+  const companyDescriptionByWorkspace = new Map<string, string | undefined>()
   for (const row of rows) {
     if (await completeAlreadyCategorizedJob(ctx, row, now)) {
       continue
@@ -538,21 +595,28 @@ async function claimableRowsWithMentions(
       await markJobDead(ctx, row, "invalid_mention", now)
       continue
     }
-    try {
-      const text = mentionText({
-        body: mention.body as string,
-        ...(mention.title === undefined
-          ? {}
-          : { title: mention.title as string }),
-      })
-      claimable.push({
-        mention: { id: String(mention._id), text },
-        row,
-      })
-    } catch {
+    const workspaceKey = String(row.workspaceId)
+    if (!companyDescriptionByWorkspace.has(workspaceKey)) {
+      const workspace = await ctx.db.get(
+        "workspaces",
+        row.workspaceId as WorkspaceId,
+      )
+      companyDescriptionByWorkspace.set(
+        workspaceKey,
+        workspace?.companyDescription,
+      )
+    }
+    const context = await categorizationMention(
+      ctx.db,
+      mention,
+      companyDescriptionByWorkspace.get(workspaceKey),
+      now,
+    )
+    if (!context) {
       await markJobDead(ctx, row, "invalid_mention", now)
       continue
     }
+    claimable.push({ mention: context, row })
   }
   return claimable
 }
@@ -728,7 +792,7 @@ export const loadCategorizationBatchContext = internalQuery({
         state: "invalid_batch",
       }
     }
-    const mentions = await mentionsForBatch(ctx.db, batch)
+    const mentions = await mentionsForBatch(ctx.db, batch, now)
     if (!mentions) {
       return {
         errorCode: "invalid_mention",
@@ -874,7 +938,7 @@ export const applyCategorizationBatch = internalMutation({
     ) {
       throw new TypeError("Categorization category snapshot changed")
     }
-    const mentions = await mentionsForBatch(ctx.db, batch)
+    const mentions = await mentionsForBatch(ctx.db, batch, now)
     if (!mentions) {
       throw new TypeError("Categorization mention batch is invalid")
     }

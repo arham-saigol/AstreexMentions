@@ -262,6 +262,34 @@ export function MentionsScreen() {
     Record<string, boolean>
   >({})
   const [actionErrors, setActionErrors] = useState<Record<string, string>>({})
+  const [onboardingNotice, setOnboardingNotice] = useState<string | null>(null)
+
+  useEffect(() => {
+    try {
+      const raw = window.sessionStorage.getItem("astreex:onboarding-result")
+      if (!raw) return
+      const value = JSON.parse(raw) as {
+        activeCount?: unknown
+        paid?: unknown
+        pausedCount?: unknown
+      }
+      if (value.paid === true && access.planId === null) return
+      window.sessionStorage.removeItem("astreex:onboarding-result")
+      if (
+        typeof value.activeCount === "number" &&
+        typeof value.pausedCount === "number"
+      ) {
+        const notice = `${value.activeCount} keyword${value.activeCount === 1 ? " is" : "s are"} active and ${value.pausedCount} ${value.pausedCount === 1 ? "is" : "are"} paused. Manage the saved overflow on Keywords.`
+        const noticeTimer = window.setTimeout(
+          () => setOnboardingNotice(notice),
+          0,
+        )
+        return () => window.clearTimeout(noticeTimer)
+      }
+    } catch {
+      // A missing completion notice must not block the feed.
+    }
+  }, [access.planId])
 
   const resetPagination = () => {
     setCursor(undefined)
@@ -399,7 +427,7 @@ export function MentionsScreen() {
     selectAll()
   }
 
-  const usage = billing.usage
+  const usage = billing.usage ?? billing.evaluation
   const usageLimited =
     mentionsValue?.monitoringState === "usage_limited" ||
     Boolean(
@@ -453,6 +481,21 @@ export function MentionsScreen() {
 
   return (
     <div>
+      {onboardingNotice && (
+        <div
+          role="status"
+          className="border-border bg-card mb-5 flex items-start justify-between gap-4 rounded-lg border px-4 py-3 text-sm shadow-sm"
+        >
+          <p>{onboardingNotice}</p>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setOnboardingNotice(null)}
+          >
+            Dismiss
+          </Button>
+        </div>
+      )}
       <div className="flex flex-col gap-3 pb-6 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-display text-foreground text-[28px] leading-[34px] font-medium tracking-[-0.02em]">

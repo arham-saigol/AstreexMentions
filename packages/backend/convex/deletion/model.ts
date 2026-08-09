@@ -32,6 +32,8 @@ export const ACCOUNT_DELETION_PURGE_STAGES = [
   "keywords",
   "categories",
   "usage_cycles",
+  "free_evaluation_grants",
+  "onboarding_research",
   "billing_checkouts",
   "subscriptions",
   "provider_runs",

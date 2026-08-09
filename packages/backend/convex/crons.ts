@@ -18,6 +18,13 @@ crons.interval(
 )
 
 crons.interval(
+  "reconcile expired monitoring access",
+  { minutes: 5 },
+  internal.billing.accessReconciliation.reconcileExpiredMonitoringAccess,
+  {},
+)
+
+crons.interval(
   "dispatch persisted tracking schedules",
   { minutes: 1 },
   internal.scheduling.internal.dispatchDueTrackingSources,
@@ -28,6 +35,13 @@ crons.interval(
   "dispatch mention categorization jobs",
   { minutes: 1 },
   internal.categorization.internal.dispatchDueCategorizationJobs,
+  {},
+)
+
+crons.interval(
+  "purge expired free evaluation mentions",
+  { hours: 1 },
+  internal.retention.purgeExpiredFreeMentions,
   {},
 )
 
