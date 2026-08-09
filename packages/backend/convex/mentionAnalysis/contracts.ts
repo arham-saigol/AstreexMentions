@@ -5,12 +5,14 @@ import {
   MAX_FILTERING_CONTEXT_CHARS,
   MAX_FILTERING_GUIDELINES_CHARS,
   MAX_MENTION_ANALYSIS_BATCH_SIZE,
+  MENTION_ANALYSIS_VERSION,
 } from "../lib/deepseekMentionAnalysis"
 
 const nonEmptyStringSchema = z.string().trim().min(1)
 
 export const analysisSnapshotContractSchema = z
   .object({
+    analysisVersion: z.literal(MENTION_ANALYSIS_VERSION),
     categories: z
       .array(
         z

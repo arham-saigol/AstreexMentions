@@ -1,5 +1,6 @@
 import {
   MAX_MENTION_ANALYSIS_BATCH_SIZE,
+  MENTION_ANALYSIS_VERSION,
   normalizeMentionAnalysisMentionText,
   validateMentionAnalysisBatch,
   validateMentionAnalysisCatalog,
@@ -81,6 +82,7 @@ export function analysisSnapshotJson(
   context: MentionAnalysisContext,
 ): string {
   return JSON.stringify({
+    analysisVersion: MENTION_ANALYSIS_VERSION,
     categories: canonicalCategoryCatalog(categories),
     filteringContext: context.filteringContext,
     filteringGuidelines: context.filteringGuidelines ?? "",

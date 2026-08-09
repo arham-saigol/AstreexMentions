@@ -416,6 +416,15 @@ afterEach(() => {
 })
 
 describe("durable DeepSeek mention analysis worker", () => {
+  it("binds leases to the mention analysis policy version", async () => {
+    const t = createBackendTest()
+    const seeded = await seedMentionAnalysis(t, { mentionCount: 1 })
+
+    expect(JSON.parse(snapshotJson(seeded))).toMatchObject({
+      analysisVersion: "mention-analysis-v1",
+    })
+  })
+
   it.each(fixture.batchCases)(
     "claims $mentionCount pending jobs as $expectedBatchSizes",
     async ({ expectedBatchSizes, mentionCount }) => {
