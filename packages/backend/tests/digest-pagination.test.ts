@@ -16,6 +16,11 @@ const aggregatePage = makeFunctionReference<
   { digestRunId: GenericId<"digestRuns"> },
   { mentionCount?: number; state: string }
 >("digest/internal:aggregateDailyDigestPage")
+const loadRenderContext = makeFunctionReference<
+  "mutation",
+  { digestRunId: GenericId<"digestRuns"> },
+  { counts?: { total: number }; mentions?: unknown[]; state: string }
+>("digest/internal:loadDailyDigestRenderContext")
 
 describe("daily digest pagination", () => {
   it("ranks and counts the complete window across bounded pages", async () => {
@@ -24,6 +29,7 @@ describe("daily digest pagination", () => {
       const userId = await ctx.db.insert("users", {
         clerkUserId: "digest-pagination-user",
         createdAt: 1,
+        email: "digest@example.test",
         tokenIdentifier: "issuer|digest-pagination-user",
         updatedAt: 1,
       })
@@ -135,5 +141,25 @@ describe("daily digest pagination", () => {
       platforms: { hacker_news: 0, reddit: 600, x: 0 },
       total: 600,
     })
+
+    const filteredMentionId = run!.mentionIds[0]!
+    await t.run(
+      async (ctx) =>
+        await ctx.db.patch("mentions", filteredMentionId, {
+          feedState: "filtered",
+        }),
+    )
+    await expect(
+      t.mutation(loadRenderContext, { digestRunId: seeded.digestRunId }),
+    ).resolves.toMatchObject({
+      counts: { total: 599 },
+      mentions: expect.arrayContaining([]),
+      state: "ready",
+    })
+    const refreshedRun = await t.run(
+      async (ctx) => await ctx.db.get("digestRuns", seeded.digestRunId),
+    )
+    expect(refreshedRun).toMatchObject({ mentionCount: 599 })
+    expect(refreshedRun?.mentionIds).not.toContain(filteredMentionId)
   }, 10_000)
 })

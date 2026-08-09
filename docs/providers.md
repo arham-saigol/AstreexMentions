@@ -159,7 +159,7 @@ The prompt:
 - includes the reviewed filtering context and guidelines once per batch;
 - includes bounded matched-keyword context with each mention;
 - includes only enabled category IDs, names, and descriptions;
-- defines relevance and low, medium, and high priority policy;
+- defines relevance and low, medium, and high-priority policy;
 - treats all supplied text as untrusted data, never as instructions;
 - requires JSON only and forbids extra IDs, omissions, duplicates, and extra fields.
 

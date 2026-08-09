@@ -53,7 +53,7 @@ The existing category-configuration onboarding screens are removed. Default cate
 - Existing paid entitlement and recurring counters live in `subscriptions` and `usageCycles`; ingestion in `packages/backend/convex/ingestion/service.ts` atomically increments `mentionsUsed` and pauses sources at a cap. Reuse that transactional cap behavior for the evaluation rather than implementing client-side counting.
 - `packages/backend/convex/keywords.ts` currently makes every no-subscription source paused with reason `paid`; `apps/web/lib/product-access.ts` correspondingly treats non-subscribers as preview/onboarding only. Both need an explicit free-evaluation access path.
 - The public pricing section is in `apps/web/app/(public)/page.tsx`; keep its three paid cards and add only the agreed subheading/copy about the first 100 mentions.
-- The DeepSeek mention analysis pipeline receives mention text, category definitions, filtering fields, and matched-keyword context (`packages/backend/convex/mentionAnalysis/internal.ts` and `packages/backend/convex/lib/deepseekMentionAnalysis.ts`).
+- Separately from this rollout, the DeepSeek mention analysis pipeline receives mention text, category definitions, filtering fields, and matched-keyword context (`packages/backend/convex/mentionAnalysis/internal.ts` and `packages/backend/convex/lib/deepseekMentionAnalysis.ts`).
 
 ## Implementation plan
 
@@ -79,7 +79,7 @@ Refactor `packages/backend/convex/keywords.ts`, `packages/backend/convex/mention
 - Update create/update/pause/resume keyword APIs to accept and return descriptions and enforce active capacity server-side. Resuming a paused keyword must fail when a slot is occupied; pausing an active keyword then resuming another is the supported swap path. Do not rely on button disabled state for authorization or quotas.
 - Adapt ingestion’s existing serializable cap check to resolve either paid usage or the free grant, increment the appropriate counter exactly once for a newly inserted mention, set the free mention expiry, and pause eligible sources when the selected allowance is exhausted. Rediscovery must not consume allowance or extend a free mention’s retention.
 - Update mention monitoring-state queries and product access decisions so free workspaces are `active` until the allowance is exhausted, rather than `unpaid`/preview. Preserve the paid provider configuration error state only for paid checkout actions.
-- The mention analysis batch loader includes bounded filtering context and matched-keyword descriptions. It keeps prompt limits and complete category validation.
+- The mention analysis batch loader includes bounded filtering context and matched-keyword descriptions. Loading and application validate relevance, priority, category and mention IDs, bounded reasons, extra fields, batch cardinality, and atomic whole-batch application while preserving prompt limits.
 
 ### 3. Implement free-mention retention
 

@@ -55,6 +55,7 @@ export type MentionAnalysisBatchLeaseArguments = {
   analysisSnapshotJson: string
   jobIds: MentionAnalysisJobId[]
   leaseToken: string
+  mentionContextJson: string
 }
 
 type LeasedBatch = {
@@ -533,6 +534,12 @@ async function mentionAnalysisMention(
   }
 }
 
+function mentionContextJson(
+  mentions: readonly MentionAnalysisMention[],
+): string {
+  return JSON.stringify(mentions)
+}
+
 async function mentionsForBatch(
   db: DatabaseReader,
   batch: LeasedBatch,
@@ -637,16 +644,19 @@ function promptBoundedJobs(
   }[],
   categories: readonly MentionAnalysisCategory[],
   context: MentionAnalysisContext,
-): Doc<"mentionAnalysisJobs">[] {
+): Doc<"mentionAnalysisJobs">[] | null {
   const selected: MentionAnalysisMention[] = []
   for (const candidate of candidates) {
-    const next = [...selected, candidate.mention]
     try {
-      buildDeepSeekMentionAnalysisRequest(next, categories, context)
+      buildDeepSeekMentionAnalysisRequest(
+        [...selected, candidate.mention],
+        categories,
+        context,
+      )
       selected.push(candidate.mention)
     } catch {
-      if (selected.length > 0) break
-      selected.push(candidate.mention)
+      if (selected.length === 0) return null
+      break
     }
   }
   return candidates.slice(0, selected.length).map(({ row }) => row)
@@ -711,16 +721,32 @@ export const dispatchDueMentionAnalysisJobs = internalMutation({
         snapshot.categories,
         snapshot.context,
       )
+      if (eligible === null) {
+        blockedCatalog += claimable.length
+        for (let index = queue.length - 1; index >= 0; index -= 1) {
+          if (queue[index]!.workspaceId === workspaceId) {
+            blockedCatalog += 1
+            queue.splice(index, 1)
+          }
+        }
+        continue
+      }
       for (const { row } of claimable.slice(eligible.length)) {
         queue.push(row)
       }
       if (eligible.length === 0) {
         continue
       }
+      const selectedMentionContextJson = mentionContextJson(
+        claimable.slice(0, eligible.length).map(({ mention }) => mention),
+      )
       const lease = createMentionAnalysisLease({
         jobs: eligible.map(jobForClaim),
         now,
-        snapshotJson: snapshot.json,
+        snapshotJson: JSON.stringify({
+          analysis: snapshot.json,
+          mentions: selectedMentionContextJson,
+        }),
       })
       const jobIds = eligible.map((row) => row._id as MentionAnalysisJobId)
       for (const row of eligible) {
@@ -754,6 +780,7 @@ export const dispatchDueMentionAnalysisJobs = internalMutation({
           analysisSnapshotJson: snapshot.json,
           jobIds,
           leaseToken: lease.token,
+          mentionContextJson: selectedMentionContextJson,
         },
       )
       batches += 1
@@ -774,6 +801,7 @@ export const loadMentionAnalysisBatchContext = internalQuery({
     analysisSnapshotJson: v.string(),
     jobIds: v.array(v.id("mentionAnalysisJobs")),
     leaseToken: v.string(),
+    mentionContextJson: v.string(),
   },
   handler: async (ctx, args): Promise<MentionAnalysisBatchExecutionContext> => {
     const now = Date.now()
@@ -815,6 +843,13 @@ export const loadMentionAnalysisBatchContext = internalQuery({
         state: "invalid_batch",
       }
     }
+    if (mentionContextJson(mentions) !== args.mentionContextJson) {
+      return {
+        errorCode: "analysis_snapshot_changed",
+        retryable: true,
+        state: "invalid_batch",
+      }
+    }
 
     return {
       categories: currentSnapshot.categories,
@@ -830,6 +865,7 @@ export const releaseMentionAnalysisBlockedConfiguration = internalMutation({
     analysisSnapshotJson: v.string(),
     jobIds: v.array(v.id("mentionAnalysisJobs")),
     leaseToken: v.string(),
+    mentionContextJson: v.string(),
   },
   handler: async (ctx, args) => {
     const now = Date.now()
@@ -872,6 +908,7 @@ export const startMentionAnalysisProviderRun = internalMutation({
     analysisSnapshotJson: v.string(),
     jobIds: v.array(v.id("mentionAnalysisJobs")),
     leaseToken: v.string(),
+    mentionContextJson: v.string(),
   },
   handler: async (ctx, args) => {
     const now = Date.now()
@@ -895,6 +932,11 @@ export const startMentionAnalysisProviderRun = internalMutation({
       !currentSnapshot ||
       currentSnapshot.json !== args.analysisSnapshotJson
     ) {
+      return { state: "snapshot_changed" as const }
+    }
+
+    const mentions = await mentionsForBatch(ctx.db, batch, now)
+    if (!mentions || mentionContextJson(mentions) !== args.mentionContextJson) {
       return { state: "snapshot_changed" as const }
     }
 
@@ -928,6 +970,7 @@ export const applyMentionAnalysisBatch = internalMutation({
     durationMs: v.number(),
     jobIds: v.array(v.id("mentionAnalysisJobs")),
     leaseToken: v.string(),
+    mentionContextJson: v.string(),
     resultsJson: v.string(),
   },
   handler: async (ctx, args) => {
@@ -959,7 +1002,7 @@ export const applyMentionAnalysisBatch = internalMutation({
       throw new TypeError("Mention analysis analysis snapshot changed")
     }
     const mentions = await mentionsForBatch(ctx.db, batch, now)
-    if (!mentions) {
+    if (!mentions || mentionContextJson(mentions) !== args.mentionContextJson) {
       throw new TypeError("Mention analysis mention batch is invalid")
     }
     const parsedResults = parseMentionAnalysisResultsJson(args.resultsJson)
@@ -1069,6 +1112,7 @@ export const failMentionAnalysisBatch = internalMutation({
     errorMessage: v.string(),
     jobIds: v.array(v.id("mentionAnalysisJobs")),
     leaseToken: v.string(),
+    mentionContextJson: v.string(),
     retryable: v.boolean(),
     retryAfterMs: v.optional(v.number()),
   },

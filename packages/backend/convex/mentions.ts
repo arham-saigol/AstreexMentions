@@ -6,6 +6,7 @@ import { authenticatedMutation, authenticatedQuery } from "./lib/authorization"
 import { type MutationCtx, type QueryCtx } from "./_generated/server"
 import { resolveWorkspaceAllowance } from "./lib/workspaceAccess"
 import { incrementDailySystemMetric } from "./lib/systemMetricBuckets"
+import { mentionPriorityValidator } from "./schema"
 import { resolveCurrentCustomer } from "./users"
 
 const DEFAULT_PAGE_SIZE = 12
@@ -31,11 +32,6 @@ const mentionSortValidator = v.union(
   v.literal("newest"),
   v.literal("oldest"),
   v.literal("most_engaged"),
-)
-const mentionPriorityValidator = v.union(
-  v.literal("low"),
-  v.literal("medium"),
-  v.literal("high"),
 )
 const selectedFeedValidator = v.union(
   v.literal("visible"),

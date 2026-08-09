@@ -1,6 +1,11 @@
 import { z } from "zod"
 
-import { MAX_MENTION_ANALYSIS_BATCH_SIZE } from "../lib/deepseekMentionAnalysis"
+import {
+  MAX_ANALYSIS_REASON_CHARS,
+  MAX_FILTERING_CONTEXT_CHARS,
+  MAX_FILTERING_GUIDELINES_CHARS,
+  MAX_MENTION_ANALYSIS_BATCH_SIZE,
+} from "../lib/deepseekMentionAnalysis"
 
 const nonEmptyStringSchema = z.string().trim().min(1)
 
@@ -17,8 +22,8 @@ export const analysisSnapshotContractSchema = z
           .strict(),
       )
       .min(1),
-    filteringContext: nonEmptyStringSchema.max(2_000),
-    filteringGuidelines: z.string().trim().max(2_000),
+    filteringContext: nonEmptyStringSchema.max(MAX_FILTERING_CONTEXT_CHARS),
+    filteringGuidelines: z.string().trim().max(MAX_FILTERING_GUIDELINES_CHARS),
   })
   .strict()
 
@@ -31,9 +36,11 @@ export const mentionAnalysisResultsContractSchema = z
             categoryId: nonEmptyStringSchema,
             mentionId: nonEmptyStringSchema,
             priority: z.enum(["low", "medium", "high"]),
-            priorityReason: nonEmptyStringSchema.max(500),
+            priorityReason: nonEmptyStringSchema.max(MAX_ANALYSIS_REASON_CHARS),
             relevant: z.boolean(),
-            relevanceReason: nonEmptyStringSchema.max(500),
+            relevanceReason: nonEmptyStringSchema.max(
+              MAX_ANALYSIS_REASON_CHARS,
+            ),
           })
           .strict(),
       )

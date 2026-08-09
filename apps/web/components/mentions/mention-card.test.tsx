@@ -87,6 +87,7 @@ describe("MentionCard", () => {
     fireEvent.click(screen.getByRole("button", { name: "Mark as relevant" }))
     expect(onRestore).toHaveBeenCalledWith("mention_1")
     expect(screen.queryByRole("button", { name: "Save" })).toBeNull()
+    expect(screen.queryByRole("button", { name: "Dismiss" })).toBeNull()
     expect(screen.getByText(/unrelated meaning/)).toBeTruthy()
   })
 

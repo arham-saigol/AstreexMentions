@@ -500,14 +500,15 @@ export function OnboardingFlow() {
                 type="button"
                 variant="outline"
                 disabled={pending}
-                onClick={() =>
+                onClick={() => {
+                  setError(null)
                   setDraft((current) => ({
                     ...current,
                     filteringContext:
                       current.manualDescription || current.filteringContext,
                     step: 2,
                   }))
-                }
+                }}
               >
                 Add keywords manually
                 <ArrowRightIcon />

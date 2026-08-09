@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
   analysisSnapshotJson,
   MENTION_ANALYSIS_LEASE_MS,
+  mentionText,
 } from "../convex/mentionAnalysis/model"
 import {
   buildDeepSeekMentionAnalysisRequest,
@@ -19,6 +20,10 @@ import {
 
 const NOW = Date.parse("2026-07-26T12:00:00.000Z")
 const BLOCKED_CONFIGURATION_RETRY_MS = 5 * 60_000
+const FILTERING_CONTEXT =
+  "Astreex monitors customer conversations for the Astreex product."
+const FILTERING_GUIDELINES =
+  "Keep ambiguous mentions relevant. Filter clearly unrelated meanings."
 
 const mentionAnalysisTestSchema = defineSchema({
   categories: defineTable(v.any()).index(
@@ -123,6 +128,7 @@ const executeReference = makeFunctionReference<
     analysisSnapshotJson: string
     jobIds: MentionAnalysisJobId[]
     leaseToken: string
+    mentionContextJson: string
   },
   unknown
 >("mentionAnalysis/actions:executeMentionAnalysisBatch")
@@ -150,10 +156,8 @@ async function seedMentionAnalysis(
   return await t.run(async (ctx) => {
     const workspaceId = await ctx.db.insert("workspaces", {
       createdAt: NOW - 10_000,
-      filteringContext:
-        "Astreex monitors customer conversations for the Astreex product.",
-      filteringGuidelines:
-        "Keep ambiguous mentions relevant. Filter clearly unrelated meanings.",
+      filteringContext: FILTERING_CONTEXT,
+      filteringGuidelines: FILTERING_GUIDELINES,
       name: "Mention analysis fixture workspace",
       updatedAt: NOW - 10_000,
     })
@@ -234,10 +238,8 @@ function snapshotJson(seeded: SeededMentionAnalysis): string {
       name: category.name,
     })),
     {
-      filteringContext:
-        "Astreex monitors customer conversations for the Astreex product.",
-      filteringGuidelines:
-        "Keep ambiguous mentions relevant. Filter clearly unrelated meanings.",
+      filteringContext: FILTERING_CONTEXT,
+      filteringGuidelines: FILTERING_GUIDELINES,
     },
   )
 }
@@ -250,6 +252,7 @@ async function leasedBatchArguments(
     analysisSnapshotJson: string
     jobIds: MentionAnalysisJobId[]
     leaseToken: string
+    mentionContextJson: string
   }>
 > {
   const jobs = await t.run(
@@ -264,13 +267,63 @@ async function leasedBatchArguments(
     ids.push(job._id)
     byLease.set(job.leaseToken, ids)
   }
-  return [...byLease.entries()]
-    .map(([leaseToken, jobIds]) => ({
+  const batches = await Promise.all(
+    [...byLease.entries()].map(async ([leaseToken, jobIds]) => ({
       analysisSnapshotJson: snapshotJson(seeded),
       jobIds,
       leaseToken,
-    }))
-    .sort((left, right) => right.jobIds.length - left.jobIds.length)
+      mentionContextJson: JSON.stringify(
+        await t.run(
+          async (ctx) =>
+            await Promise.all(
+              jobIds.map(async (jobId) => {
+                const job = await ctx.db.get("mentionAnalysisJobs", jobId)
+                const mention = job
+                  ? await ctx.db.get("mentions", job.mentionId as MentionId)
+                  : null
+                if (!mention) throw new TypeError("Leased mention is missing")
+                const matches = await ctx.db
+                  .query("mentionKeywordMatches")
+                  .withIndex("by_workspace_and_mention", (q) =>
+                    q
+                      .eq("workspaceId", mention.workspaceId)
+                      .eq("mentionId", mention._id),
+                  )
+                  .take(3)
+                const keywordRows = await Promise.all(
+                  matches.map(
+                    async (match) =>
+                      await ctx.db.get("keywords", match.keywordId),
+                  ),
+                )
+                const keywords = keywordRows
+                  .filter((keyword) => keyword !== null)
+                  .map((keyword) => ({
+                    phrase: keyword.phrase as string,
+                    ...(typeof keyword.description === "string"
+                      ? { description: keyword.description }
+                      : {}),
+                  }))
+                  .sort((left, right) =>
+                    left.phrase.localeCompare(right.phrase, "en"),
+                  )
+                return {
+                  id: String(mention._id),
+                  text: mentionText({
+                    body: mention.body as string,
+                    ...(typeof mention.title === "string"
+                      ? { title: mention.title }
+                      : {}),
+                  }),
+                  ...(keywords.length ? { keywords } : {}),
+                }
+              }),
+            ),
+        ),
+      ),
+    })),
+  )
+  return batches.sort((left, right) => right.jobIds.length - left.jobIds.length)
 }
 
 function mentionAnalysisOutput(
@@ -476,6 +529,7 @@ describe("durable DeepSeek mention analysis worker", () => {
         analysisSnapshotJson: string
         jobIds: MentionAnalysisJobId[]
         leaseToken: string
+        mentionContextJson: string
       },
       {
         mentions?: Array<{ id: string; text: string }>
@@ -589,6 +643,34 @@ describe("durable DeepSeek mention analysis worker", () => {
     expect(systemPrompt).not.toContain(fixture.disabledCategory.description)
   })
 
+  it("leaves jobs pending when one mention cannot fit the analysis prompt", async () => {
+    const t = createBackendTest()
+    const seeded = await seedMentionAnalysis(t, { mentionCount: 1 })
+    await t.run(async (ctx) => {
+      for (let index = 0; index < 100; index += 1) {
+        await ctx.db.insert("categories", {
+          createdAt: NOW,
+          description: `${index} ${"x".repeat(498)}`,
+          enabled: true,
+          isSystem: false,
+          name: `Large category ${index}`,
+          normalizedName: `large category ${index}`,
+          sortOrder: index + 10,
+          updatedAt: NOW,
+          workspaceId: seeded.workspaceId,
+        })
+      }
+    })
+
+    await expect(
+      t.mutation(dispatchReference, { now: NOW }),
+    ).resolves.toMatchObject({ batches: 0, blockedCatalog: 1, claimed: 0 })
+    const job = await t.run(
+      async (ctx) => await ctx.db.get("mentionAnalysisJobs", seeded.jobIds[0]!),
+    )
+    expect(job).toMatchObject({ attempts: 0, status: "pending" })
+  })
+
   it("blocks a workspace snapshot unless the enabled permanent Other category is present", async () => {
     const t = createBackendTest()
     await seedMentionAnalysis(t, { includeOther: false, mentionCount: 2 })
@@ -685,6 +767,48 @@ describe("durable DeepSeek mention analysis worker", () => {
         filteringGuidelines: "The reviewed guidance changed after leasing.",
       })
     })
+    await expect(t.action(executeReference, args!)).resolves.toMatchObject({
+      pending: 1,
+      state: "failed",
+    })
+    const job = await t.run(
+      async (ctx) => await ctx.db.get("mentionAnalysisJobs", seeded.jobIds[0]!),
+    )
+    expect(job).toMatchObject({
+      lastError: "analysis_snapshot_changed",
+      status: "pending",
+    })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it("rejects a stale snapshot after matched keyword context changes", async () => {
+    const t = createBackendTest()
+    const seeded = await seedMentionAnalysis(t, { mentionCount: 1 })
+    const keywordId = await t.run(async (ctx) => {
+      const keywordId = await ctx.db.insert("keywords", {
+        description: "Original keyword context",
+        phrase: "Astreex",
+        workspaceId: seeded.workspaceId,
+      })
+      await ctx.db.insert("mentionKeywordMatches", {
+        keywordId,
+        mentionId: seeded.mentionIds[0]!,
+        workspaceId: seeded.workspaceId,
+      })
+      return keywordId
+    })
+    const fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+
+    await t.mutation(dispatchReference, { now: NOW })
+    const [args] = await leasedBatchArguments(t, seeded)
+    await t.run(
+      async (ctx) =>
+        await ctx.db.patch("keywords", keywordId, {
+          description: "Changed keyword context",
+        }),
+    )
+
     await expect(t.action(executeReference, args!)).resolves.toMatchObject({
       pending: 1,
       state: "failed",

@@ -122,4 +122,4 @@ Record:
 - known unresolved rows or customer impact;
 - follow-up code/test/runbook work.
 
-Do not close while deletion pending rows are being mistaken for completed erasure, mention analysis backlog is still unexplained, or credential-backed verification is represented only by local tests.
+Do not close while pending deletion rows are being mistaken for completed erasure, mention analysis backlog is still unexplained, or credential-backed verification is represented only by local tests.

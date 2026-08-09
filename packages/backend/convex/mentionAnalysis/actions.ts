@@ -36,6 +36,16 @@ function safeFailure(error: unknown): SafeMentionAnalysisFailure {
     }
   }
   if (
+    error instanceof MentionAnalysisValidationError &&
+    error.code !== "INVALID_OUTPUT"
+  ) {
+    return {
+      code: "invalid_analysis_request",
+      message: "DeepSeek mention analysis request could not be built",
+      retryable: false,
+    }
+  }
+  if (
     error instanceof MentionAnalysisValidationError ||
     error instanceof MentionAnalysisOrchestrationError
   ) {
@@ -57,6 +67,7 @@ export const executeMentionAnalysisBatch = internalAction({
     analysisSnapshotJson: v.string(),
     jobIds: v.array(v.id("mentionAnalysisJobs")),
     leaseToken: v.string(),
+    mentionContextJson: v.string(),
   },
   handler: async (ctx, args) => {
     const context = await ctx.runQuery(

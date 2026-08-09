@@ -1,4 +1,4 @@
-import { ConvexError, v } from "convex/values"
+import { ConvexError, type Infer, v } from "convex/values"
 import type { Id } from "./_generated/dataModel"
 
 import { authenticatedMutation, authenticatedQuery } from "./lib/authorization"
@@ -22,7 +22,7 @@ type KeywordId = Id<"keywords">
 type MentionStatus = "new" | "saved" | "dismissed"
 type MentionSort = "newest" | "oldest" | "most_engaged"
 type Platform = "x" | "reddit" | "hacker_news"
-type MentionPriority = "low" | "medium" | "high"
+type MentionPriority = Infer<typeof mentionPriorityValidator>
 
 type MentionFilters = {
   categoryIds?: CategoryId[]
@@ -237,7 +237,7 @@ function storedSavedViewResult(row: Record<string, unknown>): SavedViewResult {
     icon: row.icon as string,
     id: String(row._id),
     name: row.name as string,
-    position: row.position as number,
+    position: (row.position as number) + 1,
     sort: row.sort as MentionSort,
   }
 }

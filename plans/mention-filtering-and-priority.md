@@ -69,7 +69,7 @@ Update:
 
 The onboarding review step should show both fields as editable textareas and explain that they guide relevance, priority, and categorization but do not alter provider queries. The manual fallback may use the user's manual description as `filteringContext`; `filteringGuidelines` may initially be empty when research is unavailable, but the UI must let the user supply it. Require a non-empty filtering context before onboarding completion and enforce clear length limits at both client and backend boundaries. Post-onboarding settings for editing these fields are intentionally deferred, but the persisted structure and labels must be suitable for that later UI.
 
-Pass workspace filtering context and guidelines once as shared batch context, not repeated inside every mention. Keep matched keyword phrase and bounded keyword description as per-mention context. Include the filtering fields and enabled category catalog in the immutable analysis snapshot/fingerprint. If either changes while a batch is leased, reject the stale application and requeue it using the existing snapshot-change behavior.
+Pass workspace filtering context and guidelines once as shared batch context, not repeated inside every mention. Keep matched keyword phrase and bounded keyword description as per-mention context. Include the filtering fields, enabled category catalog, and each mention's exact matched keyword phrase and bounded description in the immutable analysis snapshot/fingerprint. If any of them change while a batch is leased, reject the stale application and requeue it using the existing snapshot-change behavior.
 
 ## Backend data model
 
@@ -246,7 +246,7 @@ Do not change plan limits or usage-warning thresholds.
 
 ### Labeled analysis fixture
 
-Replace/extend `packages/backend/tests/fixtures/categorization/deepseek-cases.json` with a mention-analysis fixture containing independently labeled examples for:
+Replace/extend `packages/backend/tests/fixtures/mention-analysis/deepseek-cases.json` with a mention-analysis fixture containing independently labeled examples for:
 
 - Linear product discussion versus linear algebra/equations/generic adjective use
 - Other ambiguous brand names and short context-poor mentions
@@ -263,8 +263,8 @@ Use the fixture to compare batch contract behavior at 1, 10, and 20 mentions and
 
 Update or replace the existing categorization tests, especially:
 
-- `packages/backend/tests/categorization-worker.test.ts`
-- `packages/backend/tests/categorization-digest-email.test.ts`
+- `packages/backend/tests/mention-analysis-worker.test.ts`
+- `packages/backend/tests/mention-analysis-digest-email.test.ts`
 - `packages/backend/tests/ingestion-atomic.test.ts`
 - `packages/backend/tests/keywords-mentions.test.ts`
 - `packages/backend/tests/onboarding-atomic.test.ts`
@@ -310,7 +310,7 @@ Read `packages/backend/convex/_generated/ai/guidelines.md` before implementation
 While iterating, run the narrowest affected tests, for example:
 
 ```bash
-pnpm --filter @astreex/backend test -- categorization-worker.test.ts
+pnpm --filter @astreex/backend test -- mention-analysis-worker.test.ts
 pnpm --filter @astreex/backend test -- ingestion-atomic.test.ts keywords-mentions.test.ts
 pnpm --filter @astreex/backend test -- onboarding-atomic.test.ts onboarding-discovery-provider.test.ts
 pnpm --filter @astreex/backend test -- digest-pagination.test.ts

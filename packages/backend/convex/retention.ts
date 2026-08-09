@@ -49,13 +49,11 @@ export const purgeExpiredFreeMentions = internalMutation({
         .withIndex("by_mention", (q) => q.eq("mentionId", mentionId))
         .take(MAX_JOBS_PER_MENTION + 1)
       for (const job of jobs.slice(0, MAX_JOBS_PER_MENTION)) {
-        if (job.status !== "completed" && job.status !== "dead") {
-          await transitionMentionAnalysisStatusMetric(ctx, {
-            from: job.status,
-            updatedAt: now,
-            workspaceId: mention.workspaceId,
-          })
-        }
+        await transitionMentionAnalysisStatusMetric(ctx, {
+          from: job.status,
+          updatedAt: now,
+          workspaceId: mention.workspaceId,
+        })
         await ctx.db.delete("mentionAnalysisJobs", job._id)
       }
       if (jobs.length > MAX_JOBS_PER_MENTION) {

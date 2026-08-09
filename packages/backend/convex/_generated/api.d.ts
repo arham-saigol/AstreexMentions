@@ -1711,7 +1711,7 @@ export declare const internal: {
         any
       >;
       loadDailyDigestRenderContext: FunctionReference<
-        "query",
+        "mutation",
         "internal",
         { digestRunId: Id<"digestRuns"> },
         any
@@ -1847,6 +1847,7 @@ export declare const internal: {
           analysisSnapshotJson: string;
           jobIds: Array<Id<"mentionAnalysisJobs">>;
           leaseToken: string;
+          mentionContextJson: string;
         },
         any
       >;
@@ -1860,6 +1861,7 @@ export declare const internal: {
           durationMs: number;
           jobIds: Array<Id<"mentionAnalysisJobs">>;
           leaseToken: string;
+          mentionContextJson: string;
           resultsJson: string;
         },
         any
@@ -1880,6 +1882,7 @@ export declare const internal: {
           errorMessage: string;
           jobIds: Array<Id<"mentionAnalysisJobs">>;
           leaseToken: string;
+          mentionContextJson: string;
           retryAfterMs?: number;
           retryable: boolean;
         },
@@ -1892,6 +1895,7 @@ export declare const internal: {
           analysisSnapshotJson: string;
           jobIds: Array<Id<"mentionAnalysisJobs">>;
           leaseToken: string;
+          mentionContextJson: string;
         },
         any
       >;
@@ -1902,6 +1906,7 @@ export declare const internal: {
           analysisSnapshotJson: string;
           jobIds: Array<Id<"mentionAnalysisJobs">>;
           leaseToken: string;
+          mentionContextJson: string;
         },
         any
       >;
@@ -1912,6 +1917,7 @@ export declare const internal: {
           analysisSnapshotJson: string;
           jobIds: Array<Id<"mentionAnalysisJobs">>;
           leaseToken: string;
+          mentionContextJson: string;
         },
         any
       >;
