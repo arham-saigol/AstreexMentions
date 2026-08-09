@@ -6,6 +6,7 @@ import {
   transitionSubscriptionMetrics,
 } from "../lib/operationalMetrics"
 import { transitionCategorizationStatusMetric } from "../categorization/metrics"
+import { onboardingResearchRateLimiter } from "../lib/onboardingResearchRateLimit"
 import {
   internalMutation,
   internalQuery,
@@ -767,6 +768,9 @@ async function purgeSpecialStage(
   now: number,
 ): Promise<number> {
   if (stage === "workspace") {
+    await onboardingResearchRateLimiter.reset(ctx, "onboardingResearch", {
+      key: String(job.workspaceId),
+    })
     const workspace = await ctx.db.get(
       "workspaces",
       job.workspaceId as WorkspaceId,

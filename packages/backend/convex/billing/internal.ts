@@ -445,7 +445,10 @@ async function persistSubscriptionTransition(
       workspaceId: input.workspaceId,
     })
   } else {
-    await ctx.db.patch("subscriptions", subscriptionId, subscriptionDocument)
+    await ctx.db.patch("subscriptions", subscriptionId, {
+      ...subscriptionDocument,
+      monitoringAccessReconciledAt: undefined,
+    })
     await transitionSubscriptionMetrics(ctx, {
       from: input.existingRow ?? undefined,
       to: subscriptionDocument,

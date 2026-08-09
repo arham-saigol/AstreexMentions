@@ -13,6 +13,7 @@ export const onboardingKeywordDraftSchema = z
     clientId: z.string().trim().min(1),
     description: z.string().trim().max(160),
     phrase: z.string().trim().min(1).max(160),
+    origin: z.enum(["custom", "suggestion"]),
     platforms: z.array(onboardingPlatformSchema).min(1),
     selected: z.boolean(),
   })
@@ -105,6 +106,24 @@ export function createOnboardingDraft(workspaceName: string): OnboardingDraft {
 
 export function normalizeKeywordPhrase(value: string): string {
   return value.trim().replace(/\s+/g, " ").toLocaleLowerCase("en")
+}
+
+export function mergeResearchKeywordDrafts(
+  existing: readonly OnboardingKeywordDraft[],
+  suggestions: readonly OnboardingKeywordDraft[],
+): OnboardingKeywordDraft[] {
+  const custom = existing.filter((keyword) => keyword.origin === "custom")
+  const phrases = new Set(
+    custom.map((keyword) => normalizeKeywordPhrase(keyword.phrase)),
+  )
+  const merged = [...custom]
+  for (const suggestion of suggestions) {
+    const phrase = normalizeKeywordPhrase(suggestion.phrase)
+    if (phrases.has(phrase) || merged.length >= MAX_DRAFT_KEYWORDS) continue
+    phrases.add(phrase)
+    merged.push(suggestion)
+  }
+  return merged
 }
 
 export function draftStorageKey(workspaceId: string): string {

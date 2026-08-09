@@ -298,6 +298,10 @@ async function syncKeywordSources(
         })
         await ctx.db.patch("trackingSources", source._id, {
           deletedAt: now,
+          inProgressCursor: undefined,
+          inProgressPage: undefined,
+          inProgressWindowEndAt: undefined,
+          inProgressWindowStartAt: undefined,
           leaseExpiresAt: undefined,
           leaseToken: undefined,
           pauseReason: undefined,
@@ -339,6 +343,14 @@ async function syncKeywordSources(
     await ctx.db.patch("trackingSources", source._id, {
       ...schedule,
       deletedAt: undefined,
+      ...(reactivating
+        ? {
+            inProgressCursor: undefined,
+            inProgressPage: undefined,
+            inProgressWindowEndAt: undefined,
+            inProgressWindowStartAt: undefined,
+          }
+        : {}),
       providerQuery: keyword.phrase,
       status: preserveError ? "error" : state.status,
       pauseReason: preserveError ? source.pauseReason : state.pauseReason,
@@ -526,6 +538,10 @@ async function deleteKeywordRow(
     })
     await ctx.db.patch("trackingSources", source._id, {
       deletedAt: now,
+      inProgressCursor: undefined,
+      inProgressPage: undefined,
+      inProgressWindowEndAt: undefined,
+      inProgressWindowStartAt: undefined,
       leaseExpiresAt: undefined,
       leaseToken: undefined,
       pauseReason: undefined,

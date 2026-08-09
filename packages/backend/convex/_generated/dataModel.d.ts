@@ -1579,6 +1579,7 @@ export type DataModel = {
       endedAt?: number;
       entitlementStatus: "active" | "inactive";
       lastSyncedAt: number;
+      monitoringAccessReconciledAt?: number;
       planId: "starter" | "growth" | "scale";
       provider: "creem";
       providerCustomerId: string;
@@ -1601,6 +1602,7 @@ export type DataModel = {
       | "endedAt"
       | "entitlementStatus"
       | "lastSyncedAt"
+      | "monitoringAccessReconciledAt"
       | "planId"
       | "provider"
       | "providerCustomerId"
@@ -1613,8 +1615,9 @@ export type DataModel = {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
       by_created_at: ["createdAt", "_creationTime"];
-      by_entitlement_and_period_end: [
+      by_entitlement_reconciled_at_and_period_end: [
         "entitlementStatus",
+        "monitoringAccessReconciledAt",
         "currentPeriodEnd",
         "_creationTime",
       ];

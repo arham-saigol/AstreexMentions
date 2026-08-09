@@ -6,6 +6,7 @@ import {
   CHECKOUT_INTENT_TTL_MS,
   createOnboardingDraft,
   MAX_DRAFT_KEYWORDS,
+  mergeResearchKeywordDrafts,
   normalizeKeywordPhrase,
   onboardingDraftSchema,
 } from "./onboarding-draft"
@@ -16,6 +17,7 @@ function keyword(index: number) {
     clientId: `keyword-${index}`,
     description: `Why keyword ${index} matters`,
     phrase: `Keyword ${index}`,
+    origin: "suggestion" as const,
     platforms: ["x" as const],
     selected: true,
   }
@@ -72,6 +74,24 @@ describe("onboarding draft", () => {
         ),
       }).success,
     ).toBe(false)
+  })
+
+  it("keeps custom entries when research suggestions are retried", () => {
+    const custom = {
+      ...keyword(0),
+      brandCandidate: false,
+      origin: "custom" as const,
+      phrase: "Customer pain",
+    }
+    const suggestions = [
+      { ...keyword(1), phrase: "Customer pain" },
+      { ...keyword(2), phrase: "Astreex" },
+    ]
+
+    expect(mergeResearchKeywordDrafts([custom], suggestions)).toEqual([
+      custom,
+      suggestions[1],
+    ])
   })
 
   it("supports free and paid selections while preserving an outstanding checkout", () => {

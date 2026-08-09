@@ -556,6 +556,57 @@ describe("keyword Convex functions", () => {
     expect(corrected).not.toHaveProperty("pauseReason")
   })
 
+  it("clears partial provider checkpoints when a removed source is reactivated", async () => {
+    const t = createBackendTest()
+    const customer = await seedCustomer(t, {
+      paid: true,
+      suffix: "source-reactivation",
+    })
+    const created = keywordResult(
+      await customer.client.mutation(createKeywordReference, {
+        phrase: "Source reactivation",
+        platforms: ["reddit"],
+      }),
+    )
+    const sourceId = created.sources[0]!.id
+    await t.run(async (ctx) => {
+      await ctx.db.patch("trackingSources", sourceId, {
+        inProgressCursor: "stale-cursor",
+        inProgressPage: 3,
+        inProgressWindowEndAt: Date.now(),
+        inProgressWindowStartAt: Date.now() - 60_000,
+      })
+    })
+
+    await customer.client.mutation(updateKeywordReference, {
+      keywordId: created.id,
+      phrase: created.phrase,
+      platforms: ["x"],
+    })
+    const removed = await t.run(
+      async (ctx) => await ctx.db.get("trackingSources", sourceId),
+    )
+    expect(removed).toMatchObject({ status: "deleted" })
+    expect(removed).not.toHaveProperty("inProgressCursor")
+    expect(removed).not.toHaveProperty("inProgressPage")
+    expect(removed).not.toHaveProperty("inProgressWindowEndAt")
+    expect(removed).not.toHaveProperty("inProgressWindowStartAt")
+
+    await customer.client.mutation(updateKeywordReference, {
+      keywordId: created.id,
+      phrase: created.phrase,
+      platforms: ["reddit"],
+    })
+    const reactivated = await t.run(
+      async (ctx) => await ctx.db.get("trackingSources", sourceId),
+    )
+    expect(reactivated).toMatchObject({ status: "active" })
+    expect(reactivated).not.toHaveProperty("inProgressCursor")
+    expect(reactivated).not.toHaveProperty("inProgressPage")
+    expect(reactivated).not.toHaveProperty("inProgressWindowEndAt")
+    expect(reactivated).not.toHaveProperty("inProgressWindowStartAt")
+  })
+
   it("keeps keyword status and source status reversible before soft deletion", async () => {
     const t = createBackendTest()
     const customer = await seedCustomer(t, { paid: true, suffix: "lifecycle" })

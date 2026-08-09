@@ -357,6 +357,7 @@ export default defineSchema({
     endedAt: v.optional(v.number()),
     entitlementStatus: entitlementStatusValidator,
     lastSyncedAt: v.number(),
+    monitoringAccessReconciledAt: v.optional(v.number()),
     planId: planIdValidator,
     provider: v.literal("creem"),
     providerCustomerId: v.string(),
@@ -377,8 +378,9 @@ export default defineSchema({
     .index("by_provider_customer", ["provider", "providerCustomerId"])
     .index("by_provider_subscription", ["provider", "providerSubscriptionId"])
     .index("by_status_and_period_end", ["status", "currentPeriodEnd"])
-    .index("by_entitlement_and_period_end", [
+    .index("by_entitlement_reconciled_at_and_period_end", [
       "entitlementStatus",
+      "monitoringAccessReconciledAt",
       "currentPeriodEnd",
     ])
     .index("by_plan_and_status", ["planId", "status"])

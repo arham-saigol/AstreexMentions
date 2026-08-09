@@ -29,6 +29,7 @@ import {
   createOnboardingDraft,
   draftStorageKey,
   MAX_DRAFT_KEYWORDS,
+  mergeResearchKeywordDrafts,
   normalizeKeywordPhrase,
   onboardingDraftSchema,
   type OnboardingDraft,
@@ -250,11 +251,15 @@ export function OnboardingFlow() {
         setDraft((current) => ({
           ...current,
           companyDescription: result.companyDescription,
-          keywords: result.suggestions.map((suggestion) => ({
-            ...suggestion,
-            clientId: clientId(),
-            selected: true,
-          })),
+          keywords: mergeResearchKeywordDrafts(
+            current.keywords,
+            result.suggestions.map((suggestion) => ({
+              ...suggestion,
+              clientId: clientId(),
+              origin: "suggestion" as const,
+              selected: true,
+            })),
+          ),
           step: 2,
         }))
       } else if (result.state === "in_progress") {
@@ -554,6 +559,7 @@ export function OnboardingFlow() {
                       clientId: clientId(),
                       description: "",
                       phrase: "",
+                      origin: "custom",
                       platforms: ["x", "reddit", "hacker_news"],
                       selected: true,
                     },

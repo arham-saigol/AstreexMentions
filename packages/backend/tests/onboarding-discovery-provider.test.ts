@@ -16,6 +16,8 @@ describe("TinyFish onboarding provider boundary", () => {
       "http://127.0.0.1",
       "http://169.254.169.254/latest/meta-data",
       "http://10.0.0.1",
+      "http://[::ffff:127.0.0.1]",
+      "http://[febf::1]",
     ]) {
       expect(() => canonicalResearchUrl(value)).toThrow(
         TinyFishIntegrationError,

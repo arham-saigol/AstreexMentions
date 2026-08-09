@@ -276,7 +276,7 @@ export const researchCompany = customerAction({
           unique.findIndex((candidate) => candidate.brandCandidate) === index,
         platforms: [...new Set(suggestion.platforms)],
       }))
-      await ctx.runMutation(
+      const completion = await ctx.runMutation(
         internal.onboardingResearchInternal.completeResearch,
         {
           companyDescription: discovered.companyDescription,
@@ -287,6 +287,9 @@ export const researchCompany = customerAction({
           workspaceId: ctx.workspace.id,
         },
       )
+      if (completion.state === "stale") {
+        return { state: "in_progress" as const }
+      }
       return {
         companyDescription: discovered.companyDescription,
         state: "completed" as const,

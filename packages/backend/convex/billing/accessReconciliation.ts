@@ -7,7 +7,7 @@ import { reconcileWorkspaceKeywords } from "../keywords"
 const EXPIRED_WORKSPACES_PER_BATCH = 4
 
 export const reconcileExpiredMonitoringAccess = internalMutation({
-  args: { cursor: v.optional(v.string()), now: v.optional(v.number()) },
+  args: { now: v.optional(v.number()) },
   returns: v.object({
     reconciled: v.number(),
     state: v.literal("completed"),
@@ -17,19 +17,18 @@ export const reconcileExpiredMonitoringAccess = internalMutation({
     if (!Number.isSafeInteger(now) || now < 0) {
       throw new TypeError("Billing reconciliation time is invalid")
     }
-    const page = await ctx.db
+    const subscriptions = await ctx.db
       .query("subscriptions")
-      .withIndex("by_entitlement_and_period_end", (q) =>
-        q.eq("entitlementStatus", "active").lte("currentPeriodEnd", now),
+      .withIndex("by_entitlement_reconciled_at_and_period_end", (q) =>
+        q
+          .eq("entitlementStatus", "active")
+          .eq("monitoringAccessReconciledAt", undefined)
+          .lte("currentPeriodEnd", now),
       )
-      .paginate({
-        cursor: args.cursor ?? null,
-        maximumRowsRead: EXPIRED_WORKSPACES_PER_BATCH,
-        numItems: EXPIRED_WORKSPACES_PER_BATCH,
-      })
+      .take(EXPIRED_WORKSPACES_PER_BATCH)
     const workspaceIds = [
       ...new Map(
-        page.page.map((subscription) => [
+        subscriptions.map((subscription) => [
           String(subscription.workspaceId),
           subscription.workspaceId,
         ]),
@@ -38,11 +37,16 @@ export const reconcileExpiredMonitoringAccess = internalMutation({
     for (const workspaceId of workspaceIds) {
       await reconcileWorkspaceKeywords(ctx, { now, workspaceId })
     }
-    if (!page.isDone) {
+    for (const subscription of subscriptions) {
+      await ctx.db.patch("subscriptions", subscription._id, {
+        monitoringAccessReconciledAt: now,
+      })
+    }
+    if (subscriptions.length === EXPIRED_WORKSPACES_PER_BATCH) {
       await ctx.scheduler.runAfter(
         0,
         internal.billing.accessReconciliation.reconcileExpiredMonitoringAccess,
-        { cursor: page.continueCursor, now },
+        { now },
       )
     }
     return { reconciled: workspaceIds.length, state: "completed" as const }

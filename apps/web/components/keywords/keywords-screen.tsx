@@ -251,6 +251,9 @@ export function KeywordsScreen() {
           }) => {
             if (editingKeyword) {
               await updateKeyword({
+                ...(value.description === undefined
+                  ? {}
+                  : { description: value.description }),
                 keywordId: editingKeyword.id,
                 phrase: value.phrase,
                 platforms: value.platforms,

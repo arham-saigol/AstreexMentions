@@ -24,7 +24,7 @@ const purgeExpired = makeFunctionReference<
 >("retention:purgeExpiredFreeMentions")
 
 describe("free mention retention", () => {
-  it("hides expired free mentions and purges one bounded batch with children without touching paid mentions", async () => {
+  it("hides expired free mentions and drains bounded child batches before deleting them", async () => {
     const t = convexTest({ modules, schema })
     const identity = {
       issuer: "https://clerk.example.test",
@@ -103,6 +103,17 @@ describe("free mention retention", () => {
           mentionId,
           workspaceId,
         })
+        if (index === 0) {
+          for (let match = 0; match < 16; match += 1) {
+            await ctx.db.insert("mentionKeywordMatches", {
+              createdAt: NOW + match + 1,
+              keywordId,
+              matchKind: "provider",
+              mentionId,
+              workspaceId,
+            })
+          }
+        }
         await ctx.db.insert("categorizationJobs", {
           attempts: 0,
           createdAt: NOW,
@@ -127,7 +138,11 @@ describe("free mention retention", () => {
     expect(page.items.map(({ id }) => id)).toEqual([seeded.paidMentionId])
 
     await expect(t.mutation(purgeExpired, { now: NOW })).resolves.toEqual({
-      deleted: RETENTION_BATCH_SIZE,
+      deleted: RETENTION_BATCH_SIZE - 1,
+      state: "completed",
+    })
+    await expect(t.mutation(purgeExpired, { now: NOW })).resolves.toEqual({
+      deleted: 1,
       state: "completed",
     })
     const remaining = await t.run(async (ctx) => ({

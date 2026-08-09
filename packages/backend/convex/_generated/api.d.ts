@@ -1329,7 +1329,7 @@ export declare const internal: {
       reconcileExpiredMonitoringAccess: FunctionReference<
         "mutation",
         "internal",
-        { cursor?: string; now?: number },
+        { now?: number },
         { reconciled: number; state: "completed" }
       >;
     };

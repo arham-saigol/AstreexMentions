@@ -80,6 +80,11 @@ describe("complete Convex schema", () => {
       "workspaceId",
       "entitlementStatus",
     ])
+    expectIndex(
+      "subscriptions",
+      "by_entitlement_reconciled_at_and_period_end",
+      ["entitlementStatus", "monitoringAccessReconciledAt", "currentPeriodEnd"],
+    )
     expectIndex("billingEvents", "by_provider_event", [
       "provider",
       "providerEventId",

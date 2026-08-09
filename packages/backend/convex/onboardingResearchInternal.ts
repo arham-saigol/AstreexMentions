@@ -1,14 +1,9 @@
-import { HOUR, RateLimiter } from "@convex-dev/rate-limiter"
-import { components } from "./_generated/api"
 import { v } from "convex/values"
 
 import type { Id } from "./_generated/dataModel"
 import { internalMutation, internalQuery } from "./_generated/server"
+import { onboardingResearchRateLimiter } from "./lib/onboardingResearchRateLimit"
 import { recordProviderMetricBuckets } from "./lib/providerMetricBuckets"
-
-const rateLimiter = new RateLimiter(components.rateLimiter, {
-  onboardingResearch: { kind: "fixed window", period: HOUR, rate: 3 },
-})
 const RUN_STALE_MS = 5 * 60_000
 
 type ResearchId = Id<"onboardingResearch">
@@ -53,22 +48,67 @@ export const beginResearch = internalMutation({
       .query("onboardingResearch")
       .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
       .unique()
-    if (existing?.inputFingerprint === args.inputFingerprint) {
-      if (existing.status === "completed") {
-        return { researchId: existing._id, state: "completed" as const }
-      }
-      if (
-        existing.status === "running" &&
-        existing.startedAt > now - RUN_STALE_MS
-      ) {
-        return { researchId: existing._id, state: "running" as const }
-      }
+    if (
+      existing?.inputFingerprint === args.inputFingerprint &&
+      existing.status === "completed"
+    ) {
+      return { researchId: existing._id, state: "completed" as const }
     }
-    const limited = await rateLimiter.limit(ctx, "onboardingResearch", {
-      key: String(args.workspaceId),
-    })
+    if (
+      existing?.status === "running" &&
+      existing.startedAt > now - RUN_STALE_MS
+    ) {
+      return { researchId: existing._id, state: "running" as const }
+    }
+    const limited = await onboardingResearchRateLimiter.limit(
+      ctx,
+      "onboardingResearch",
+      {
+        key: String(args.workspaceId),
+      },
+    )
     if (!limited.ok) {
       return { state: "rate_limited" as const }
+    }
+
+    if (
+      existing?.status === "running" &&
+      existing.inputFingerprint !== args.inputFingerprint
+    ) {
+      const abandonedRun = await ctx.db
+        .query("providerRuns")
+        .withIndex("by_idempotency_key", (q) =>
+          q.eq(
+            "idempotencyKey",
+            providerRunKey(args.workspaceId, existing.inputFingerprint),
+          ),
+        )
+        .unique()
+      if (abandonedRun?.status === "running") {
+        await ctx.db.patch("providerRuns", abandonedRun._id, {
+          durationMs: Math.max(0, now - abandonedRun.startedAt),
+          errorCode: "operation_abandoned",
+          errorMessage: "Onboarding research exceeded the running timeout",
+          finishedAt: now,
+          status: "failed",
+          updatedAt: now,
+        })
+        await recordProviderMetricBuckets(
+          ctx,
+          {
+            durationMs: Math.max(0, now - abandonedRun.startedAt),
+            failureCount: 1,
+            inputItemCount: 1,
+            operation: "onboarding.research",
+            outputItemCount: 0,
+            provider: "tinyfish",
+            rateLimitedCount: 0,
+            retryCount: 0,
+            successCount: 0,
+          },
+          now,
+        )
+      }
     }
 
     let researchId: ResearchId

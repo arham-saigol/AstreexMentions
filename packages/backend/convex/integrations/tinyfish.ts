@@ -57,7 +57,7 @@ function blockedHostname(hostname: string): boolean {
     host.endsWith(".localhost") ||
     host === "metadata.google.internal" ||
     host === "169.254.169.254" ||
-    host === "::1"
+    host.startsWith("::")
   ) {
     return true
   }
@@ -73,8 +73,12 @@ function blockedHostname(hostname: string): boolean {
       (a === 192 && b === 168)
     )
   }
+  const firstHextet = Number.parseInt(host.split(":")[0] ?? "", 16)
   return (
-    host.startsWith("fc") || host.startsWith("fd") || host.startsWith("fe80:")
+    Number.isInteger(firstHextet) &&
+    ((firstHextet & 0xfe00) === 0xfc00 ||
+      (firstHextet & 0xffc0) === 0xfe80 ||
+      (firstHextet & 0xff00) === 0xff00)
   )
 }
 
