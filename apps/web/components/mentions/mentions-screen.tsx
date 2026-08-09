@@ -460,6 +460,12 @@ export function MentionsScreen() {
     selectAll()
   }
 
+  const clearActiveCriteria = () => {
+    setSearch("")
+    setFilters({})
+    resetPagination()
+  }
+
   const usage = billing.usage ?? billing.evaluation
   const usageLimited =
     mentionsValue?.monitoringState === "usage_limited" ||
@@ -670,7 +676,12 @@ export function MentionsScreen() {
                   </p>
                 </div>
               ) : hasSearchOrFilters ? (
-                <MentionsEmptyState filtered onClear={clearSearchAndFilters} />
+                <MentionsEmptyState
+                  filtered
+                  onClear={
+                    filteredView ? clearActiveCriteria : clearSearchAndFilters
+                  }
+                />
               ) : setupRequired ? (
                 <MentionsSetupRequiredState />
               ) : paused ? (
