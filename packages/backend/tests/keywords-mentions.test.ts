@@ -1169,7 +1169,6 @@ describe("mention Convex functions", () => {
     expect(state.mention).toMatchObject({
       feedState: "visible",
       relevanceReason: "The keyword has a clearly unrelated meaning.",
-      visibilityOverride: "manually_restored",
     })
     expect(state.usage?.mentionsUsed).toBe(7)
     expect(state.auditEvents).toEqual([

@@ -24,6 +24,7 @@ type SavedViewFilters = {
   keywordIds?: Id<"keywords">[]
   mentionStatuses?: Array<"new" | "saved" | "dismissed">
   platforms?: Array<"x" | "reddit" | "hacker_news">
+  priorities?: Array<"low" | "medium" | "high">
   publishedAfter?: number
   publishedBefore?: number
 }
@@ -108,28 +109,13 @@ function removeCategoryFromSavedViewFilters(
   filters: SavedViewFilters,
   categoryId: CategoryId,
 ): SavedViewFilters {
+  const { categoryIds: _removedCategoryIds, ...otherFilters } = filters
   const categoryIds = filters.categoryIds?.filter(
     (candidate) => candidate !== categoryId,
   )
   return {
-    ...(categoryIds === undefined || categoryIds.length === 0
-      ? {}
-      : { categoryIds }),
-    ...(filters.keywordIds === undefined
-      ? {}
-      : { keywordIds: filters.keywordIds }),
-    ...(filters.mentionStatuses === undefined
-      ? {}
-      : { mentionStatuses: filters.mentionStatuses }),
-    ...(filters.platforms === undefined
-      ? {}
-      : { platforms: filters.platforms }),
-    ...(filters.publishedAfter === undefined
-      ? {}
-      : { publishedAfter: filters.publishedAfter }),
-    ...(filters.publishedBefore === undefined
-      ? {}
-      : { publishedBefore: filters.publishedBefore }),
+    ...otherFilters,
+    ...(categoryIds?.length ? { categoryIds } : {}),
   }
 }
 

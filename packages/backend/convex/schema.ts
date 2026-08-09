@@ -684,7 +684,6 @@ export default defineSchema({
     title: v.optional(v.string()),
     trackingSourceId: v.optional(v.id("trackingSources")),
     updatedAt: v.number(),
-    visibilityOverride: v.optional(v.literal("manually_restored")),
     workspaceId: v.id("workspaces"),
   })
     .index("by_workspace_platform_content_provider_item", [

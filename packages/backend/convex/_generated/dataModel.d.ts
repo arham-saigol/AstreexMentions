@@ -1178,7 +1178,6 @@ export type DataModel = {
       title?: string;
       trackingSourceId?: Id<"trackingSources">;
       updatedAt: number;
-      visibilityOverride?: "manually_restored";
       workspaceId: Id<"workspaces">;
       _id: Id<"mentions">;
       _creationTime: number;
@@ -1218,7 +1217,6 @@ export type DataModel = {
       | "title"
       | "trackingSourceId"
       | "updatedAt"
-      | "visibilityOverride"
       | "workspaceId";
     indexes: {
       by_id: ["_id"];

@@ -948,7 +948,6 @@ export const restoreFilteredMention = authenticatedMutation({
     await ctx.db.patch("mentions", mention._id, {
       feedState: "visible",
       updatedAt: now,
-      visibilityOverride: "manually_restored",
     })
     await ctx.db.insert("auditEvents", {
       action: "mention.restored",

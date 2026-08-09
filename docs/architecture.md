@@ -4,16 +4,16 @@ This document describes the implementation in `apps/*`, `packages/*`, and `tests
 
 ## Package boundaries
 
-| Package                                 | Responsibility                                                                                                                                                                                               | May depend on                                                                |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
-| `apps/web` (`@astreex/web`)             | Public marketing/blog/changelog pages, Clerk sign-in/up, onboarding, and the customer product UI on port 3000. It validates generic Convex responses with Zod before rendering them.                         | `@astreex/backend`, `@astreex/domain`, `@astreex/ui`, Clerk, Convex, Next.js |
-| `apps/admin` (`@astreex/admin`)         | Restricted operations UI on port 3001 for metrics, feature requests, and changelog management. Every protected request is exact-admin checked before it calls Convex.                                        | `@astreex/backend`, `@astreex/domain`, `@astreex/ui`, Clerk, Convex, Next.js |
-| `packages/backend` (`@astreex/backend`) | Convex schema, public and internal functions, HTTP webhooks, crons, durable jobs, provider adapters, authorization, billing, ingestion, categorization, digest, email, metrics, deletion, and audit records. | `@astreex/domain`, `@astreex/email`, Convex, Resend, Zod                     |
-| `packages/domain` (`@astreex/domain`)   | Browser-safe domain enums, plans, categories, scheduling, time, URL, usage, content, engagement, and deterministic helpers. It has no app or backend dependency.                                             | Temporal polyfill, Zod                                                       |
-| `packages/email` (`@astreex/email`)     | React Email layouts and templates plus deterministic rendering helpers. It does not send mail.                                                                                                               | `@astreex/domain`, React Email, React                                        |
-| `packages/ui` (`@astreex/ui`)           | Shared accessible UI primitives, shell components, theme support, and styles. It contains no business persistence.                                                                                           | React, Next.js peer APIs, Radix UI, Recharts, utility libraries              |
-| `packages/config` (`@astreex/config`)   | Shared TypeScript and ESLint configuration only.                                                                                                                                                             | ESLint and TypeScript tooling                                                |
-| `tests/security`                        | Source-scanning authorization and guard tests.                                                                                                                                                               | Repository source and Vitest through the workspace toolchain                 |
+| Package                                 | Responsibility                                                                                                                                                                                                 | May depend on                                                                |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `apps/web` (`@astreex/web`)             | Public marketing/blog/changelog pages, Clerk sign-in/up, onboarding, and the customer product UI on port 3000. It validates generic Convex responses with Zod before rendering them.                           | `@astreex/backend`, `@astreex/domain`, `@astreex/ui`, Clerk, Convex, Next.js |
+| `apps/admin` (`@astreex/admin`)         | Restricted operations UI on port 3001 for metrics, feature requests, and changelog management. Every protected request is exact-admin checked before it calls Convex.                                          | `@astreex/backend`, `@astreex/domain`, `@astreex/ui`, Clerk, Convex, Next.js |
+| `packages/backend` (`@astreex/backend`) | Convex schema, public and internal functions, HTTP webhooks, crons, durable jobs, provider adapters, authorization, billing, ingestion, mention analysis, digest, email, metrics, deletion, and audit records. | `@astreex/domain`, `@astreex/email`, Convex, Resend, Zod                     |
+| `packages/domain` (`@astreex/domain`)   | Browser-safe domain enums, plans, categories, scheduling, time, URL, usage, content, engagement, and deterministic helpers. It has no app or backend dependency.                                               | Temporal polyfill, Zod                                                       |
+| `packages/email` (`@astreex/email`)     | React Email layouts and templates plus deterministic rendering helpers. It does not send mail.                                                                                                                 | `@astreex/domain`, React Email, React                                        |
+| `packages/ui` (`@astreex/ui`)           | Shared accessible UI primitives, shell components, theme support, and styles. It contains no business persistence.                                                                                             | React, Next.js peer APIs, Radix UI, Recharts, utility libraries              |
+| `packages/config` (`@astreex/config`)   | Shared TypeScript and ESLint configuration only.                                                                                                                                                               | ESLint and TypeScript tooling                                                |
+| `tests/security`                        | Source-scanning authorization and guard tests.                                                                                                                                                                 | Repository source and Vitest through the workspace toolchain                 |
 
 The root is a pnpm workspace orchestrated by Turborepo. Root scripts are the supported entry points; see `README.md`.
 
@@ -28,7 +28,7 @@ The root is a pnpm workspace orchestrated by Turborepo. Root scripts are the sup
   - Hacker News stories and comments through Algolia's public HN API.
   - Billing through Creem.
   - Email delivery and delivery webhooks through Resend.
-  - DeepSeek categorization through a durable one-minute dispatcher, leased batch action, strict total-result validation, and atomic result application.
+  - DeepSeek mention analysis through a durable one-minute dispatcher, leased batch action, strict total-result validation, and atomic result application.
 
 ## Customer request and authentication flow
 
@@ -83,11 +83,11 @@ All six Convex crons run every minute:
 1. dispatch durable account-deletion jobs;
 2. retry persisted Creem billing events;
 3. claim due tracking sources;
-4. claim due categorization jobs;
+4. claim due mention analysis jobs;
 5. claim due daily digests;
 6. claim pending email outbox messages.
 
-Account deletion, tracking, categorization, and email use durable leases. Billing retries pending inbox rows directly, and digest dispatch relies on local-date/idempotency guards rather than a lease.
+Account deletion, tracking, mention analysis, and email use durable leases. Billing retries pending inbox rows directly, and digest dispatch relies on local-date/idempotency guards rather than a lease.
 
 For leased provider work:
 

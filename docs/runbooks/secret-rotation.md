@@ -28,7 +28,7 @@ Use for Creem API, Resend API, Xquik, FetchLayer, and DeepSeek when the provider
 4. Revoke the old key.
 5. Verify again and record provider key identifier, not the secret.
 
-Avoid a gap between revocation and installation. For Xquik/FetchLayer, a missing key encountered by a claimed source creates `paused/config`; restoring the key does not bulk-resume those sources. For Resend, pending outbox rows remain durable and can retry after configuration returns. For DeepSeek, missing configuration returns leased categorization jobs to `pending`, restores the attempt count, and schedules another check in five minutes.
+Avoid a gap between revocation and installation. For Xquik/FetchLayer, a missing key encountered by a claimed source creates `paused/config`; restoring the key does not bulk-resume those sources. For Resend, pending outbox rows remain durable and can retry after configuration returns. For DeepSeek, missing configuration returns leased mention analysis jobs to `pending`, restores the attempt count, and schedules another check in five minutes.
 
 ## Webhook-secret rotation
 

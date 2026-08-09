@@ -7,7 +7,6 @@ export const MAX_FILTERING_GUIDELINES_CHARS = 2_000
 export const MENTION_ANALYSIS_VERSION = "mention-analysis-v1"
 export const DEEPSEEK_MENTION_ANALYSIS_MODEL = "deepseek-v4-pro"
 export const DEFAULT_MENTION_ANALYSIS_MAX_ATTEMPTS = 3
-export const DEFAULT_MENTION_ANALYSIS_TIMEOUT_MS = 120_000
 const MENTION_ANALYSIS_TEXT_TRUNCATION_MARKER = "\n\n[truncated]"
 
 export type MentionAnalysisMention = {
@@ -87,18 +86,6 @@ export class DeepSeekRequestError extends Error {
     if (options.status !== undefined) {
       this.status = options.status
     }
-  }
-}
-
-export class MentionAnalysisAttemptsExhaustedError extends Error {
-  readonly attempts: number
-
-  constructor(attempts: number, cause: unknown) {
-    super(`DeepSeek mention analysis failed after ${attempts} attempts`, {
-      cause,
-    })
-    this.name = "MentionAnalysisAttemptsExhaustedError"
-    this.attempts = attempts
   }
 }
 
@@ -212,8 +199,6 @@ export function validateMentionAnalysisBatch(
   return validated
 }
 
-export const assertValidMentionAnalysisBatch = validateMentionAnalysisBatch
-
 export function validateMentionAnalysisCatalog(
   categories: readonly MentionAnalysisCategory[],
 ): MentionAnalysisCategory[] {
@@ -272,32 +257,6 @@ export function validateMentionAnalysisCatalog(
     )
   }
   return validated
-}
-
-export function chunkMentionAnalysisMentions(
-  mentions: readonly MentionAnalysisMention[],
-): MentionAnalysisMention[][] {
-  const batches: MentionAnalysisMention[][] = []
-  let batch: MentionAnalysisMention[] = []
-  for (const mention of mentions) {
-    const normalized = validateMentionAnalysisBatch([mention])[0]!
-    const candidate = [...batch, normalized]
-    if (
-      batch.length > 0 &&
-      (candidate.length > MAX_MENTION_ANALYSIS_BATCH_SIZE ||
-        JSON.stringify({ mentions: candidate }).length >
-          MAX_MENTION_ANALYSIS_BATCH_PROMPT_CHARS)
-    ) {
-      batches.push(validateMentionAnalysisBatch(batch))
-      batch = [normalized]
-    } else {
-      batch = candidate
-    }
-  }
-  if (batch.length > 0) {
-    batches.push(validateMentionAnalysisBatch(batch))
-  }
-  return batches
 }
 
 export function validateMentionAnalysisContext(
@@ -475,238 +434,4 @@ export function validateMentionAnalysisOutput(
     }
     return result
   })
-}
-
-function retryDelayMs(
-  completedAttempt: number,
-  baseDelayMs: number,
-  random: () => number,
-): number {
-  const exponential = baseDelayMs * 2 ** Math.max(0, completedAttempt - 1)
-  const jitterMultiplier = 0.75 + Math.min(1, Math.max(0, random())) * 0.5
-  return Math.round(exponential * jitterMultiplier)
-}
-
-function isRetryableError(error: unknown): boolean {
-  if (error instanceof DeepSeekRequestError) {
-    return error.retryable
-  }
-
-  return (
-    error instanceof MentionAnalysisValidationError ||
-    (error instanceof DOMException && error.name === "AbortError") ||
-    error instanceof TypeError
-  )
-}
-
-async function requestWithTimeout(
-  requester: DeepSeekRequester,
-  request: DeepSeekMentionAnalysisRequest,
-  timeoutMs: number,
-): Promise<unknown> {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), timeoutMs)
-
-  try {
-    return await requester(request, controller.signal)
-  } finally {
-    clearTimeout(timeout)
-  }
-}
-
-export type MentionAnalysisRetryOptions = {
-  baseDelayMs?: number
-  maxAttempts?: number
-  random?: () => number
-  sleep?: (delayMs: number) => Promise<void>
-  timeoutMs?: number
-}
-
-export async function analyzeBatchWithRetry(
-  requester: DeepSeekRequester,
-  mentions: readonly MentionAnalysisMention[],
-  categories: readonly MentionAnalysisCategory[],
-  context: MentionAnalysisContext,
-  options: MentionAnalysisRetryOptions = {},
-): Promise<MentionAnalysisResult[]> {
-  const maxAttempts =
-    options.maxAttempts ?? DEFAULT_MENTION_ANALYSIS_MAX_ATTEMPTS
-  const timeoutMs = options.timeoutMs ?? DEFAULT_MENTION_ANALYSIS_TIMEOUT_MS
-  const baseDelayMs = options.baseDelayMs ?? 500
-  const random = options.random ?? Math.random
-  const sleep =
-    options.sleep ??
-    ((delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs)))
-
-  if (!Number.isInteger(maxAttempts) || maxAttempts < 1) {
-    throw new RangeError("maxAttempts must be a positive integer")
-  }
-  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
-    throw new RangeError("timeoutMs must be positive")
-  }
-
-  const validatedMentions = validateMentionAnalysisBatch(mentions)
-  const validatedCategories = validateMentionAnalysisCatalog(categories)
-  const request = buildDeepSeekMentionAnalysisRequest(
-    validatedMentions,
-    validatedCategories,
-    context,
-  )
-  let lastError: unknown
-
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    try {
-      const rawOutput = await requestWithTimeout(requester, request, timeoutMs)
-      return validateMentionAnalysisOutput(
-        validatedMentions,
-        validatedCategories,
-        rawOutput,
-      )
-    } catch (error) {
-      lastError = error
-      if (!isRetryableError(error)) {
-        throw error
-      }
-      if (attempt < maxAttempts) {
-        await sleep(retryDelayMs(attempt, baseDelayMs, random))
-      }
-    }
-  }
-
-  throw new MentionAnalysisAttemptsExhaustedError(maxAttempts, lastError)
-}
-
-export type AnalyzeAllOptions = MentionAnalysisRetryOptions & {
-  concurrency?: number
-}
-
-/** Runs bounded provider batches after rows were claimed individually. */
-export async function analyzeMentionsInBatches(
-  requester: DeepSeekRequester,
-  mentions: readonly MentionAnalysisMention[],
-  categories: readonly MentionAnalysisCategory[],
-  context: MentionAnalysisContext,
-  options: AnalyzeAllOptions = {},
-): Promise<MentionAnalysisResult[]> {
-  if (mentions.length === 0) {
-    return []
-  }
-
-  const concurrency = options.concurrency ?? 2
-  if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 8) {
-    throw new RangeError("concurrency must be an integer between 1 and 8")
-  }
-
-  const validatedCategories = validateMentionAnalysisCatalog(categories)
-  const batches = chunkMentionAnalysisMentions(mentions)
-  const completed = new Array<MentionAnalysisResult[]>(batches.length)
-  let nextBatchIndex = 0
-
-  const workers = Array.from(
-    { length: Math.min(concurrency, batches.length) },
-    async () => {
-      while (true) {
-        const batchIndex = nextBatchIndex
-        nextBatchIndex += 1
-        const batch = batches[batchIndex]
-        if (!batch) {
-          return
-        }
-        completed[batchIndex] = await analyzeBatchWithRetry(
-          requester,
-          batch,
-          validatedCategories,
-          context,
-          options,
-        )
-      }
-    },
-  )
-
-  await Promise.all(workers)
-  return completed.flat()
-}
-
-/** A worker may combine claimed rows for one provider call, never more than 20. */
-export function selectMentionAnalysisJobsForClaim<T>(
-  dueJobs: readonly T[],
-  requestedLimit = MAX_MENTION_ANALYSIS_BATCH_SIZE,
-): T[] {
-  if (!Number.isInteger(requestedLimit) || requestedLimit < 1) {
-    throw new RangeError("requestedLimit must be a positive integer")
-  }
-  return dueJobs.slice(
-    0,
-    Math.min(requestedLimit, MAX_MENTION_ANALYSIS_BATCH_SIZE),
-  )
-}
-
-export function createDeepSeekHttpRequester(options: {
-  apiKey: string
-  endpoint?: string
-  fetch?: typeof fetch
-}): DeepSeekRequester {
-  const fetchImplementation = options.fetch ?? fetch
-  const endpoint =
-    options.endpoint ?? "https://api.deepseek.com/chat/completions"
-
-  return async (request, signal) => {
-    let response: Response
-    try {
-      response = await fetchImplementation(endpoint, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${options.apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(request),
-        signal,
-      })
-    } catch (error) {
-      throw new DeepSeekRequestError("DeepSeek request failed", {
-        cause: error,
-        retryable: true,
-      })
-    }
-
-    if (!response.ok) {
-      const retryable =
-        response.status === 408 ||
-        response.status === 409 ||
-        response.status === 429 ||
-        response.status >= 500
-      throw new DeepSeekRequestError(
-        `DeepSeek returned HTTP ${response.status}`,
-        { retryable, status: response.status },
-      )
-    }
-
-    let payload: unknown
-    try {
-      payload = (await response.json()) as unknown
-    } catch (error) {
-      throw new MentionAnalysisValidationError(
-        "INVALID_OUTPUT",
-        "DeepSeek returned an invalid response envelope",
-        { cause: error },
-      )
-    }
-
-    if (!isRecord(payload) || !Array.isArray(payload.choices)) {
-      throw new MentionAnalysisValidationError(
-        "INVALID_OUTPUT",
-        "DeepSeek response is missing choices",
-      )
-    }
-
-    const firstChoice = payload.choices[0]
-    if (!isRecord(firstChoice) || !isRecord(firstChoice.message)) {
-      throw new MentionAnalysisValidationError(
-        "INVALID_OUTPUT",
-        "DeepSeek response is missing the first message",
-      )
-    }
-
-    return firstChoice.message.content
-  }
 }

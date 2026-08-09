@@ -1,6 +1,6 @@
 # Astreex
 
-Astreex is a pnpm/Turborepo monorepo for monitoring customer conversations across X, Reddit, and Hacker News. It contains a customer-facing Next.js application, a restricted administrator application, a shared Convex backend, billing through Creem, email through Resend, and a DeepSeek categorization adapter.
+Astreex is a pnpm/Turborepo monorepo for monitoring customer conversations across X, Reddit, and Hacker News. It contains a customer-facing Next.js application, a restricted administrator application, a shared Convex backend, billing through Creem, email through Resend, and a DeepSeek mention analysis adapter.
 
 ## Repository status
 
@@ -261,7 +261,7 @@ configured identity-fence duration in the target environment.
 - X: Xquik, `https://xquik.com/api/v1/x/tweets/search`
 - Reddit: FetchLayer, `https://fetchlayer.dev/api/reddit`
 - Hacker News: public Algolia Hacker News API
-- Categorization: DeepSeek chat completions with `deepseek-v4-pro`, dispatched from the durable Convex categorization queue
+- Mention analysis: DeepSeek chat completions with `deepseek-v4-pro`, dispatched from the durable Convex mention analysis queue
 - Billing: Creem test or production API selected by `CREEM_MODE`
 - Email: Resend API and signed webhook delivery events
 

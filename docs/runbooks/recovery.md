@@ -71,7 +71,7 @@ After code/config recovery, classify each workflow:
 | Pending/expired email outbox               | One-minute cron retries/reclaims up to 32 rows/run                                                                             |
 | Dead email/digest run                      | No admin requeue; reviewed maintenance required                                                                                |
 | Resend `pending_match`                     | Scheduled 30-second reconciliation chain; no scanning cron                                                                     |
-| Pending categorization                     | One-minute dispatcher claims due jobs; config-blocked work retries in 5 minutes; catalog-blocked work requires category repair |
+| Pending mention analysis                   | One-minute dispatcher claims due jobs; config-blocked work retries in 5 minutes; catalog-blocked work requires category repair |
 | Pending deletion                           | One-minute dispatcher resumes due work; security-fence phase waits until its configured expiry                                 |
 
 Preserve idempotency keys, payload fingerprints, provider IDs, lease versions, and checkpoints. Direct state edits can create duplicate payments/emails/mentions or lost provider windows.
@@ -122,4 +122,4 @@ Record:
 - known unresolved rows or customer impact;
 - follow-up code/test/runbook work.
 
-Do not close while deletion pending rows are being mistaken for completed erasure, categorization backlog is still unexplained, or credential-backed verification is represented only by local tests.
+Do not close while deletion pending rows are being mistaken for completed erasure, mention analysis backlog is still unexplained, or credential-backed verification is represented only by local tests.

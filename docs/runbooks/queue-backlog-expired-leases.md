@@ -20,7 +20,7 @@ Astreex uses several durable workflows with different recovery behavior. Do not 
 2. Confirm that the relevant one-minute cron is installed in the exact Convex deployment:
    - Creem retries;
    - tracking dispatch;
-   - categorization dispatch;
+   - mention analysis dispatch;
    - daily digest dispatch;
    - email outbox dispatch.
    - durable account deletion dispatch.
@@ -43,11 +43,11 @@ Astreex uses several durable workflows with different recovery behavior. Do not 
 - Missing delivery configuration blocks dispatch. If configuration disappears after claim, the action returns the row to pending in five minutes and rolls back that attempted claim.
 - Do not create a second outbox row with a different key for the same message to “unstick” it.
 
-## Digest, webhook-match, categorization, and deletion backlog
+## Digest, webhook-match, mention analysis, and deletion backlog
 
 - A due digest with missing sender/`APP_URL` is not claimed, so the preference stays due. A created run that fails rendering/configuration is marked `failed`; no retry worker exists.
 - `emailWebhookEvents.pending_match` has its own scheduled retry chain and no cron. If it becomes old without new attempts, a reviewed repair must invoke equivalent reconciliation; do not mark it applied without an outbox provider-message match.
-- Categorization jobs should advance through the one-minute cron. Missing/invalid DeepSeek configuration returns a leased batch to pending for five minutes without consuming an attempt. A missing enabled permanent `Other` category leaves jobs due and unclaimed; repeated `blockedCatalog` results require catalog repair. Expired four-minute leases are recovered, and their prior provider run is closed as `lease_expired` before retry/dead-letter planning.
+- The one-minute cron advances mention analysis jobs. Missing or invalid DeepSeek configuration returns a leased batch to pending without consuming an attempt. The retry delay is five minutes. Missing filtering context or a valid `Other` category leaves jobs due and unclaimed. Repeated `blockedCatalog` results require workspace or catalog repair. The dispatcher recovers expired four-minute leases. It closes each old provider run as `lease_expired` before it plans the next job state.
 - Deletion jobs should advance by phase. A pending `security_fence` job is intentionally dormant until `nextAttemptAt`; a blocked job needs billing/reconciliation; a dead job needs exact-admin review and confirmation-gated retry. Never clear lease or quiescence fields manually.
 
 ## Recover and verify

@@ -88,7 +88,7 @@ const faqs = [
   ],
   [
     "What changes between plans?",
-    "Every plan includes all product features. A mention counts when Astreex collects it, including a result later kept in the reviewable Filtered view.",
+    "Every plan includes all product features. Plans differ by keyword and mention capacity. A mention counts when Astreex collects it, including a result later kept in the reviewable Filtered view.",
   ],
 ] as const
 

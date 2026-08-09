@@ -604,7 +604,10 @@ describe("customer category functions", () => {
       }),
     ).rejects.toMatchObject({ data: { code: "CATEGORY_NAME_CONFLICT" } })
     await customer.mutation(createSavedView, {
-      filters: { categoryIds: [custom.id, other!.id] },
+      filters: {
+        categoryIds: [custom.id, other!.id],
+        priorities: ["high"],
+      },
       icon: "funnel",
       name: "Sales leads",
       sort: "newest",
@@ -614,19 +617,21 @@ describe("customer category functions", () => {
       enabled: false,
     })
     let savedViews = (await customer.query(listSavedViews, {})) as Array<{
-      filters: { categoryIds?: string[] }
+      filters: { categoryIds?: string[]; priorities?: string[] }
       name: string
     }>
     expect(
-      savedViews.find(({ name }) => name === "Sales leads")?.filters
-        .categoryIds,
-    ).toEqual([other?.id])
+      savedViews.find(({ name }) => name === "Sales leads")?.filters,
+    ).toEqual({ categoryIds: [other?.id], priorities: ["high"] })
     await customer.mutation(updateCategory, {
       categoryId: custom.id,
       enabled: true,
     })
     await customer.mutation(createSavedView, {
-      filters: { categoryIds: [custom.id, other!.id] },
+      filters: {
+        categoryIds: [custom.id, other!.id],
+        priorities: ["medium"],
+      },
       icon: "funnel",
       name: "Sales leads for deletion",
       sort: "newest",
@@ -670,13 +675,13 @@ describe("customer category functions", () => {
       reassigned.every((mention) => mention.categoryId === other?.id),
     ).toBe(true)
     savedViews = (await customer.query(listSavedViews, {})) as Array<{
-      filters: { categoryIds?: string[] }
+      filters: { categoryIds?: string[]; priorities?: string[] }
       name: string
     }>
     expect(
       savedViews.find(({ name }) => name === "Sales leads for deletion")
-        ?.filters.categoryIds,
-    ).toEqual([other?.id])
+        ?.filters,
+    ).toEqual({ categoryIds: [other?.id], priorities: ["medium"] })
   })
 })
 

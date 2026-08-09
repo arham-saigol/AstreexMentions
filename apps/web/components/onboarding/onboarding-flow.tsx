@@ -505,7 +505,6 @@ export function OnboardingFlow() {
                     ...current,
                     filteringContext:
                       current.manualDescription || current.filteringContext,
-                    filteringGuidelines: current.filteringGuidelines,
                     step: 2,
                   }))
                 }
