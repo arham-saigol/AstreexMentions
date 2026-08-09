@@ -485,10 +485,9 @@ export function MentionsScreen() {
     monitoringState === "setup_required" || keywords.length === 0
   const paused = monitoringState === "paused" || allKeywordsPaused
   const filteredView = selectedViewId === FILTERED_VIEW_ID
-  const filtered =
-    search.trim().length > 0 ||
-    mentionFilterCount(filters) > 0 ||
-    selectedViewId !== null
+  const hasSearchOrFilters =
+    search.trim().length > 0 || mentionFilterCount(filters) > 0
+  const filtered = hasSearchOrFilters || selectedViewId !== null
   const paginationAvailable =
     cursorHistory.length > 0 ||
     (mentionsValue !== undefined &&
@@ -662,7 +661,7 @@ export function MentionsScreen() {
               )}
 
             {visibleMentions.length === 0 ? (
-              filteredView ? (
+              filteredView && !hasSearchOrFilters ? (
                 <div className="border-border rounded-lg border border-dashed p-10 text-center">
                   <h2 className="font-medium">No filtered mentions</h2>
                   <p className="text-muted-foreground mt-2 text-sm">
@@ -670,6 +669,8 @@ export function MentionsScreen() {
                     reviewable here.
                   </p>
                 </div>
+              ) : hasSearchOrFilters ? (
+                <MentionsEmptyState filtered onClear={clearSearchAndFilters} />
               ) : setupRequired ? (
                 <MentionsSetupRequiredState />
               ) : paused ? (

@@ -409,7 +409,7 @@ export const createSavedView = authenticatedMutation({
       icon,
       id: savedViewId,
       name,
-      position,
+      position: position + 1,
       sort: args.sort,
     }
   },

@@ -715,7 +715,8 @@ describe("customer saved view functions", () => {
       icon: "funnel",
       name: "Saved mentions",
       sort: "newest",
-    })) as { id: string }
+    })) as { id: string; position: number }
+    expect(saved.position).toBe(2)
     await expect(
       customer.mutation(createSavedView, {
         filters: {},
