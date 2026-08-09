@@ -122,7 +122,8 @@ export const beginResearch = internalMutation({
       researchId = existing._id
       await ctx.db.patch("onboardingResearch", researchId, {
         ...runningResearch,
-        companyDescription: undefined,
+        filteringContext: undefined,
+        filteringGuidelines: undefined,
         completedAt: undefined,
         errorCode: undefined,
         manualDescription: args.manualDescription,
@@ -197,7 +198,8 @@ export const loadResearch = internalQuery({
 
 export const completeResearch = internalMutation({
   args: {
-    companyDescription: v.string(),
+    filteringContext: v.string(),
+    filteringGuidelines: v.string(),
     durationMs: v.number(),
     inputFingerprint: v.string(),
     researchId: v.id("onboardingResearch"),
@@ -216,7 +218,8 @@ export const completeResearch = internalMutation({
     }
     const now = Date.now()
     await ctx.db.patch("onboardingResearch", row._id, {
-      companyDescription: args.companyDescription,
+      filteringContext: args.filteringContext,
+      filteringGuidelines: args.filteringGuidelines,
       completedAt: now,
       errorCode: undefined,
       status: "completed",

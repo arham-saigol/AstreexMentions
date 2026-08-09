@@ -3,9 +3,9 @@ import { ConvexError, v } from "convex/values"
 import type { Doc, Id } from "./_generated/dataModel"
 
 import {
-  CATEGORIZATION_JOB_STATUSES,
-  categorizationStatusMetric,
-} from "./categorization/metrics"
+  MENTION_ANALYSIS_JOB_STATUSES,
+  mentionAnalysisStatusMetric,
+} from "./mentionAnalysis/metrics"
 import {
   ACCOUNT_DELETION_MAX_ATTEMPTS,
   ACCOUNT_DELETION_PURGE_STAGES,
@@ -14,8 +14,8 @@ import {
 } from "./deletion/model"
 import { restoreDeletionFenceState } from "./deletion/recovery"
 import {
-  CATEGORIZED_MENTION_GROUPS,
-  categorizedMentionMetric,
+  ANALYZED_MENTION_GROUPS,
+  analyzedMentionMetric,
   ingestedMentionPlatformMetric,
 } from "./ingestion/model"
 import { adminMutation, adminQuery } from "./lib/authorization"
@@ -186,7 +186,7 @@ const subscriptionByPlanValidator = v.object({
   planId: planValidator,
 })
 const metricsResultValidator = v.object({
-  categorization: v.object({
+  mentionAnalysis: v.object({
     completed: v.number(),
     failed: v.number(),
     leased: v.number(),
@@ -194,6 +194,17 @@ const metricsResultValidator = v.object({
     total: v.number(),
   }),
   categoryBreakdown: v.array(categoryBreakdownValidator),
+  feedOutcomes: v.object({
+    filtered: v.number(),
+    priorities: v.object({
+      high: v.number(),
+      low: v.number(),
+      medium: v.number(),
+    }),
+    relevant: v.number(),
+    restorations: v.number(),
+    terminalFailures: v.number(),
+  }),
   digestDelivery: v.object({
     bounced: v.number(),
     clicked: v.number(),
@@ -779,15 +790,20 @@ export const getMetricsOverview = adminQuery({
       ...DELIVERY_STATUSES.map(
         (status) => `${DELIVERY_METRIC_PREFIX}${status}`,
       ),
-      ...CATEGORIZED_MENTION_GROUPS.map(({ key }) =>
-        categorizedMentionMetric(key),
-      ),
+      ...ANALYZED_MENTION_GROUPS.map(({ key }) => analyzedMentionMetric(key)),
+      "mentions_analyzed_relevant",
+      "mentions_analyzed_filtered",
+      "mentions_priority:low",
+      "mentions_priority:medium",
+      "mentions_priority:high",
+      "mention_analysis_terminal_failures",
+      "mentions_restored",
     ]
 
     const [
       providerRows,
       systemRows,
-      categorizationGaugeRows,
+      mentionAnalysisGaugeRows,
       operationalGaugeRows,
       activeWorkspaceRows,
     ] = await Promise.all([
@@ -827,7 +843,7 @@ export const getMetricsOverview = adminQuery({
         ),
       ).then((rows) => rows.flat()),
       Promise.all(
-        CATEGORIZATION_JOB_STATUSES.map(
+        MENTION_ANALYSIS_JOB_STATUSES.map(
           async (status) =>
             await ctx.db
               .query("systemMetricBuckets")
@@ -835,7 +851,7 @@ export const getMetricsOverview = adminQuery({
                 "by_metric_scope_workspace_granularity_and_bucket",
                 (q) =>
                   q
-                    .eq("metric", categorizationStatusMetric(status))
+                    .eq("metric", mentionAnalysisStatusMetric(status))
                     .eq("scope", "global")
                     .eq("workspaceId", undefined)
                     .eq("granularity", "hour")
@@ -872,25 +888,23 @@ export const getMetricsOverview = adminQuery({
       (row) => row.bucketStartAt >= metricReadStartAt,
     )
     const categoryCounts = new Map<string, number>()
-    let categorizedMentions = 0
-    for (const { key, label } of CATEGORIZED_MENTION_GROUPS) {
+    for (const { key, label } of ANALYZED_MENTION_GROUPS) {
       const count = sumMetric(
         relevantSystemRows,
-        categorizedMentionMetric(key),
+        analyzedMentionMetric(key),
         startAt,
       )
-      categorizedMentions += count
       if (count > 0) {
         categoryCounts.set(label, count)
       }
     }
-    const uncategorizedMentions = Math.max(
-      0,
-      sumMetric(relevantSystemRows, MENTION_METRIC, startAt) -
-        categorizedMentions,
+    const unclassifiedMentions = sumMetric(
+      relevantSystemRows,
+      "mention_analysis_terminal_failures",
+      startAt,
     )
-    if (uncategorizedMentions > 0) {
-      categoryCounts.set("Uncategorized", uncategorizedMentions)
+    if (unclassifiedMentions > 0) {
+      categoryCounts.set("Unclassified", unclassifiedMentions)
     }
     const categoryBreakdown = [...categoryCounts.entries()]
       .map(([category, count]) => ({ category, count }))
@@ -911,21 +925,21 @@ export const getMetricsOverview = adminQuery({
       }),
     )
 
-    const categorizationCounts = Object.fromEntries(
-      CATEGORIZATION_JOB_STATUSES.map((status, index) => [
+    const mentionAnalysisCounts = Object.fromEntries(
+      MENTION_ANALYSIS_JOB_STATUSES.map((status, index) => [
         status,
-        categorizationGaugeRows[index]
-          ? metricAmount(categorizationGaugeRows[index]!)
+        mentionAnalysisGaugeRows[index]
+          ? metricAmount(mentionAnalysisGaugeRows[index]!)
           : 0,
       ]),
-    ) as Record<(typeof CATEGORIZATION_JOB_STATUSES)[number], number>
-    const categorization = {
-      completed: categorizationCounts.completed,
-      failed: categorizationCounts.dead,
-      leased: categorizationCounts.leased,
-      pending: categorizationCounts.pending,
-      total: CATEGORIZATION_JOB_STATUSES.reduce(
-        (total, status) => total + categorizationCounts[status],
+    ) as Record<(typeof MENTION_ANALYSIS_JOB_STATUSES)[number], number>
+    const mentionAnalysis = {
+      completed: mentionAnalysisCounts.completed,
+      failed: mentionAnalysisCounts.dead,
+      leased: mentionAnalysisCounts.leased,
+      pending: mentionAnalysisCounts.pending,
+      total: MENTION_ANALYSIS_JOB_STATUSES.reduce(
+        (total, status) => total + mentionAnalysisCounts[status],
         0,
       ),
     }
@@ -951,8 +965,43 @@ export const getMetricsOverview = adminQuery({
     const delivery = digestDelivery(relevantSystemRows, startAt)
 
     return {
-      categorization,
+      mentionAnalysis,
       categoryBreakdown,
+      feedOutcomes: {
+        filtered: sumMetric(
+          relevantSystemRows,
+          "mentions_analyzed_filtered",
+          startAt,
+        ),
+        priorities: {
+          high: sumMetric(
+            relevantSystemRows,
+            "mentions_priority:high",
+            startAt,
+          ),
+          low: sumMetric(relevantSystemRows, "mentions_priority:low", startAt),
+          medium: sumMetric(
+            relevantSystemRows,
+            "mentions_priority:medium",
+            startAt,
+          ),
+        },
+        relevant: sumMetric(
+          relevantSystemRows,
+          "mentions_analyzed_relevant",
+          startAt,
+        ),
+        restorations: sumMetric(
+          relevantSystemRows,
+          "mentions_restored",
+          startAt,
+        ),
+        terminalFailures: sumMetric(
+          relevantSystemRows,
+          "mention_analysis_terminal_failures",
+          startAt,
+        ),
+      },
       digestDelivery: delivery,
       mentionVolume: mentionVolume(relevantSystemRows, startAt, args.days),
       mentions: {

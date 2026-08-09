@@ -246,9 +246,10 @@ export const aggregateDailyDigestPage = internalMutation({
     const workspaceId = run.workspaceId
     const page = await ctx.db
       .query("mentions")
-      .withIndex("by_workspace_and_published_at", (q) =>
+      .withIndex("by_workspace_feed_state_and_published_at", (q) =>
         q
           .eq("workspaceId", workspaceId)
+          .eq("feedState", "visible")
           .gte("publishedAt", run.windowStartAt)
           .lt("publishedAt", run.windowEndAt),
       )
@@ -271,7 +272,9 @@ export const aggregateDailyDigestPage = internalMutation({
       )
     ).filter(
       (mention): mention is Doc<"mentions"> =>
-        mention !== null && mention.workspaceId === workspaceId,
+        mention !== null &&
+        mention.workspaceId === workspaceId &&
+        mention.feedState === "visible",
     )
     const mentionLimit =
       typeof run.mentionLimit === "number" ? run.mentionLimit : 10
@@ -286,7 +289,7 @@ export const aggregateDailyDigestPage = internalMutation({
       const platform = platformFromRow(mention)
       const categoryId =
         mention.categoryId === undefined
-          ? "uncategorized"
+          ? "unanalyzed"
           : String(mention.categoryId)
       counts.total += 1
       counts.platforms[platform] += 1
@@ -392,6 +395,7 @@ export const loadDailyDigestRenderContext = internalQuery({
       (mention): mention is Doc<"mentions"> =>
         mention !== null &&
         mention.workspaceId === workspaceId &&
+        mention.feedState === "visible" &&
         (mention.firstSeenAt as number) <= (run.createdAt as number),
     )
     const mentions = snapshotRows.map((mention) => {
@@ -425,9 +429,7 @@ export const loadDailyDigestRenderContext = internalQuery({
       aggregateCounts.categories,
     )) {
       const category =
-        categoryId === "uncategorized"
-          ? undefined
-          : categoryById.get(categoryId)
+        categoryId === "unanalyzed" ? undefined : categoryById.get(categoryId)
       const label = digestCategory(
         isCategorySystemKey(category?.systemKey)
           ? category.systemKey

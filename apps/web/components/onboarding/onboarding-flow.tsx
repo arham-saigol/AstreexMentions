@@ -130,7 +130,7 @@ function KeywordEditor({
               onChange={(event) =>
                 onChange({ ...keyword, description: event.target.value })
               }
-              placeholder="Why this phrase matters for categorization"
+              placeholder="Why this phrase matters for mention analysis"
             />
           </div>
           <fieldset>
@@ -235,7 +235,7 @@ export function OnboardingFlow() {
   const startResearch = async (event: FormEvent) => {
     event.preventDefault()
     if (!draft.websiteUrl.trim() && !draft.manualDescription.trim()) {
-      setError("Enter a company website or a short company description.")
+      setError("Enter a company website or a short filtering context.")
       return
     }
     setPending(true)
@@ -250,7 +250,8 @@ export function OnboardingFlow() {
       if (result.state === "completed") {
         setDraft((current) => ({
           ...current,
-          companyDescription: result.companyDescription,
+          filteringContext: result.filteringContext,
+          filteringGuidelines: result.filteringGuidelines,
           keywords: mergeResearchKeywordDrafts(
             current.keywords,
             result.suggestions.map((suggestion) => ({
@@ -281,8 +282,8 @@ export function OnboardingFlow() {
   }
 
   const continueToPlans = () => {
-    if (!draft.companyDescription.trim()) {
-      setError("Review or enter a concise company description.")
+    if (!draft.filteringContext.trim()) {
+      setError("Review or enter a concise filtering context.")
       return
     }
     if (selectedKeywords.length === 0) {
@@ -316,7 +317,8 @@ export function OnboardingFlow() {
     try {
       const result = await saveConfiguration({
         accessPath: plan,
-        companyDescription: draft.companyDescription.trim(),
+        filteringContext: draft.filteringContext.trim(),
+        filteringGuidelines: draft.filteringGuidelines.trim(),
         keywords: selectedKeywords.map((keyword, selectionOrder) => ({
           brandCandidate: keyword.brandCandidate,
           ...(keyword.description.trim()
@@ -462,7 +464,7 @@ export function OnboardingFlow() {
           </div>
           <div className="mt-5">
             <Label htmlFor="manual-description">
-              Manual company description{" "}
+              Manual filtering context{" "}
               <span className="font-normal">(optional fallback)</span>
             </Label>
             <Textarea
@@ -501,8 +503,9 @@ export function OnboardingFlow() {
                 onClick={() =>
                   setDraft((current) => ({
                     ...current,
-                    companyDescription:
-                      current.manualDescription || current.companyDescription,
+                    filteringContext:
+                      current.manualDescription || current.filteringContext,
+                    filteringGuidelines: current.filteringGuidelines,
                     step: 2,
                   }))
                 }
@@ -518,22 +521,42 @@ export function OnboardingFlow() {
       {draft.step === 2 && (
         <section>
           <div className="border-border bg-card rounded-xl border p-6">
-            <Label htmlFor="company-context">Company context</Label>
+            <Label htmlFor="company-context">Filtering context</Label>
             <Textarea
               id="company-context"
-              value={draft.companyDescription}
+              value={draft.filteringContext}
               onChange={(event) =>
                 setDraft((current) => ({
                   ...current,
-                  companyDescription: event.target.value,
+                  filteringContext: event.target.value,
                 }))
               }
               maxLength={1_000}
               className="mt-2 min-h-28"
             />
             <p className="text-muted-foreground mt-2 text-xs">
-              This reviewed context helps Astreex categorize mentions. It does
-              not change provider queries.
+              This identifies your brand and products for relevance, priority,
+              and categorization. It does not change provider queries.
+            </p>
+            <Label htmlFor="filtering-guidelines" className="mt-5 block">
+              Filtering guidelines
+            </Label>
+            <Textarea
+              id="filtering-guidelines"
+              value={draft.filteringGuidelines}
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  filteringGuidelines: event.target.value,
+                }))
+              }
+              maxLength={1_000}
+              className="mt-2 min-h-28"
+              placeholder="Include ambiguous names, unrelated meanings, and concrete relevant or irrelevant examples."
+            />
+            <p className="text-muted-foreground mt-2 text-xs">
+              These rules guide AI filtering and analysis. They do not alter
+              provider searches.
             </p>
           </div>
 
@@ -620,9 +643,9 @@ export function OnboardingFlow() {
       {draft.step === 3 && (
         <section>
           <p className="text-muted-foreground mb-5 text-sm">
-            Every option includes X, Reddit, Hacker News, categorization, custom
-            categories, and digests. Capacity changes how many keywords collect
-            at once.
+            Every option includes X, Reddit, Hacker News, AI filtering and
+            analysis, custom categories, and digests. Capacity changes how many
+            keywords collect at once.
           </p>
           <div className="grid gap-4 md:grid-cols-2">
             <button

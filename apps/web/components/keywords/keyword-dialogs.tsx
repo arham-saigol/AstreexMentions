@@ -198,7 +198,7 @@ export function KeywordFormDialog({
               onChange={(event) => setDescription(event.target.value)}
               className="mt-2 min-h-20"
               maxLength={160}
-              placeholder="Context for categorization"
+              placeholder="Context for mention analysis"
             />
           </div>
 

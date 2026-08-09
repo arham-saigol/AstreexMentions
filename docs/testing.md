@@ -126,6 +126,6 @@ Do not place credentials, raw webhook bodies, auth tokens, customer query text, 
 ## Known gaps that tests must not hide
 
 - `packages/backend/convex/_generated` cannot be produced until a real Convex development deployment is selected after interactive CLI login. The generic constructor/reference boundary typechecks but is transitional.
-- The categorization worker is covered with fixtures and mocked transport, but no automated suite proves real `deepseek-v4-pro` credentials, quota, request-field support, or production output quality.
+- The mention analysis worker is covered with fixtures and mocked transport, but no automated suite proves real `deepseek-v4-pro` credentials, quota, request-field support, or production output quality.
 - There is no automated credential-backed provider, checkout, webhook-delivery, OAuth, DNS, or mailbox suite.
 - The live deletion workflow still requires a disposable identity and explicit operator evidence; deterministic Clerk/Creem transport doubles are not evidence of cloud erasure.

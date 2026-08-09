@@ -34,7 +34,7 @@ The canonical schema is `packages/backend/convex/schema.ts`. It defines 25 valid
 
 **Purpose.** Tenant root for all customer-owned data.
 
-**Invariants.** Current rows have `kind = "personal"`; `ownerUserId` is the owning `users` row; `normalizedName` is the lowercase normalized workspace name; `deletedAt` is a soft-delete marker. Current authorization requires owner, user pointer, and membership to agree.
+**Invariants.** Current rows have `kind = "personal"`; `ownerUserId` is the owning `users` row; `normalizedName` is the lowercase normalized workspace name; `deletedAt` is a soft-delete marker. Current authorization requires owner, user pointer, and membership to agree. `filteringContext` and `filteringGuidelines` define the reviewed mention analysis context.
 
 **Indexes.**
 
@@ -173,7 +173,7 @@ The canonical schema is `packages/backend/convex/schema.ts`. It defines 25 valid
 
 **Purpose.** Canonical normalized external posts/comments/tweets matched into a workspace.
 
-**Invariants.** A mention belongs to exactly one workspace and platform. Deduplication prefers `(workspaceId, platform, contentType, providerItemId)` and falls back to the equivalent tuple with `fallbackKey`. `canonicalUrl` must be a credential-free HTTP(S) URL before customer return. `searchText` is normalized searchable content. `status` is customer workflow state; `analysisState` is categorization workflow state. `firstSeenAt` is creation observation time and `lastMatchedAt` advances when rediscovered. Customer pagination uses one bounded 250-row database scan to fill filtered pages across sparse gaps and carries unmatched continuation state in a workspace/filter-bound cursor.
+**Invariants.** A mention belongs to exactly one workspace and platform. Deduplication prefers `(workspaceId, platform, contentType, providerItemId)` and falls back to the equivalent tuple with `fallbackKey`. `canonicalUrl` must be a credential-free HTTP(S) URL before customer return. `searchText` is normalized searchable content. `status` is customer workflow state. `analysisState` is execution state, and `feedState` controls normal or Filtered feed visibility. `firstSeenAt` is creation observation time and `lastMatchedAt` advances when rediscovered. Customer pagination uses one bounded 1,000-row database scan to fill filtered pages across sparse gaps and carries unmatched continuation state in a workspace/filter-bound cursor.
 
 **Indexes.**
 
@@ -181,13 +181,16 @@ The canonical schema is `packages/backend/convex/schema.ts`. It defines 25 valid
 - `by_workspace_platform_content_fallback` (`workspaceId`, `platform`, `contentType`, `fallbackKey`) — fallback dedupe when no provider item ID exists.
 - `by_workspace_status_and_published_at` (`workspaceId`, `status`, `publishedAt`) — customer status feeds sorted by time.
 - `by_workspace_status_and_engagement` (`workspaceId`, `status`, `engagementScore`) — customer feeds sorted by engagement.
-- `by_workspace_engagement_and_published_at` (`workspaceId`, `engagementScore`, `publishedAt`) — complete tenant engagement feed with publication-time tie-breaking.
-- `by_workspace_and_published_at` (`workspaceId`, `publishedAt`) — complete tenant timeline and digest windows.
+- `by_workspace_feed_state_and_published_at` (`workspaceId`, `feedState`, `publishedAt`) — visible or Filtered feeds sorted by time.
+- `by_workspace_feed_state_engagement_and_published_at` (`workspaceId`, `feedState`, `engagementScore`, `publishedAt`) — feed-state engagement order.
+- `by_workspace_feed_state_priority_and_published_at` (`workspaceId`, `feedState`, `priority`, `publishedAt`) — one-priority feeds sorted by time.
+- `by_workspace_feed_state_priority_engagement_and_published_at` (`workspaceId`, `feedState`, `priority`, `engagementScore`, `publishedAt`) — one-priority feeds sorted by engagement.
+- `by_workspace_and_published_at` (`workspaceId`, `publishedAt`) — complete tenant timeline.
 - `by_workspace_category_and_published_at` (`workspaceId`, `categoryId`, `publishedAt`) — category filters and reassignment.
 - `by_workspace_platform_and_published_at` (`workspaceId`, `platform`, `publishedAt`) — platform filters.
 - `by_tracking_source_and_published_at` (`trackingSourceId`, `publishedAt`) — source lineage and cleanup/debugging.
 - `by_status_and_published_at` (`status`, `publishedAt`) — global workflow/metrics scans.
-- Search index `search_body` on `searchText`, filtered by `workspaceId`, `status`, `platform`, and `categoryId` — tenant-filtered full-text search.
+- Search index `search_body` on `searchText`, filtered by `workspaceId`, `feedState`, `priority`, `status`, `platform`, and `categoryId` — tenant-filtered full-text search.
 
 ### `mentionKeywordMatches`
 
@@ -223,7 +226,7 @@ The canonical schema is `packages/backend/convex/schema.ts`. It defines 25 valid
 
 **Purpose.** User-owned persisted mention filter/sort presets within a workspace. Keyword removal and category disable/delete—including atomic onboarding replacement—remove those IDs from active views in the same transaction.
 
-**Invariants.** Ownership is both `workspaceId` and `userId`. Active names are unique per workspace/user. Referenced category/keyword IDs must be active and belong to the same workspace at write time. Positions are contiguous after reorder/delete. `All Mentions` is synthetic and must never be stored, changed, reordered away from first, or deleted. Deletion is soft.
+**Invariants.** Ownership is both `workspaceId` and `userId`. Active names are unique per workspace/user. Referenced category/keyword IDs must be active and belong to the same workspace at write time. Positions are contiguous after reorder/delete. `All Mentions` and `Filtered` are synthetic. They cannot be stored, changed, reordered, or deleted. Deletion is soft.
 
 **Indexes.**
 
@@ -232,20 +235,20 @@ The canonical schema is `packages/backend/convex/schema.ts`. It defines 25 valid
 - `by_workspace_user_and_updated_at` (`workspaceId`, `userId`, `updatedAt`) — per-user change history/synchronization.
 - `by_workspace_and_updated_at` (`workspaceId`, `updatedAt`) — tenant-wide maintenance and future collaboration migration.
 
-### `categorizationJobs`
+### `mentionAnalysisJobs`
 
-**Purpose.** Durable one-mention categorization work queue.
+**Purpose.** Durable one-mention analysis work queue.
 
-**Invariants.** Each job targets one `mentionId` in the same workspace. `idempotencyKey` prevents duplicate work. Status is `pending`, `leased`, `completed`, or `dead`; attempts cannot exceed `maxAttempts`; leases and next retry coordinate recovery. `model` records the categorizer version/provider selection.
+**Invariants.** Each job targets one `mentionId` in the same workspace. `idempotencyKey` prevents duplicate work. Status is `pending`, `leased`, `completed`, or `dead`; attempts cannot exceed `maxAttempts`; leases and next retry coordinate recovery. `model` records the provider model. The immutable batch snapshot contains filtering fields and the enabled category catalog.
 
 **Indexes.**
 
-- `by_mention` (`mentionId`) — find categorization history/current work for a mention.
+- `by_mention` (`mentionId`) — find analysis history or current work for a mention.
 - `by_idempotency_key` (`idempotencyKey`) — enqueue idempotency.
 - `by_status_and_next_attempt_at` (`status`, `nextAttemptAt`) — claim due jobs.
 - `by_status_and_lease_expires_at` (`status`, `leaseExpiresAt`) — recover abandoned jobs.
 - `by_workspace_status_and_created_at` (`workspaceId`, `status`, `createdAt`) — tenant queue state.
-- `by_workspace_and_created_at` (`workspaceId`, `createdAt`) — tenant categorization history.
+- `by_workspace_and_created_at` (`workspaceId`, `createdAt`) — tenant analysis history.
 - `by_model_status_and_created_at` (`model`, `status`, `createdAt`) — model health and migration operations.
 
 ## Digest and email

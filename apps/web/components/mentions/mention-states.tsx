@@ -199,7 +199,7 @@ export function MentionsEmptyState({
       <EmptyStateDescription>
         {filtered
           ? "Adjust the search, filters, or saved view to broaden the existing feed."
-          : "Monitoring is active, but no customer conversations have been collected for these keywords yet."}
+          : "Monitoring is active. Collected mentions count toward usage; AI keeps clearly unrelated results in the reviewable Filtered view."}
       </EmptyStateDescription>
       {filtered && (
         <EmptyStateActions>

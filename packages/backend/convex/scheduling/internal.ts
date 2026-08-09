@@ -635,7 +635,7 @@ export const startTrackingProviderRun = internalMutation({
 
 type ProviderPageIngestion = {
   associationsAdded: number
-  categorizationJobsEnqueued: number
+  mentionAnalysisJobsEnqueued: number
   inserted: number
   rediscovered: number
   unprocessedPosition?: number | undefined
@@ -666,7 +666,7 @@ async function ingestProviderPage(
   })
   const aggregate: ProviderPageIngestion = {
     associationsAdded: 0,
-    categorizationJobsEnqueued: 0,
+    mentionAnalysisJobsEnqueued: 0,
     inserted: 0,
     rediscovered: 0,
     usageExhausted: false,
@@ -685,7 +685,7 @@ async function ingestProviderPage(
       },
     )
     aggregate.associationsAdded += result.associationsAdded
-    aggregate.categorizationJobsEnqueued += result.categorizationJobsEnqueued
+    aggregate.mentionAnalysisJobsEnqueued += result.mentionAnalysisJobsEnqueued
     aggregate.inserted += result.inserted
     aggregate.rediscovered += result.rediscovered
     aggregate.usageExhausted = result.usage.exhausted
@@ -1043,7 +1043,7 @@ export const applyNextTrackingProviderPage = internalMutation({
     } else if (!ingestion.usageExhausted) {
       return {
         associationsAdded: ingestion.associationsAdded,
-        categorizationJobsEnqueued: ingestion.categorizationJobsEnqueued,
+        mentionAnalysisJobsEnqueued: ingestion.mentionAnalysisJobsEnqueued,
         inserted: ingestion.inserted,
         rediscovered: ingestion.rediscovered,
         state: "batch_applied" as const,
@@ -1062,7 +1062,7 @@ export const applyNextTrackingProviderPage = internalMutation({
     )
     return {
       associationsAdded: ingestion.associationsAdded,
-      categorizationJobsEnqueued: ingestion.categorizationJobsEnqueued,
+      mentionAnalysisJobsEnqueued: ingestion.mentionAnalysisJobsEnqueued,
       inserted: ingestion.inserted,
       rediscovered: ingestion.rediscovered,
       state: ingestion.usageExhausted

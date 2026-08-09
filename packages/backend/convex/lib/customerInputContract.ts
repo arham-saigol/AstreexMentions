@@ -1,4 +1,5 @@
 export const SYNTHETIC_ALL_MENTIONS_VIEW_NAME = "All Mentions"
+export const SYNTHETIC_FILTERED_VIEW_NAME = "Filtered"
 
 export function normalizeSavedViewName(name: string): string {
   return name.trim().toLocaleLowerCase("en")
@@ -11,8 +12,11 @@ export function assertPersistableSavedViewName(name: string): string {
   if (normalized.length === 0) {
     throw new TypeError("Saved view name must be a non-empty string")
   }
-  if (normalized === normalizeSavedViewName(SYNTHETIC_ALL_MENTIONS_VIEW_NAME)) {
-    throw new TypeError("All Mentions is a synthetic view and cannot be stored")
+  if (
+    normalized === normalizeSavedViewName(SYNTHETIC_ALL_MENTIONS_VIEW_NAME) ||
+    normalized === normalizeSavedViewName(SYNTHETIC_FILTERED_VIEW_NAME)
+  ) {
+    throw new TypeError(`${trimmed} is a synthetic view and cannot be stored`)
   }
   return trimmed
 }

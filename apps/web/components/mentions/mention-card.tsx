@@ -76,6 +76,25 @@ function categoryVariant(category: MentionItem["category"]) {
   }
 }
 
+function PriorityBadge({ priority }: { priority: MentionItem["priority"] }) {
+  if (!priority) return null
+  const explanation =
+    priority === "high"
+      ? "Requires immediate intervention"
+      : priority === "medium"
+        ? "Should be reviewed soon"
+        : "No immediate action"
+  return (
+    <Badge
+      variant={priority === "high" ? "outline" : "muted"}
+      title={explanation}
+    >
+      {priority === "high" ? "High" : priority === "medium" ? "Medium" : "Low"}{" "}
+      priority
+    </Badge>
+  )
+}
+
 function StatusBadge({ status }: { status: MentionStatus }) {
   if (status === "new") return null
   return (
@@ -130,11 +149,13 @@ function MentionMetrics({ mention }: { mention: MentionItem }) {
 export function MentionCard({
   actionError,
   mention,
+  onRestore,
   onStatusChange,
   pending,
 }: {
   actionError?: string
   mention: MentionItem
+  onRestore?: (mentionId: MentionItem["id"]) => void
   onStatusChange: (mentionId: MentionItem["id"], status: MentionStatus) => void
   pending: boolean
 }) {
@@ -180,6 +201,10 @@ export function MentionCard({
             {mention.category.name}
           </Badge>
         )}
+        <PriorityBadge priority={mention.priority} />
+        {mention.analysisState === "failed" && (
+          <Badge variant="outline">Unclassified</Badge>
+        )}
         <StatusBadge status={mention.status} />
         <time
           dateTime={publishedAt.toISOString()}
@@ -203,6 +228,20 @@ export function MentionCard({
       >
         {mention.body}
       </p>
+
+      {mention.feedState === "filtered" && mention.relevanceReason && (
+        <div className="bg-muted/40 mt-3 rounded-md px-3 py-2 text-sm">
+          <span className="font-medium">Why this was filtered: </span>
+          <span className="text-muted-foreground">
+            {mention.relevanceReason}
+          </span>
+        </div>
+      )}
+      {mention.analysisState === "failed" && (
+        <p className="text-muted-foreground mt-3 text-xs">
+          Analysis did not complete, so this mention remains visible for review.
+        </p>
+      )}
 
       {mention.matchedKeywords.length > 0 && (
         <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -229,32 +268,45 @@ export function MentionCard({
           <MentionMetrics mention={mention} />
         </div>
         <div className="flex flex-wrap items-center gap-1 sm:ml-auto">
-          <Button
-            size="sm"
-            variant={mention.status === "saved" ? "secondary" : "ghost"}
-            aria-pressed={mention.status === "saved"}
-            disabled={pending}
-            onClick={() => onStatusChange(mention.id, saveTarget)}
-          >
-            <BookmarkSimpleIcon
-              aria-hidden="true"
-              weight={mention.status === "saved" ? "fill" : "regular"}
-            />
-            {mention.status === "saved" ? "Unsave" : "Save"}
-          </Button>
-          <Button
-            size="sm"
-            variant={mention.status === "dismissed" ? "secondary" : "ghost"}
-            aria-pressed={mention.status === "dismissed"}
-            disabled={pending}
-            onClick={() => onStatusChange(mention.id, dismissTarget)}
-          >
-            <XCircleIcon
-              aria-hidden="true"
-              weight={mention.status === "dismissed" ? "fill" : "regular"}
-            />
-            {mention.status === "dismissed" ? "Undo dismiss" : "Dismiss"}
-          </Button>
+          {mention.feedState === "filtered" && onRestore ? (
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={pending}
+              onClick={() => onRestore(mention.id)}
+            >
+              Mark as relevant
+            </Button>
+          ) : (
+            <>
+              <Button
+                size="sm"
+                variant={mention.status === "saved" ? "secondary" : "ghost"}
+                aria-pressed={mention.status === "saved"}
+                disabled={pending}
+                onClick={() => onStatusChange(mention.id, saveTarget)}
+              >
+                <BookmarkSimpleIcon
+                  aria-hidden="true"
+                  weight={mention.status === "saved" ? "fill" : "regular"}
+                />
+                {mention.status === "saved" ? "Unsave" : "Save"}
+              </Button>
+              <Button
+                size="sm"
+                variant={mention.status === "dismissed" ? "secondary" : "ghost"}
+                aria-pressed={mention.status === "dismissed"}
+                disabled={pending}
+                onClick={() => onStatusChange(mention.id, dismissTarget)}
+              >
+                <XCircleIcon
+                  aria-hidden="true"
+                  weight={mention.status === "dismissed" ? "fill" : "regular"}
+                />
+                {mention.status === "dismissed" ? "Undo dismiss" : "Dismiss"}
+              </Button>
+            </>
+          )}
           <Button asChild size="sm" variant="outline">
             <a
               href={mention.canonicalUrl}

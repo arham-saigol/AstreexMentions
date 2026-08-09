@@ -11,6 +11,7 @@ export type MentionStatus = FunctionArgs<
   typeof api.mentions.updateMentionStatus
 >["status"]
 export type Platform = NonNullable<MentionFilters["platforms"]>[number]
+export type MentionPriority = NonNullable<MentionFilters["priorities"]>[number]
 export type MentionCategory = FunctionReturnType<
   typeof api.categories.listCategories
 >[number]
@@ -28,6 +29,7 @@ export type SavedView = FunctionReturnType<
 >[number]
 
 export const ALL_MENTIONS_VIEW_ID = "all-mentions"
+export const FILTERED_VIEW_ID = "filtered"
 
 export function nextSparseMentionCursor(input: {
   filtered: boolean
@@ -76,6 +78,7 @@ export function compactMentionFilters(filters: MentionFilters): MentionFilters {
       ? { mentionStatuses: filters.mentionStatuses }
       : {}),
     ...(filters.platforms?.length ? { platforms: filters.platforms } : {}),
+    ...(filters.priorities?.length ? { priorities: filters.priorities } : {}),
     ...(filters.publishedAfter !== undefined
       ? { publishedAfter: filters.publishedAfter }
       : {}),
@@ -91,6 +94,7 @@ export function mentionFilterCount(filters: MentionFilters): number {
     (filters.keywordIds?.length ?? 0) +
     (filters.mentionStatuses?.length ?? 0) +
     (filters.platforms?.length ?? 0) +
+    (filters.priorities?.length ?? 0) +
     (filters.publishedAfter !== undefined ||
     filters.publishedBefore !== undefined
       ? 1
@@ -106,6 +110,7 @@ export function copyMentionFilters(filters: MentionFilters): MentionFilters {
       ? { mentionStatuses: [...filters.mentionStatuses] }
       : {}),
     ...(filters.platforms ? { platforms: [...filters.platforms] } : {}),
+    ...(filters.priorities ? { priorities: [...filters.priorities] } : {}),
     ...(filters.publishedAfter !== undefined
       ? { publishedAfter: filters.publishedAfter }
       : {}),
@@ -127,7 +132,12 @@ export function toggleFilterValue<T extends string>(
 }
 
 export function setMentionFilterValues<
-  Key extends "categoryIds" | "keywordIds" | "mentionStatuses" | "platforms",
+  Key extends
+    | "categoryIds"
+    | "keywordIds"
+    | "mentionStatuses"
+    | "platforms"
+    | "priorities",
 >(
   filters: MentionFilters,
   key: Key,

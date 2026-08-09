@@ -5,6 +5,7 @@ import type { Doc, Id } from "./_generated/dataModel"
 import { authenticatedMutation, authenticatedQuery } from "./lib/authorization"
 import { type MutationCtx, type QueryCtx } from "./_generated/server"
 import { resolveWorkspaceAllowance } from "./lib/workspaceAccess"
+import { incrementDailySystemMetric } from "./lib/systemMetricBuckets"
 import { resolveCurrentCustomer } from "./users"
 
 const DEFAULT_PAGE_SIZE = 12
@@ -31,12 +32,22 @@ const mentionSortValidator = v.union(
   v.literal("oldest"),
   v.literal("most_engaged"),
 )
+const mentionPriorityValidator = v.union(
+  v.literal("low"),
+  v.literal("medium"),
+  v.literal("high"),
+)
+const selectedFeedValidator = v.union(
+  v.literal("visible"),
+  v.literal("filtered"),
+)
 
 const mentionFiltersValidator = v.object({
   categoryIds: v.optional(v.array(v.id("categories"))),
   keywordIds: v.optional(v.array(v.id("keywords"))),
   mentionStatuses: v.optional(v.array(mentionStatusValidator)),
   platforms: v.optional(v.array(platformValidator)),
+  priorities: v.optional(v.array(mentionPriorityValidator)),
   publishedAfter: v.optional(v.number()),
   publishedBefore: v.optional(v.number()),
 })
@@ -54,6 +65,12 @@ const matchedKeywordResultValidator = v.object({
 })
 
 const mentionResultValidator = v.object({
+  analysisState: v.union(
+    v.literal("pending"),
+    v.literal("leased"),
+    v.literal("completed"),
+    v.literal("failed"),
+  ),
   authorDisplayName: v.optional(v.string()),
   authorHandle: v.optional(v.string()),
   body: v.string(),
@@ -61,12 +78,20 @@ const mentionResultValidator = v.object({
   category: v.union(categoryResultValidator, v.null()),
   commentCount: v.optional(v.number()),
   engagementScore: v.number(),
+  feedState: v.union(
+    v.literal("pending"),
+    v.literal("visible"),
+    v.literal("filtered"),
+  ),
   id: v.id("mentions"),
   likeCount: v.optional(v.number()),
   matchedKeywords: v.array(matchedKeywordResultValidator),
   platform: platformValidator,
   pointCount: v.optional(v.number()),
+  priority: v.optional(mentionPriorityValidator),
+  priorityReason: v.optional(v.string()),
   publishedAt: v.number(),
+  relevanceReason: v.optional(v.string()),
   replyCount: v.optional(v.number()),
   repostCount: v.optional(v.number()),
   status: mentionStatusValidator,
@@ -94,6 +119,8 @@ type MentionId = Id<"mentions">
 type KeywordId = Id<"keywords">
 type CategoryId = Id<"categories">
 type Platform = "x" | "reddit" | "hacker_news"
+type MentionPriority = "low" | "medium" | "high"
+type SelectedFeed = "visible" | "filtered"
 type MentionStatus = "new" | "saved" | "dismissed"
 type MentionSort = "newest" | "oldest" | "most_engaged"
 type MentionMonitoringState =
@@ -114,6 +141,7 @@ type NormalizedMentionFilters = {
   keywordIds: KeywordId[]
   mentionStatuses: MentionStatus[]
   platforms: Platform[]
+  priorities: MentionPriority[]
   publishedAfter?: number | undefined
   publishedBefore?: number | undefined
 }
@@ -204,6 +232,7 @@ function normalizeMentionFilters(
         keywordIds?: KeywordId[] | undefined
         mentionStatuses?: MentionStatus[] | undefined
         platforms?: Platform[] | undefined
+        priorities?: MentionPriority[] | undefined
         publishedAfter?: number | undefined
         publishedBefore?: number | undefined
       }
@@ -236,6 +265,7 @@ function normalizeMentionFilters(
       "mentionStatuses",
     ),
     platforms: normalizedEnumArray(filters?.platforms, "platforms"),
+    priorities: normalizedEnumArray(filters?.priorities, "priorities"),
     ...(publishedAfter === undefined ? {} : { publishedAfter }),
     ...(publishedBefore === undefined ? {} : { publishedBefore }),
   }
@@ -306,6 +336,7 @@ export function safeCanonicalUrl(value: string): string {
 }
 
 function requestFingerprint(input: {
+  feed: SelectedFeed
   filters: NormalizedMentionFilters
   query: string
   sort: MentionSort
@@ -316,6 +347,7 @@ function requestFingerprint(input: {
       keywordIds: input.filters.keywordIds.map(String).sort(),
       mentionStatuses: [...input.filters.mentionStatuses].sort(),
       platforms: [...input.filters.platforms].sort(),
+      priorities: [...input.filters.priorities].sort(),
       ...(input.filters.publishedAfter === undefined
         ? {}
         : { publishedAfter: input.filters.publishedAfter }),
@@ -323,6 +355,7 @@ function requestFingerprint(input: {
         ? {}
         : { publishedBefore: input.filters.publishedBefore }),
     },
+    feed: input.feed,
     query: input.query,
     sort: input.sort,
   })
@@ -441,6 +474,12 @@ function mentionMatchesFilters(
   if (
     filters.platforms.length > 0 &&
     !filters.platforms.includes(row.platform as Platform)
+  ) {
+    return false
+  }
+  if (
+    filters.priorities.length > 0 &&
+    !filters.priorities.includes(row.priority as MentionPriority)
   ) {
     return false
   }
@@ -625,10 +664,12 @@ async function formatMention(
   ])
 
   return {
+    analysisState: mention.analysisState,
     body: mention.body as string,
     canonicalUrl,
     category,
     engagementScore: mention.engagementScore as number,
+    feedState: mention.feedState,
     id: mention._id as MentionId,
     matchedKeywords,
     platform: mention.platform as Platform,
@@ -649,6 +690,15 @@ async function formatMention(
     ...(mention.pointCount === undefined
       ? {}
       : { pointCount: mention.pointCount as number }),
+    ...(mention.priority === undefined
+      ? {}
+      : { priority: mention.priority as MentionPriority }),
+    ...(mention.priorityReason === undefined
+      ? {}
+      : { priorityReason: mention.priorityReason as string }),
+    ...(mention.relevanceReason === undefined
+      ? {}
+      : { relevanceReason: mention.relevanceReason as string }),
     ...(mention.replyCount === undefined
       ? {}
       : { replyCount: mention.replyCount as number }),
@@ -715,6 +765,7 @@ async function readMentionMonitoringState(
 export const listMentions = authenticatedQuery({
   args: {
     cursor: v.optional(v.string()),
+    feed: v.optional(selectedFeedValidator),
     filters: v.optional(mentionFiltersValidator),
     limit: v.optional(v.number()),
     now: v.number(),
@@ -730,8 +781,9 @@ export const listMentions = authenticatedQuery({
     const filters = normalizeMentionFilters(args.filters)
     const query = normalizeMentionSearchQuery(args.query)
     const sort = args.sort ?? "newest"
+    const feed = args.feed ?? "visible"
     const limit = validatedLimit(args.limit)
-    const fingerprint = requestFingerprint({ filters, query, sort })
+    const fingerprint = requestFingerprint({ feed, filters, query, sort })
     const cursor =
       args.cursor === undefined
         ? null
@@ -743,11 +795,13 @@ export const listMentions = authenticatedQuery({
 
     await assertAuthorizedFilterIds(ctx, customer.workspaceId, filters)
     const keywordIds = new Set(filters.keywordIds.map(String))
-    const bufferedRows = await bufferedMentionRows(
-      ctx,
-      customer.workspaceId,
-      cursor?.bufferedMentionIds ?? [],
-    )
+    const bufferedRows = (
+      await bufferedMentionRows(
+        ctx,
+        customer.workspaceId,
+        cursor?.bufferedMentionIds ?? [],
+      )
+    ).filter((row) => row.feedState === feed)
     const candidates = await filterMentionRows(
       ctx,
       customer.workspaceId,
@@ -758,20 +812,52 @@ export const listMentions = authenticatedQuery({
     let databaseDone = cursor?.databaseDone ?? false
 
     if (candidates.length <= limit && !databaseDone) {
+      const singlePriority =
+        filters.priorities.length === 1 ? filters.priorities[0] : undefined
       const scanQuery =
         sort === "most_engaged"
-          ? ctx.db
-              .query("mentions")
-              .withIndex("by_workspace_engagement_and_published_at", (q) =>
-                q.eq("workspaceId", customer.workspaceId),
-              )
-              .order("desc")
-          : ctx.db
-              .query("mentions")
-              .withIndex("by_workspace_and_published_at", (q) =>
-                q.eq("workspaceId", customer.workspaceId),
-              )
-              .order(sort === "oldest" ? "asc" : "desc")
+          ? singlePriority
+            ? ctx.db
+                .query("mentions")
+                .withIndex(
+                  "by_workspace_feed_state_priority_engagement_and_published_at",
+                  (q) =>
+                    q
+                      .eq("workspaceId", customer.workspaceId)
+                      .eq("feedState", feed)
+                      .eq("priority", singlePriority),
+                )
+                .order("desc")
+            : ctx.db
+                .query("mentions")
+                .withIndex(
+                  "by_workspace_feed_state_engagement_and_published_at",
+                  (q) =>
+                    q
+                      .eq("workspaceId", customer.workspaceId)
+                      .eq("feedState", feed),
+                )
+                .order("desc")
+          : singlePriority
+            ? ctx.db
+                .query("mentions")
+                .withIndex(
+                  "by_workspace_feed_state_priority_and_published_at",
+                  (q) =>
+                    q
+                      .eq("workspaceId", customer.workspaceId)
+                      .eq("feedState", feed)
+                      .eq("priority", singlePriority),
+                )
+                .order(sort === "oldest" ? "asc" : "desc")
+            : ctx.db
+                .query("mentions")
+                .withIndex("by_workspace_feed_state_and_published_at", (q) =>
+                  q
+                    .eq("workspaceId", customer.workspaceId)
+                    .eq("feedState", feed),
+                )
+                .order(sort === "oldest" ? "asc" : "desc")
       const scanned = await scanQuery.paginate({
         cursor: continueCursor,
         maximumBytesRead: MENTION_SCAN_MAX_BYTES,
@@ -838,6 +924,55 @@ export const getMention = authenticatedQuery({
       args.now,
     )
     return await formatMention(ctx, mention)
+  },
+})
+
+export const restoreFilteredMention = authenticatedMutation({
+  args: { mentionId: v.id("mentions") },
+  returns: mentionResultValidator,
+  handler: async (ctx, args) => {
+    const customer = await requireCurrentCustomer(ctx)
+    const now = Date.now()
+    const mention = await mentionForWorkspace(
+      ctx,
+      customer.workspaceId,
+      args.mentionId as MentionId,
+      now,
+    )
+    if (mention.feedState !== "filtered") {
+      mentionError(
+        "MENTION_NOT_FILTERED",
+        "Only a filtered mention can be marked as relevant",
+      )
+    }
+    await ctx.db.patch("mentions", mention._id, {
+      feedState: "visible",
+      updatedAt: now,
+      visibilityOverride: "manually_restored",
+    })
+    await ctx.db.insert("auditEvents", {
+      action: "mention.restored",
+      actorType: "user",
+      actorUserId: customer.userId,
+      createdAt: now,
+      outcome: "success",
+      targetId: String(mention._id),
+      targetType: "mention",
+      workspaceId: customer.workspaceId,
+    })
+    await incrementDailySystemMetric(ctx, {
+      bucketAt: now,
+      metric: "mentions_restored",
+      updatedAt: now,
+      workspaceId: customer.workspaceId,
+    })
+    const restored = await mentionForWorkspace(
+      ctx,
+      customer.workspaceId,
+      args.mentionId as MentionId,
+      now,
+    )
+    return await formatMention(ctx, restored)
   },
 })
 

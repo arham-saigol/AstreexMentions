@@ -1,8 +1,8 @@
 import {
-  DEFAULT_CATEGORIZATION_MAX_ATTEMPTS,
-  DEEPSEEK_CATEGORIZATION_MODEL,
-} from "../lib/deepseekCategorization"
-import { transitionCategorizationStatusMetric } from "../categorization/metrics"
+  DEFAULT_MENTION_ANALYSIS_MAX_ATTEMPTS,
+  DEEPSEEK_MENTION_ANALYSIS_MODEL,
+} from "../lib/deepseekMentionAnalysis"
+import { transitionMentionAnalysisStatusMetric } from "../mentionAnalysis/metrics"
 import {
   buildMentionRediscoveryPatch,
   type MentionEngagementMetrics,
@@ -21,7 +21,7 @@ import {
 import type { IngestionCandidate, IngestionChunk } from "./contracts"
 import {
   buildUsageWarningEmail,
-  categorizationJobIdempotencyKey,
+  mentionAnalysisJobIdempotencyKey,
   INGESTED_MENTION_METRIC,
   ingestedMentionPlatformMetric,
   normalizeMentionFallbackKey,
@@ -42,7 +42,7 @@ type TrackingSourceType =
 export class IngestionInvariantError extends Error {
   readonly code:
     | "CANDIDATE_SOURCE_MISMATCH"
-    | "CATEGORIZATION_JOB_COLLISION"
+    | "MENTION_ANALYSIS_JOB_COLLISION"
     | "DEDUPE_IDENTITY_COLLISION"
     | "EMAIL_OUTBOX_COLLISION"
     | "EMAIL_RECIPIENT_UNCONFIGURED"
@@ -65,7 +65,7 @@ export class IngestionInvariantError extends Error {
 
 export type IngestionChunkResult = {
   associationsAdded: number
-  categorizationJobsEnqueued: number
+  mentionAnalysisJobsEnqueued: number
   checkpoint: "advance" | "hold"
   inserted: number
   nextPosition: number
@@ -259,16 +259,16 @@ async function ensureKeywordAssociation(
   return true
 }
 
-async function ensureCategorizationJob(
+async function ensureMentionAnalysisJob(
   ctx: MutationCtx,
   input: { mentionId: MentionId; workspaceId: WorkspaceId },
   now: number,
 ): Promise<boolean> {
-  const idempotencyKey = categorizationJobIdempotencyKey(
+  const idempotencyKey = mentionAnalysisJobIdempotencyKey(
     String(input.mentionId),
   )
   const existing = await ctx.db
-    .query("categorizationJobs")
+    .query("mentionAnalysisJobs")
     .withIndex("by_idempotency_key", (q) =>
       q.eq("idempotencyKey", idempotencyKey),
     )
@@ -279,26 +279,26 @@ async function ensureCategorizationJob(
       existing.workspaceId !== input.workspaceId
     ) {
       throw new IngestionInvariantError(
-        "CATEGORIZATION_JOB_COLLISION",
-        "Categorization idempotency key belongs to another mention",
+        "MENTION_ANALYSIS_JOB_COLLISION",
+        "Mention analysis idempotency key belongs to another mention",
       )
     }
     return false
   }
 
-  await ctx.db.insert("categorizationJobs", {
+  await ctx.db.insert("mentionAnalysisJobs", {
     attempts: 0,
     createdAt: now,
     idempotencyKey,
-    maxAttempts: DEFAULT_CATEGORIZATION_MAX_ATTEMPTS,
+    maxAttempts: DEFAULT_MENTION_ANALYSIS_MAX_ATTEMPTS,
     mentionId: input.mentionId,
-    model: DEEPSEEK_CATEGORIZATION_MODEL,
+    model: DEEPSEEK_MENTION_ANALYSIS_MODEL,
     nextAttemptAt: now,
     status: "pending",
     updatedAt: now,
     workspaceId: input.workspaceId,
   })
-  await transitionCategorizationStatusMetric(ctx, {
+  await transitionMentionAnalysisStatusMetric(ctx, {
     to: "pending",
     updatedAt: now,
     workspaceId: input.workspaceId,
@@ -558,7 +558,7 @@ export async function applyIngestionChunkAtomically(
     allowance.kind === "paid" ? allowance.cycle.warning100SentAt : undefined
   const sourceType = sourceTypeFromRow(source)
   let associationsAdded = 0
-  let categorizationJobsEnqueued = 0
+  let mentionAnalysisJobsEnqueued = 0
   let inserted = 0
   let pausedSourceCount = 0
   let rediscovered = 0
@@ -612,7 +612,7 @@ export async function applyIngestionChunkAtomically(
       const unprocessedPosition = input.startPosition + candidateIndex
       return {
         associationsAdded,
-        categorizationJobsEnqueued,
+        mentionAnalysisJobsEnqueued,
         checkpoint: "hold",
         inserted,
         nextPosition: unprocessedPosition,
@@ -637,6 +637,7 @@ export async function applyIngestionChunkAtomically(
         contentType: candidate.contentType,
         engagementScore: candidate.engagementScore,
         fallbackKey,
+        feedState: "pending",
         firstSeenAt: options.now,
         language: candidate.language,
         lastMatchedAt: options.now,
@@ -678,13 +679,13 @@ export async function applyIngestionChunkAtomically(
       })
     }
     if (
-      await ensureCategorizationJob(
+      await ensureMentionAnalysisJob(
         ctx,
         { mentionId, workspaceId },
         options.now,
       )
     ) {
-      categorizationJobsEnqueued += 1
+      mentionAnalysisJobsEnqueued += 1
     }
     if (
       await ensureKeywordAssociation(
@@ -765,7 +766,7 @@ export async function applyIngestionChunkAtomically(
 
   return {
     associationsAdded,
-    categorizationJobsEnqueued,
+    mentionAnalysisJobsEnqueued,
     checkpoint: "advance",
     inserted,
     nextPosition: input.startPosition + input.candidates.length,

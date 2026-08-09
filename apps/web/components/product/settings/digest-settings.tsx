@@ -160,8 +160,7 @@ export function DigestSettings() {
             Daily digest
           </Label>
           <p className="text-muted-foreground mt-1 text-sm leading-6">
-            Email a concise summary of recent categorized mentions once each
-            day.
+            Email a concise summary of recent visible mentions once each day.
           </p>
         </div>
         <Switch

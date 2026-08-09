@@ -231,8 +231,9 @@ export function UsageSettings() {
         <p className="text-muted-foreground mt-1 text-sm leading-6">
           Astreex deduplicates provider results before a mention is accepted
           into the account. Repeated sightings of the same source item do not
-          consume the mention allowance again; only newly accepted mentions
-          increment usage.
+          consume the mention allowance again. Each newly collected mention
+          increments usage, including one that AI later keeps in the reviewable
+          Filtered view.
         </p>
       </section>
     </div>

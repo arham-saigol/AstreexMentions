@@ -51,6 +51,7 @@ describe("daily digest pagination", () => {
       for (let index = 0; index < 600; index += 1) {
         const mentionId = await ctx.db.insert("mentions", {
           analysisState: "completed",
+          feedState: "visible",
           body: `Digest mention ${index}`,
           canonicalUrl: `https://www.reddit.com/r/test/comments/${index}`,
           commentCount: 0,
@@ -68,6 +69,24 @@ describe("daily digest pagination", () => {
         if (index === 0) {
           oldestHighEngagementId = mentionId
         }
+      }
+      for (const [index, feedState] of ["pending", "filtered"].entries()) {
+        await ctx.db.insert("mentions", {
+          analysisState: feedState === "pending" ? "pending" : "completed",
+          body: `Excluded digest mention ${feedState}`,
+          canonicalUrl: `https://example.com/excluded/${feedState}`,
+          contentType: "post",
+          engagementScore: 2_000_000 + index,
+          feedState,
+          firstSeenAt: 9_500,
+          lastMatchedAt: 9_500,
+          platform: "reddit",
+          publishedAt: 1_500 + index,
+          searchText: `excluded ${feedState}`,
+          status: "new",
+          updatedAt: 9_500,
+          workspaceId,
+        })
       }
       if (!oldestHighEngagementId) {
         throw new TypeError("Oldest digest mention was not seeded")
@@ -112,7 +131,7 @@ describe("daily digest pagination", () => {
     expect(run?.aggregationCompletedAt).toEqual(expect.any(Number))
     expect(run?.mentionIds).toContain(seeded.oldestHighEngagementId)
     expect(JSON.parse(run?.digestCountsJson ?? "")).toEqual({
-      categories: { uncategorized: 600 },
+      categories: { unanalyzed: 600 },
       platforms: { hacker_news: 0, reddit: 600, x: 0 },
       total: 600,
     })

@@ -32,9 +32,9 @@ crons.interval(
 )
 
 crons.interval(
-  "dispatch mention categorization jobs",
+  "dispatch mention analysis jobs",
   { minutes: 1 },
-  internal.categorization.internal.dispatchDueCategorizationJobs,
+  internal.mentionAnalysis.internal.dispatchDueMentionAnalysisJobs,
   {},
 )
 

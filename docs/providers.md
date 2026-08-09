@@ -261,7 +261,7 @@ If timestamp and type are equal, the lexicographically greater event ID wins. Ol
 - Monitoring adapters: `packages/backend/convex/integrations/providers/`
 - Monitoring action: `packages/backend/convex/scheduling/actions.ts`
 - DeepSeek transport: `packages/backend/convex/integrations/deepseek.ts`
-- DeepSeek validation: `packages/backend/convex/lib/deepseekCategorization.ts`
+- DeepSeek validation: `packages/backend/convex/lib/deepseekMentionAnalysis.ts`
 - Resend transport: `packages/backend/convex/integrations/resend.ts`
 - Resend outbox: `packages/backend/convex/email/internal.ts`
 - Resend webhook: `packages/backend/convex/email/resendHttp.ts` and `email/webhookInternal.ts`

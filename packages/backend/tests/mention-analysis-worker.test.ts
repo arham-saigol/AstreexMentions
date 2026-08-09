@@ -7,25 +7,25 @@ import { type GenericId, v } from "convex/values"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import {
-  categorySnapshotJson,
-  CATEGORIZATION_LEASE_MS,
-} from "../convex/categorization/model"
+  analysisSnapshotJson,
+  MENTION_ANALYSIS_LEASE_MS,
+} from "../convex/mentionAnalysis/model"
 import {
-  buildDeepSeekCategorizationRequest,
-  MAX_CATEGORIZATION_BATCH_PROMPT_CHARS,
-  MAX_CATEGORIZATION_MENTION_TEXT_CHARS,
-  type CategorizationCategory,
-} from "../convex/lib/deepseekCategorization"
+  buildDeepSeekMentionAnalysisRequest,
+  MAX_MENTION_ANALYSIS_BATCH_PROMPT_CHARS,
+  MAX_MENTION_ANALYSIS_MENTION_TEXT_CHARS,
+  type MentionAnalysisCategory,
+} from "../convex/lib/deepseekMentionAnalysis"
 
 const NOW = Date.parse("2026-07-26T12:00:00.000Z")
 const BLOCKED_CONFIGURATION_RETRY_MS = 5 * 60_000
 
-const categorizationTestSchema = defineSchema({
+const mentionAnalysisTestSchema = defineSchema({
   categories: defineTable(v.any()).index(
     "by_workspace_deleted_enabled_and_sort_order",
     ["workspaceId", "deletedAt", "enabled", "sortOrder"],
   ),
-  categorizationJobs: defineTable(v.any())
+  mentionAnalysisJobs: defineTable(v.any())
     .index("by_idempotency_key", ["idempotencyKey"])
     .index("by_status_and_next_attempt_at", ["status", "nextAttemptAt"])
     .index("by_status_and_lease_expires_at", ["status", "leaseExpiresAt"]),
@@ -52,18 +52,18 @@ const categorizationTestSchema = defineSchema({
 
 const modules = {
   "./_generated/server.ts": async () => ({}),
-  "./categorization/actions.ts": async () =>
-    await import("../convex/categorization/actions"),
-  "./categorization/internal.ts": async () =>
-    await import("../convex/categorization/internal"),
+  "./mentionAnalysis/actions.ts": async () =>
+    await import("../convex/mentionAnalysis/actions"),
+  "./mentionAnalysis/internal.ts": async () =>
+    await import("../convex/mentionAnalysis/internal"),
 }
 
 function createBackendTest() {
-  return convexTest({ modules, schema: categorizationTestSchema })
+  return convexTest({ modules, schema: mentionAnalysisTestSchema })
 }
 
 type BackendTest = ReturnType<typeof createBackendTest>
-type CategorizationJobId = GenericId<"categorizationJobs">
+type MentionAnalysisJobId = GenericId<"mentionAnalysisJobs">
 type CategoryId = GenericId<"categories">
 type MentionId = GenericId<"mentions">
 type WorkspaceId = GenericId<"workspaces">
@@ -81,7 +81,7 @@ type CategoryFixture = {
   systemKey?: string
 }
 
-type CategorizationFixture = {
+type MentionAnalysisFixture = {
   batchCases: BatchCase[]
   categories: CategoryFixture[]
   disabledCategory: CategoryFixture
@@ -102,55 +102,62 @@ type CategorizationFixture = {
 const fixture = JSON.parse(
   readFileSync(
     fileURLToPath(
-      new URL("./fixtures/categorization/deepseek-cases.json", import.meta.url),
+      new URL(
+        "./fixtures/mention-analysis/deepseek-cases.json",
+        import.meta.url,
+      ),
     ),
     "utf8",
   ),
-) as CategorizationFixture
+) as MentionAnalysisFixture
 
 const dispatchReference = makeFunctionReference<
   "mutation",
   { now?: number },
   { batches: number; blockedCatalog: number; claimed: number; state: string }
->("categorization/internal:dispatchDueCategorizationJobs")
+>("mentionAnalysis/internal:dispatchDueMentionAnalysisJobs")
 
 const executeReference = makeFunctionReference<
   "action",
   {
-    categorySnapshotJson: string
-    jobIds: CategorizationJobId[]
+    analysisSnapshotJson: string
+    jobIds: MentionAnalysisJobId[]
     leaseToken: string
   },
   unknown
->("categorization/actions:executeCategorizationBatch")
+>("mentionAnalysis/actions:executeMentionAnalysisBatch")
 
-type SeededCategorization = {
+type SeededMentionAnalysis = {
   categories: Array<{
     description: string
     id: CategoryId
     name: string
   }>
-  jobIds: CategorizationJobId[]
+  jobIds: MentionAnalysisJobId[]
   mentionIds: MentionId[]
   usageCycleId: GenericId<"usageCycles">
   workspaceId: WorkspaceId
 }
 
-async function seedCategorization(
+async function seedMentionAnalysis(
   t: BackendTest,
   options: {
     includeOther?: boolean
     maxAttempts?: number
     mentionCount: number
   },
-): Promise<SeededCategorization> {
+): Promise<SeededMentionAnalysis> {
   return await t.run(async (ctx) => {
     const workspaceId = await ctx.db.insert("workspaces", {
       createdAt: NOW - 10_000,
-      name: "Categorization fixture workspace",
+      filteringContext:
+        "Astreex monitors customer conversations for the Astreex product.",
+      filteringGuidelines:
+        "Keep ambiguous mentions relevant. Filter clearly unrelated meanings.",
+      name: "Mention analysis fixture workspace",
       updatedAt: NOW - 10_000,
     })
-    const categories: SeededCategorization["categories"] = []
+    const categories: SeededMentionAnalysis["categories"] = []
     let sortOrder = 0
     for (const category of fixture.categories) {
       if (category.systemKey === "other" && options.includeOther === false) {
@@ -181,21 +188,22 @@ async function seedCategorization(
     })
 
     const mentionIds: MentionId[] = []
-    const jobIds: CategorizationJobId[] = []
+    const jobIds: MentionAnalysisJobId[] = []
     for (let index = 0; index < options.mentionCount; index += 1) {
       const mentionFixture = fixture.mentions[index % fixture.mentions.length]!
       const mentionId = await ctx.db.insert("mentions", {
         analysisState: "pending",
+        feedState: "pending",
         body: `${mentionFixture.body} Fixture ${index}.`,
         firstSeenAt: NOW - 1_000 + index,
         title: mentionFixture.title,
         updatedAt: NOW - 1_000 + index,
         workspaceId,
       })
-      const jobId = await ctx.db.insert("categorizationJobs", {
+      const jobId = await ctx.db.insert("mentionAnalysisJobs", {
         attempts: 0,
         createdAt: NOW - 1_000 + index,
-        idempotencyKey: `categorization:mention:${String(mentionId)}`,
+        idempotencyKey: `mention-analysis:mention:${String(mentionId)}`,
         maxAttempts: options.maxAttempts ?? 3,
         mentionId,
         model: "deepseek-v4-pro",
@@ -209,7 +217,6 @@ async function seedCategorization(
     }
 
     const usageCycleId = await ctx.db.insert("usageCycles", {
-      categorizationsUsed: 17,
       mentionsUsed: 23,
       updatedAt: NOW - 500,
       workspaceId,
@@ -219,30 +226,36 @@ async function seedCategorization(
   })
 }
 
-function snapshotJson(seeded: SeededCategorization): string {
-  return categorySnapshotJson(
+function snapshotJson(seeded: SeededMentionAnalysis): string {
+  return analysisSnapshotJson(
     seeded.categories.map((category) => ({
       description: category.description,
       id: String(category.id),
       name: category.name,
     })),
+    {
+      filteringContext:
+        "Astreex monitors customer conversations for the Astreex product.",
+      filteringGuidelines:
+        "Keep ambiguous mentions relevant. Filter clearly unrelated meanings.",
+    },
   )
 }
 
 async function leasedBatchArguments(
   t: BackendTest,
-  seeded: SeededCategorization,
+  seeded: SeededMentionAnalysis,
 ): Promise<
   Array<{
-    categorySnapshotJson: string
-    jobIds: CategorizationJobId[]
+    analysisSnapshotJson: string
+    jobIds: MentionAnalysisJobId[]
     leaseToken: string
   }>
 > {
   const jobs = await t.run(
-    async (ctx) => await ctx.db.query("categorizationJobs").collect(),
+    async (ctx) => await ctx.db.query("mentionAnalysisJobs").collect(),
   )
-  const byLease = new Map<string, CategorizationJobId[]>()
+  const byLease = new Map<string, MentionAnalysisJobId[]>()
   for (const job of jobs) {
     if (job.status !== "leased" || typeof job.leaseToken !== "string") {
       continue
@@ -253,15 +266,15 @@ async function leasedBatchArguments(
   }
   return [...byLease.entries()]
     .map(([leaseToken, jobIds]) => ({
-      categorySnapshotJson: snapshotJson(seeded),
+      analysisSnapshotJson: snapshotJson(seeded),
       jobIds,
       leaseToken,
     }))
     .sort((left, right) => right.jobIds.length - left.jobIds.length)
 }
 
-function categorizationOutput(
-  seeded: SeededCategorization,
+function mentionAnalysisOutput(
+  seeded: SeededMentionAnalysis,
   kind:
     | "duplicate_mapping"
     | "extra_field"
@@ -275,10 +288,18 @@ function categorizationOutput(
   const first = {
     categoryId: questionId,
     mentionId: String(seeded.mentionIds[0]),
+    priority: "medium" as const,
+    priorityReason: "A customer question should be reviewed soon.",
+    relevant: true,
+    relevanceReason: "The mention discusses the monitored product.",
   }
   const second = {
     categoryId: bugId,
     mentionId: String(seeded.mentionIds[1] ?? seeded.mentionIds[0]),
+    priority: "high" as const,
+    priorityReason: "The severe regression needs immediate review.",
+    relevant: false,
+    relevanceReason: "The text uses an unrelated meaning of the keyword.",
   }
 
   switch (kind) {
@@ -341,12 +362,12 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe("durable DeepSeek categorization worker", () => {
+describe("durable DeepSeek mention analysis worker", () => {
   it.each(fixture.batchCases)(
     "claims $mentionCount pending jobs as $expectedBatchSizes",
     async ({ expectedBatchSizes, mentionCount }) => {
       const t = createBackendTest()
-      const seeded = await seedCategorization(t, { mentionCount })
+      const seeded = await seedMentionAnalysis(t, { mentionCount })
 
       const result = await t.mutation(dispatchReference, { now: NOW })
       const batches = await leasedBatchArguments(t, seeded)
@@ -360,7 +381,7 @@ describe("durable DeepSeek categorization worker", () => {
         expectedBatchSizes,
       )
       const jobs = await t.run(
-        async (ctx) => await ctx.db.query("categorizationJobs").collect(),
+        async (ctx) => await ctx.db.query("mentionAnalysisJobs").collect(),
       )
       expect(jobs).toHaveLength(mentionCount)
       expect(
@@ -368,22 +389,22 @@ describe("durable DeepSeek categorization worker", () => {
           (job) =>
             job.attempts === 1 &&
             job.status === "leased" &&
-            job.leaseExpiresAt === NOW + CATEGORIZATION_LEASE_MS,
+            job.leaseExpiresAt === NOW + MENTION_ANALYSIS_LEASE_MS,
         ),
       ).toBe(true)
     },
   )
 
-  it("never combines categorization jobs from different workspaces", async () => {
+  it("never combines mention analysis jobs from different workspaces", async () => {
     const t = createBackendTest()
-    await seedCategorization(t, { mentionCount: 30 })
-    await seedCategorization(t, { mentionCount: 30 })
+    await seedMentionAnalysis(t, { mentionCount: 30 })
+    await seedMentionAnalysis(t, { mentionCount: 30 })
 
     await expect(
       t.mutation(dispatchReference, { now: NOW }),
-    ).resolves.toMatchObject({ batches: 2, claimed: 60 })
+    ).resolves.toMatchObject({ batches: 4, claimed: 60 })
     const jobs = await t.run(
-      async (ctx) => await ctx.db.query("categorizationJobs").collect(),
+      async (ctx) => await ctx.db.query("mentionAnalysisJobs").collect(),
     )
     const workspacesByLease = new Map<string, Set<string>>()
     const countsByLease = new Map<string, number>()
@@ -402,16 +423,16 @@ describe("durable DeepSeek categorization worker", () => {
     ).toBe(true)
     expect(
       [...countsByLease.values()].sort((left, right) => right - left),
-    ).toEqual([30, 30])
+    ).toEqual([20, 20, 10, 10])
   })
 
   it("truncates mention text and leases batches within the prompt budget", async () => {
     const t = createBackendTest()
-    const seeded = await seedCategorization(t, { mentionCount: 20 })
+    const seeded = await seedMentionAnalysis(t, { mentionCount: 20 })
     await t.run(async (ctx) => {
       for (const mentionId of seeded.mentionIds) {
         await ctx.db.patch("mentions", mentionId, {
-          body: "x".repeat(MAX_CATEGORIZATION_MENTION_TEXT_CHARS * 2),
+          body: "x".repeat(MAX_MENTION_ANALYSIS_MENTION_TEXT_CHARS * 2),
           title: "Long mention",
         })
       }
@@ -432,25 +453,25 @@ describe("durable DeepSeek categorization worker", () => {
     const loadContext = makeFunctionReference<
       "query",
       {
-        categorySnapshotJson: string
-        jobIds: CategorizationJobId[]
+        analysisSnapshotJson: string
+        jobIds: MentionAnalysisJobId[]
         leaseToken: string
       },
       {
         mentions?: Array<{ id: string; text: string }>
         state: string
       }
-    >("categorization/internal:loadCategorizationBatchContext")
+    >("mentionAnalysis/internal:loadMentionAnalysisBatchContext")
     for (const args of batches) {
       const context = await t.query(loadContext, args)
       expect(context.state).toBe("ready")
       expect(
         JSON.stringify({ mentions: context.mentions }).length,
-      ).toBeLessThanOrEqual(MAX_CATEGORIZATION_BATCH_PROMPT_CHARS)
+      ).toBeLessThanOrEqual(MAX_MENTION_ANALYSIS_BATCH_PROMPT_CHARS)
       expect(
         context.mentions?.every(
           ({ text }) =>
-            text.length <= MAX_CATEGORIZATION_MENTION_TEXT_CHARS &&
+            text.length <= MAX_MENTION_ANALYSIS_MENTION_TEXT_CHARS &&
             text.endsWith("[truncated]"),
         ),
       ).toBe(true)
@@ -458,16 +479,20 @@ describe("durable DeepSeek categorization worker", () => {
   })
 
   it("puts every enabled category description in the prompt and sends required DeepSeek controls", async () => {
-    const promptCategories: CategorizationCategory[] = fixture.categories.map(
+    const promptCategories: MentionAnalysisCategory[] = fixture.categories.map(
       (category, index) => ({
         description: category.description,
         id: `fixture-category-${index}`,
         name: category.name,
       }),
     )
-    const request = buildDeepSeekCategorizationRequest(
+    const request = buildDeepSeekMentionAnalysisRequest(
       [{ id: "fixture-mention", text: "Fixture mention text" }],
       promptCategories,
+      {
+        filteringContext: "Astreex is a mention monitoring product.",
+        filteringGuidelines: "Keep ambiguous mentions relevant.",
+      },
     )
     expect(request).toMatchObject({
       model: "deepseek-v4-pro",
@@ -483,23 +508,25 @@ describe("durable DeepSeek categorization worker", () => {
       fixture.disabledCategory.description,
     )
     expect(() =>
-      buildDeepSeekCategorizationRequest(
+      buildDeepSeekMentionAnalysisRequest(
         [{ id: "fixture-mention", text: "Fixture mention text" }],
         promptCategories.filter((category) => category.name !== "Other"),
+        { filteringContext: "Astreex is a mention monitoring product." },
       ),
     ).toThrowError(expect.objectContaining({ code: "INVALID_CATALOG" }))
     expect(() =>
-      buildDeepSeekCategorizationRequest(
+      buildDeepSeekMentionAnalysisRequest(
         [{ id: "fixture-mention", text: "Fixture mention text" }],
         promptCategories.map((category, index) =>
           index === 0 ? { ...category, description: "" } : category,
         ),
+        { filteringContext: "Astreex is a mention monitoring product." },
       ),
     ).toThrowError(expect.objectContaining({ code: "INVALID_CATALOG" }))
 
     const t = createBackendTest()
-    const seeded = await seedCategorization(t, { mentionCount: 1 })
-    const fetchMock = completionFetch(categorizationOutput(seeded, "valid"))
+    const seeded = await seedMentionAnalysis(t, { mentionCount: 1 })
+    const fetchMock = completionFetch(mentionAnalysisOutput(seeded, "valid"))
     vi.stubGlobal("fetch", fetchMock)
     process.env.DEEPSEEK_API_KEY = "deepseek_fixture_key"
     await t.mutation(dispatchReference, { now: NOW })
@@ -514,11 +541,11 @@ describe("durable DeepSeek categorization worker", () => {
     )
     expect(
       categoryMetrics.filter((row) =>
-        String(row.metric).startsWith("mentions_categorized:"),
+        String(row.metric).startsWith("mentions_analyzed_category:"),
       ),
     ).toEqual([
       expect.objectContaining({
-        metric: "mentions_categorized:question",
+        metric: "mentions_analyzed_category:question",
         scope: "global",
         value: 1,
       }),
@@ -544,7 +571,7 @@ describe("durable DeepSeek categorization worker", () => {
 
   it("blocks a workspace snapshot unless the enabled permanent Other category is present", async () => {
     const t = createBackendTest()
-    await seedCategorization(t, { includeOther: false, mentionCount: 2 })
+    await seedMentionAnalysis(t, { includeOther: false, mentionCount: 2 })
 
     await expect(
       t.mutation(dispatchReference, { now: NOW }),
@@ -554,7 +581,7 @@ describe("durable DeepSeek categorization worker", () => {
       claimed: 0,
     })
     const state = await t.run(async (ctx) => ({
-      jobs: await ctx.db.query("categorizationJobs").collect(),
+      jobs: await ctx.db.query("mentionAnalysisJobs").collect(),
       mentions: await ctx.db.query("mentions").collect(),
     }))
     expect(
@@ -569,10 +596,10 @@ describe("durable DeepSeek categorization worker", () => {
     "rejects %s for the whole leased batch without partial category writes",
     async (kind) => {
       const t = createBackendTest()
-      const seeded = await seedCategorization(t, { mentionCount: 2 })
+      const seeded = await seedMentionAnalysis(t, { mentionCount: 2 })
       await t.mutation(dispatchReference, { now: NOW })
       const [args] = await leasedBatchArguments(t, seeded)
-      const fetchMock = completionFetch(categorizationOutput(seeded, kind))
+      const fetchMock = completionFetch(mentionAnalysisOutput(seeded, kind))
       vi.stubGlobal("fetch", fetchMock)
       process.env.DEEPSEEK_API_KEY = "deepseek_fixture_key"
 
@@ -582,7 +609,7 @@ describe("durable DeepSeek categorization worker", () => {
         state: "failed",
       })
       const state = await t.run(async (ctx) => ({
-        jobs: await ctx.db.query("categorizationJobs").collect(),
+        jobs: await ctx.db.query("mentionAnalysisJobs").collect(),
         mentions: await ctx.db.query("mentions").collect(),
         metrics: (await ctx.db.query("providerMetricBuckets").collect()).filter(
           (metric) => metric.granularity === "hour",
@@ -625,9 +652,36 @@ describe("durable DeepSeek categorization worker", () => {
     },
   )
 
+  it("rejects a stale snapshot after filtering guidance changes", async () => {
+    const t = createBackendTest()
+    const seeded = await seedMentionAnalysis(t, { mentionCount: 1 })
+    const fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+
+    await t.mutation(dispatchReference, { now: NOW })
+    const [args] = await leasedBatchArguments(t, seeded)
+    await t.run(async (ctx) => {
+      await ctx.db.patch("workspaces", seeded.workspaceId, {
+        filteringGuidelines: "The reviewed guidance changed after leasing.",
+      })
+    })
+    await expect(t.action(executeReference, args!)).resolves.toMatchObject({
+      pending: 1,
+      state: "failed",
+    })
+    const job = await t.run(
+      async (ctx) => await ctx.db.get("mentionAnalysisJobs", seeded.jobIds[0]!),
+    )
+    expect(job).toMatchObject({
+      lastError: "analysis_snapshot_changed",
+      status: "pending",
+    })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it("ignores a stale lease before configuration lookup or provider I/O", async () => {
     const t = createBackendTest()
-    const seeded = await seedCategorization(t, { mentionCount: 1 })
+    const seeded = await seedMentionAnalysis(t, { mentionCount: 1 })
     await t.mutation(dispatchReference, { now: NOW })
     const [args] = await leasedBatchArguments(t, seeded)
     const fetchMock = vi.fn(async () => {
@@ -635,13 +689,13 @@ describe("durable DeepSeek categorization worker", () => {
     })
     vi.stubGlobal("fetch", fetchMock)
     process.env.DEEPSEEK_API_KEY = "deepseek_fixture_key"
-    vi.setSystemTime(NOW + CATEGORIZATION_LEASE_MS)
+    vi.setSystemTime(NOW + MENTION_ANALYSIS_LEASE_MS)
 
     await expect(t.action(executeReference, args!)).resolves.toEqual({
       state: "stale_lease",
     })
     const state = await t.run(async (ctx) => ({
-      jobs: await ctx.db.query("categorizationJobs").collect(),
+      jobs: await ctx.db.query("mentionAnalysisJobs").collect(),
       metrics: (await ctx.db.query("providerMetricBuckets").collect()).filter(
         (metric) => metric.granularity === "hour",
       ),
@@ -655,7 +709,7 @@ describe("durable DeepSeek categorization worker", () => {
 
   it("retries transient failures with a new lease and becomes dead at the bound", async () => {
     const t = createBackendTest()
-    const seeded = await seedCategorization(t, {
+    const seeded = await seedMentionAnalysis(t, {
       maxAttempts: 2,
       mentionCount: 1,
     })
@@ -677,7 +731,7 @@ describe("durable DeepSeek categorization worker", () => {
       },
     )
     const firstFailure = await t.run(
-      async (ctx) => await ctx.db.get("categorizationJobs", seeded.jobIds[0]!),
+      async (ctx) => await ctx.db.get("mentionAnalysisJobs", seeded.jobIds[0]!),
     )
     expect(firstFailure).toMatchObject({
       attempts: 1,
@@ -699,7 +753,7 @@ describe("durable DeepSeek categorization worker", () => {
     })
 
     const state = await t.run(async (ctx) => ({
-      job: await ctx.db.get("categorizationJobs", seeded.jobIds[0]!),
+      job: await ctx.db.get("mentionAnalysisJobs", seeded.jobIds[0]!),
       mention: await ctx.db.get("mentions", seeded.mentionIds[0]!),
       metrics: (await ctx.db.query("providerMetricBuckets").collect()).filter(
         (metric) => metric.granularity === "hour",
@@ -711,7 +765,10 @@ describe("durable DeepSeek categorization worker", () => {
       lastError: "SERVER_ERROR",
       status: "dead",
     })
-    expect(state.mention).toMatchObject({ analysisState: "failed" })
+    expect(state.mention).toMatchObject({
+      analysisState: "failed",
+      feedState: "visible",
+    })
     expect(state.runs).toHaveLength(2)
     expect(state.metrics).toEqual([
       expect.objectContaining({
@@ -725,7 +782,7 @@ describe("durable DeepSeek categorization worker", () => {
 
   it("dead-letters a permanent provider failure without another retry", async () => {
     const t = createBackendTest()
-    const seeded = await seedCategorization(t, { mentionCount: 1 })
+    const seeded = await seedMentionAnalysis(t, { mentionCount: 1 })
     const fetchMock = vi.fn(
       async () =>
         new Response("authentication failed", {
@@ -742,7 +799,7 @@ describe("durable DeepSeek categorization worker", () => {
       pending: 0,
     })
     const state = await t.run(async (ctx) => ({
-      job: await ctx.db.get("categorizationJobs", seeded.jobIds[0]!),
+      job: await ctx.db.get("mentionAnalysisJobs", seeded.jobIds[0]!),
       mention: await ctx.db.get("mentions", seeded.mentionIds[0]!),
     }))
     expect(state.job).toMatchObject({
@@ -751,12 +808,15 @@ describe("durable DeepSeek categorization worker", () => {
       status: "dead",
     })
     expect(state.job?.nextAttemptAt).toBeUndefined()
-    expect(state.mention).toMatchObject({ analysisState: "failed" })
+    expect(state.mention).toMatchObject({
+      analysisState: "failed",
+      feedState: "visible",
+    })
   })
 
   it("keeps missing provider configuration pending without attempt or telemetry churn", async () => {
     const t = createBackendTest()
-    const seeded = await seedCategorization(t, { mentionCount: 1 })
+    const seeded = await seedMentionAnalysis(t, { mentionCount: 1 })
     const fetchMock = vi.fn(async () => {
       throw new Error("missing configuration must not call DeepSeek")
     })
@@ -769,7 +829,7 @@ describe("durable DeepSeek categorization worker", () => {
       state: "blocked_config",
     })
     const blocked = await t.run(async (ctx) => ({
-      job: await ctx.db.get("categorizationJobs", seeded.jobIds[0]!),
+      job: await ctx.db.get("mentionAnalysisJobs", seeded.jobIds[0]!),
       metrics: (await ctx.db.query("providerMetricBuckets").collect()).filter(
         (metric) => metric.granularity === "hour",
       ),
@@ -789,7 +849,7 @@ describe("durable DeepSeek categorization worker", () => {
       t.mutation(dispatchReference, { now: NOW + 60_000 }),
     ).resolves.toMatchObject({ batches: 0, claimed: 0 })
     const unchanged = await t.run(
-      async (ctx) => await ctx.db.get("categorizationJobs", seeded.jobIds[0]!),
+      async (ctx) => await ctx.db.get("mentionAnalysisJobs", seeded.jobIds[0]!),
     )
     expect(unchanged).toMatchObject({
       attempts: 0,
@@ -800,11 +860,11 @@ describe("durable DeepSeek categorization worker", () => {
 
   it("atomically applies a valid batch, records provider telemetry, and does not increment usage", async () => {
     const t = createBackendTest()
-    const seeded = await seedCategorization(t, { mentionCount: 2 })
+    const seeded = await seedMentionAnalysis(t, { mentionCount: 2 })
     const usageBefore = await t.run(
       async (ctx) => await ctx.db.get("usageCycles", seeded.usageCycleId),
     )
-    const fetchMock = completionFetch(categorizationOutput(seeded, "valid"))
+    const fetchMock = completionFetch(mentionAnalysisOutput(seeded, "valid"))
     vi.stubGlobal("fetch", fetchMock)
     process.env.DEEPSEEK_API_KEY = "deepseek_fixture_key"
 
@@ -816,7 +876,7 @@ describe("durable DeepSeek categorization worker", () => {
     })
 
     const state = await t.run(async (ctx) => ({
-      jobs: await ctx.db.query("categorizationJobs").collect(),
+      jobs: await ctx.db.query("mentionAnalysisJobs").collect(),
       mentions: await ctx.db.query("mentions").collect(),
       metrics: (await ctx.db.query("providerMetricBuckets").collect()).filter(
         (metric) => metric.granularity === "hour",
@@ -832,14 +892,29 @@ describe("durable DeepSeek categorization worker", () => {
     expect(state.mentions.map((mention) => String(mention.categoryId))).toEqual(
       [String(seeded.categories[0]!.id), String(seeded.categories[1]!.id)],
     )
-    expect(
-      state.mentions.every((mention) => mention.analysisState === "completed"),
-    ).toBe(true)
+    expect(state.mentions).toEqual([
+      expect.objectContaining({
+        analysisState: "completed",
+        analysisVersion: "mention-analysis-v1",
+        feedState: "visible",
+        priority: "medium",
+        priorityReason: "A customer question should be reviewed soon.",
+        relevanceReason: "The mention discusses the monitored product.",
+      }),
+      expect.objectContaining({
+        analysisState: "completed",
+        analysisVersion: "mention-analysis-v1",
+        feedState: "filtered",
+        priority: "high",
+        priorityReason: "The severe regression needs immediate review.",
+        relevanceReason: "The text uses an unrelated meaning of the keyword.",
+      }),
+    ])
     expect(state.runs).toEqual([
       expect.objectContaining({
         attempt: 1,
         inputCount: 2,
-        operation: "chat.completions",
+        operation: "mention_analysis:mention-analysis-v1",
         outputCount: 2,
         provider: "deepseek",
         status: "succeeded",

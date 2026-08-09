@@ -21,7 +21,8 @@ const accessPathValidator = v.union(
 export const saveOnboardingConfiguration = authenticatedMutation({
   args: {
     accessPath: accessPathValidator,
-    companyDescription: v.string(),
+    filteringContext: v.string(),
+    filteringGuidelines: v.string(),
     keywords: v.array(
       v.object({
         brandCandidate: v.optional(v.boolean()),
@@ -43,11 +44,18 @@ export const saveOnboardingConfiguration = authenticatedMutation({
   handler: async (ctx, args) => {
     const customer = await resolveCurrentCustomer(ctx, ctx.identity)
     const workspaceName = normalizeWorkspaceName(args.workspaceName)
-    const companyDescription = args.companyDescription.trim()
-    if (!companyDescription || companyDescription.length > 1_000) {
+    const filteringContext = args.filteringContext.trim()
+    const filteringGuidelines = args.filteringGuidelines.trim()
+    if (!filteringContext || filteringContext.length > 1_000) {
       throw new ConvexError({
-        code: "INVALID_COMPANY_DESCRIPTION",
-        message: "Company description must contain 1 to 1,000 characters",
+        code: "INVALID_FILTERING_CONTEXT",
+        message: "Filtering context must contain 1 to 1,000 characters",
+      })
+    }
+    if (filteringGuidelines.length > 1_000) {
+      throw new ConvexError({
+        code: "INVALID_FILTERING_GUIDELINES",
+        message: "Filtering guidelines cannot exceed 1,000 characters",
       })
     }
     const now = Date.now()
@@ -61,7 +69,8 @@ export const saveOnboardingConfiguration = authenticatedMutation({
       workspaceId: customer.workspace.id,
     })
     await ctx.db.patch("workspaces", customer.workspace.id, {
-      companyDescription,
+      filteringContext,
+      filteringGuidelines,
       name: workspaceName,
       normalizedName: workspaceName.toLocaleLowerCase("en"),
       updatedAt: now,

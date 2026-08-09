@@ -30,6 +30,7 @@ import {
   type MentionCategory,
   type MentionFilters,
   type MentionKeyword,
+  type MentionPriority,
   type MentionStatus,
   type Platform,
 } from "@/lib/mentions"
@@ -40,6 +41,12 @@ const platformOptions: Array<{ label: string; value: Platform }> = [
   { label: "X", value: "x" },
   { label: "Reddit", value: "reddit" },
   { label: "Hacker News", value: "hacker_news" },
+]
+
+const priorityOptions: Array<{ label: string; value: MentionPriority }> = [
+  { label: "High", value: "high" },
+  { label: "Medium", value: "medium" },
+  { label: "Low", value: "low" },
 ]
 
 const statusOptions: Array<{ label: string; value: MentionStatus }> = [
@@ -248,6 +255,27 @@ export function MentionFilterPopover({
                       current,
                       "platforms",
                       toggleFilterValue(current.platforms, option.value),
+                    ),
+                  )
+                }
+              />
+            ))}
+          </FilterGroup>
+
+          <Separator />
+
+          <FilterGroup label="Priority">
+            {priorityOptions.map((option) => (
+              <FilterCheckbox
+                key={option.value}
+                label={option.label}
+                checked={draft.priorities?.includes(option.value) ?? false}
+                onCheckedChange={() =>
+                  setDraft((current) =>
+                    setMentionFilterValues(
+                      current,
+                      "priorities",
+                      toggleFilterValue(current.priorities, option.value),
                     ),
                   )
                 }

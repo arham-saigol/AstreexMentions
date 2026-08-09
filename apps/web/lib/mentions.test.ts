@@ -1,12 +1,26 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  compactMentionFilters,
+  copyMentionFilters,
+  mentionFilterCount,
   nextSparseMentionCursor,
   optimisticStatusHasSettled,
   visibleMentionStatus,
 } from "./mentions"
 
 describe("mentions view contracts", () => {
+  it("preserves and counts multiple priority selections", () => {
+    const filters = compactMentionFilters({
+      priorities: ["high", "medium"],
+      platforms: [],
+    })
+    expect(filters).toEqual({ priorities: ["high", "medium"] })
+    expect(mentionFilterCount(filters)).toBe(2)
+    expect(copyMentionFilters(filters)).toEqual(filters)
+    expect(copyMentionFilters(filters).priorities).not.toBe(filters.priorities)
+  })
+
   it("advances across an empty bounded scan when filters remain active", () => {
     expect(
       nextSparseMentionCursor({

@@ -28,14 +28,20 @@ describe("onboarding draft", () => {
     const draft = createOnboardingDraft("Astreex")
     const parsed = onboardingDraftSchema.parse({
       ...draft,
-      companyDescription: "Astreex monitors customer conversations.",
+      filteringContext: "Astreex monitors customer conversations.",
       keywords: [keyword(0)],
       selectedPlan: "free",
       step: 3,
       websiteUrl: "https://astreex.example/",
     })
 
-    expect(parsed).toMatchObject({ selectedPlan: "free", step: 3, version: 2 })
+    expect(parsed).toMatchObject({
+      filteringContext: "Astreex monitors customer conversations.",
+      filteringGuidelines: "",
+      selectedPlan: "free",
+      step: 3,
+      version: 3,
+    })
     expect(parsed).not.toHaveProperty("categories")
     expect(parsed.keywords[0]).not.toHaveProperty("kind")
   })
@@ -112,12 +118,12 @@ describe("onboarding draft", () => {
     ).toBe(false)
   })
 
-  it("normalizes duplicate phrases and clears only the version-two workspace draft", () => {
+  it("normalizes duplicate phrases and clears only the version-three workspace draft", () => {
     expect(normalizeKeywordPhrase("  Astreex   Monitor ")).toBe(
       "astreex monitor",
     )
     const removeItem = vi.fn()
     clearOnboardingDraftStorage({ removeItem }, "workspace_1")
-    expect(removeItem).toHaveBeenCalledWith("astreex:onboarding:workspace_1:v2")
+    expect(removeItem).toHaveBeenCalledWith("astreex:onboarding:workspace_1:v3")
   })
 })

@@ -6,8 +6,10 @@ import {
   assertPersistableSavedViewName,
   normalizeSavedViewName,
   SYNTHETIC_ALL_MENTIONS_VIEW_NAME,
+  SYNTHETIC_FILTERED_VIEW_NAME,
 } from "./lib/customerInputContract"
 import {
+  mentionPriorityValidator,
   mentionSortValidator,
   mentionStatusValidator,
   platformValidator,
@@ -20,12 +22,14 @@ type KeywordId = Id<"keywords">
 type MentionStatus = "new" | "saved" | "dismissed"
 type MentionSort = "newest" | "oldest" | "most_engaged"
 type Platform = "x" | "reddit" | "hacker_news"
+type MentionPriority = "low" | "medium" | "high"
 
 type MentionFilters = {
   categoryIds?: CategoryId[]
   keywordIds?: KeywordId[]
   mentionStatuses?: MentionStatus[]
   platforms?: Platform[]
+  priorities?: MentionPriority[]
   publishedAfter?: number
   publishedBefore?: number
 }
@@ -42,6 +46,7 @@ type SavedViewResult = {
 const MAX_ACTIVE_SAVED_VIEWS = 50
 
 export const SYNTHETIC_ALL_MENTIONS_VIEW_ID = "all-mentions"
+export const SYNTHETIC_FILTERED_VIEW_ID = "filtered"
 
 export const SYNTHETIC_ALL_MENTIONS_VIEW: Readonly<SavedViewResult> =
   Object.freeze({
@@ -53,11 +58,23 @@ export const SYNTHETIC_ALL_MENTIONS_VIEW: Readonly<SavedViewResult> =
     sort: "newest",
   })
 
+export const SYNTHETIC_FILTERED_VIEW: Readonly<SavedViewResult> = Object.freeze(
+  {
+    filters: {},
+    icon: "funnel",
+    id: SYNTHETIC_FILTERED_VIEW_ID,
+    name: SYNTHETIC_FILTERED_VIEW_NAME,
+    position: 1,
+    sort: "newest",
+  },
+)
+
 const filtersValidator = v.object({
   categoryIds: v.optional(v.array(v.id("categories"))),
   keywordIds: v.optional(v.array(v.id("keywords"))),
   mentionStatuses: v.optional(v.array(mentionStatusValidator)),
   platforms: v.optional(v.array(platformValidator)),
+  priorities: v.optional(v.array(mentionPriorityValidator)),
   publishedAfter: v.optional(v.number()),
   publishedBefore: v.optional(v.number()),
 })
@@ -149,6 +166,10 @@ async function validatedFilters(
     filters.platforms === undefined
       ? undefined
       : uniqueValues(filters.platforms, "Platform filters")
+  const priorities =
+    filters.priorities === undefined
+      ? undefined
+      : uniqueValues(filters.priorities, "Priority filters")
   const publishedAfter =
     filters.publishedAfter === undefined
       ? undefined
@@ -204,6 +225,7 @@ async function validatedFilters(
     ...(keywordIds?.length ? { keywordIds } : {}),
     ...(mentionStatuses?.length ? { mentionStatuses } : {}),
     ...(platforms?.length ? { platforms } : {}),
+    ...(priorities?.length ? { priorities } : {}),
     ...(publishedAfter === undefined ? {} : { publishedAfter }),
     ...(publishedBefore === undefined ? {} : { publishedBefore }),
   }
@@ -261,13 +283,15 @@ async function storedViews(
   }
 
   for (const row of rows) {
+    const normalizedName = normalizeSavedViewName(row.name as string)
     if (
-      normalizeSavedViewName(row.name as string) ===
-      normalizeSavedViewName(SYNTHETIC_ALL_MENTIONS_VIEW_NAME)
+      normalizedName ===
+        normalizeSavedViewName(SYNTHETIC_ALL_MENTIONS_VIEW_NAME) ||
+      normalizedName === normalizeSavedViewName(SYNTHETIC_FILTERED_VIEW_NAME)
     ) {
       savedViewError(
         "SAVED_VIEW_INVARIANT",
-        "All Mentions cannot exist as a stored saved view",
+        "Synthetic views cannot exist as stored saved views",
       )
     }
   }
@@ -279,10 +303,13 @@ async function storedViews(
 }
 
 function asSavedViewId(value: string): SavedViewId {
-  if (value === SYNTHETIC_ALL_MENTIONS_VIEW_ID) {
+  if (
+    value === SYNTHETIC_ALL_MENTIONS_VIEW_ID ||
+    value === SYNTHETIC_FILTERED_VIEW_ID
+  ) {
     savedViewError(
       "SYNTHETIC_VIEW_IMMUTABLE",
-      "All Mentions is synthetic and cannot be changed",
+      "Synthetic views cannot be changed",
     )
   }
   return value as SavedViewId
@@ -292,14 +319,20 @@ export function normalizeSavedViewReorderIds(
   values: readonly string[],
 ): string[] {
   const ids = [...values]
-  if (ids[0] === SYNTHETIC_ALL_MENTIONS_VIEW_ID) {
-    ids.shift()
-  }
-  if (ids.includes(SYNTHETIC_ALL_MENTIONS_VIEW_ID)) {
-    savedViewError(
-      "INVALID_SAVED_VIEW_ORDER",
-      "All Mentions must remain the first synthetic view",
-    )
+  const includesSynthetic =
+    ids.includes(SYNTHETIC_ALL_MENTIONS_VIEW_ID) ||
+    ids.includes(SYNTHETIC_FILTERED_VIEW_ID)
+  if (includesSynthetic) {
+    if (
+      ids[0] !== SYNTHETIC_ALL_MENTIONS_VIEW_ID ||
+      ids[1] !== SYNTHETIC_FILTERED_VIEW_ID
+    ) {
+      savedViewError(
+        "INVALID_SAVED_VIEW_ORDER",
+        "All Mentions and Filtered must remain the first synthetic views",
+      )
+    }
+    ids.splice(0, 2)
   }
   return uniqueValues(ids, "Saved view order")
 }
@@ -313,7 +346,11 @@ export const listSavedViews = authenticatedQuery({
       ctx.identity,
     )
     const rows = await storedViews(ctx, workspace.id, viewer.id)
-    return [SYNTHETIC_ALL_MENTIONS_VIEW, ...rows.map(storedSavedViewResult)]
+    return [
+      SYNTHETIC_ALL_MENTIONS_VIEW,
+      SYNTHETIC_FILTERED_VIEW,
+      ...rows.map(storedSavedViewResult),
+    ]
   },
 })
 

@@ -44,6 +44,7 @@ import { SavedViews } from "@/components/mentions/saved-views"
 import { useProductContext } from "@/components/product/product-context"
 import {
   EMPTY_MENTION_FILTERS,
+  FILTERED_VIEW_ID,
   compactMentionFilters,
   copyMentionFilters,
   mentionFilterCount,
@@ -64,17 +65,20 @@ const PAGE_SIZE = 12
 
 function mentionsQueryArguments({
   cursor,
+  feed,
   filters,
   query,
   sort,
 }: {
   cursor: string | undefined
+  feed: "filtered" | "visible"
   filters: MentionFilters
   query: string
   sort: MentionSort
 }) {
   const compactFilters = compactMentionFilters(filters)
   return {
+    feed,
     limit: PAGE_SIZE,
     sort,
     ...(cursor ? { cursor } : {}),
@@ -300,11 +304,12 @@ export function MentionsScreen() {
     () =>
       mentionsQueryArguments({
         cursor,
+        feed: selectedViewId === FILTERED_VIEW_ID ? "filtered" : "visible",
         filters,
         query: deferredSearch,
         sort,
       }),
-    [cursor, deferredSearch, filters, sort],
+    [cursor, deferredSearch, filters, selectedViewId, sort],
   )
 
   const categoriesValue = useQuery(
@@ -321,6 +326,9 @@ export function MentionsScreen() {
   )
 
   const updateMentionStatus = useMutation(api.mentions.updateMentionStatus)
+  const restoreFilteredMention = useMutation(
+    api.mentions.restoreFilteredMention,
+  )
 
   const mentions = useMemo(() => mentionsValue?.items ?? [], [mentionsValue])
 
@@ -359,6 +367,29 @@ export function MentionsScreen() {
       optimisticStatuses[mention.id],
     ),
   }))
+
+  const restoreMention = async (mentionId: MentionItem["id"]) => {
+    setPendingStatuses((current) => ({ ...current, [mentionId]: true }))
+    setActionErrors((current) => {
+      const next = { ...current }
+      delete next[mentionId]
+      return next
+    })
+    try {
+      await restoreFilteredMention({ mentionId })
+    } catch {
+      setActionErrors((current) => ({
+        ...current,
+        [mentionId]: "This mention could not be restored. Try again.",
+      }))
+    } finally {
+      setPendingStatuses((current) => {
+        const next = { ...current }
+        delete next[mentionId]
+        return next
+      })
+    }
+  }
 
   const changeMentionStatus = async (
     mentionId: MentionItem["id"],
@@ -417,7 +448,9 @@ export function MentionsScreen() {
   }
 
   const applyFilters = (nextFilters: MentionFilters) => {
-    setSelectedViewId(null)
+    if (selectedViewId !== FILTERED_VIEW_ID) {
+      setSelectedViewId(null)
+    }
     setFilters(nextFilters)
     resetPagination()
   }
@@ -451,6 +484,7 @@ export function MentionsScreen() {
   const setupRequired =
     monitoringState === "setup_required" || keywords.length === 0
   const paused = monitoringState === "paused" || allKeywordsPaused
+  const filteredView = selectedViewId === FILTERED_VIEW_ID
   const filtered =
     search.trim().length > 0 ||
     mentionFilterCount(filters) > 0 ||
@@ -526,7 +560,15 @@ export function MentionsScreen() {
         </div>
       ) : loading ? (
         <div className="mt-6">
-          <MentionsLoadingState />
+          {selectedViewId === FILTERED_VIEW_ID ? (
+            <div className="border-border rounded-lg border border-dashed p-10 text-center">
+              <p className="text-muted-foreground text-sm" role="status">
+                Loading filtered mentions…
+              </p>
+            </div>
+          ) : (
+            <MentionsLoadingState />
+          )}
         </div>
       ) : (
         <>
@@ -585,7 +627,9 @@ export function MentionsScreen() {
               <Select
                 value={sort}
                 onValueChange={(value) => {
-                  setSelectedViewId(null)
+                  if (selectedViewId !== FILTERED_VIEW_ID) {
+                    setSelectedViewId(null)
+                  }
                   setSort(value as MentionSort)
                   resetPagination()
                 }}
@@ -618,7 +662,15 @@ export function MentionsScreen() {
               )}
 
             {visibleMentions.length === 0 ? (
-              setupRequired ? (
+              filteredView ? (
+                <div className="border-border rounded-lg border border-dashed p-10 text-center">
+                  <h2 className="font-medium">No filtered mentions</h2>
+                  <p className="text-muted-foreground mt-2 text-sm">
+                    Mentions that AI identifies as clearly unrelated will stay
+                    reviewable here.
+                  </p>
+                </div>
+              ) : setupRequired ? (
                 <MentionsSetupRequiredState />
               ) : paused ? (
                 <MentionsPausedState />
@@ -649,6 +701,7 @@ export function MentionsScreen() {
                       {...(actionErrors[mention.id]
                         ? { actionError: actionErrors[mention.id] }
                         : {})}
+                      onRestore={(mentionId) => void restoreMention(mentionId)}
                       onStatusChange={(mentionId, status) =>
                         void changeMentionStatus(mentionId, status)
                       }

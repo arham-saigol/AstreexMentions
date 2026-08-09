@@ -236,7 +236,7 @@ available only before `quiescedAt`.
 - Provider execution action: `packages/backend/convex/scheduling/actions.ts`
 - Atomic ingestion: `packages/backend/convex/ingestion/service.ts`
 - Crons: `packages/backend/convex/crons.ts`
-- Categorization dispatcher/state: `packages/backend/convex/categorization/internal.ts`
-- Categorization action: `packages/backend/convex/categorization/actions.ts`
+- Mention analysis dispatcher and state: `packages/backend/convex/mentionAnalysis/internal.ts`
+- Mention analysis action: `packages/backend/convex/mentionAnalysis/actions.ts`
 - Digest dispatcher: `packages/backend/convex/digest/internal.ts`
 - Email outbox dispatcher: `packages/backend/convex/email/internal.ts`

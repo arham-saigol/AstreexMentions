@@ -33,7 +33,7 @@ Provider metric names are the persisted `provider` values. Tracking runs use `x`
 - [Creem webhook lag and replay](./creem-webhook-lag-replay.md)
 - [Queue backlog and expired leases](./queue-backlog-expired-leases.md)
 - [Usage cap and resume](./usage-cap-resume.md)
-- [Categorization failures](./categorization-failures.md)
+- [Mention analysis failures](./mention-analysis-failures.md)
 - [Resend failures](./resend-failures.md)
 - [Account deletion](./account-deletion.md)
 - [Admin lockout](./admin-lockout.md)

@@ -346,80 +346,6 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
-  categorizationJobs: {
-    document: {
-      attempts: number;
-      completedAt?: number;
-      createdAt: number;
-      idempotencyKey: string;
-      lastError?: string;
-      leaseExpiresAt?: number;
-      leaseToken?: string;
-      maxAttempts: number;
-      mentionId: Id<"mentions">;
-      model: string;
-      nextAttemptAt?: number;
-      startedAt?: number;
-      status: "pending" | "leased" | "completed" | "dead";
-      updatedAt: number;
-      workspaceId: Id<"workspaces">;
-      _id: Id<"categorizationJobs">;
-      _creationTime: number;
-    };
-    fieldPaths:
-      | "_creationTime"
-      | "_id"
-      | "attempts"
-      | "completedAt"
-      | "createdAt"
-      | "idempotencyKey"
-      | "lastError"
-      | "leaseExpiresAt"
-      | "leaseToken"
-      | "maxAttempts"
-      | "mentionId"
-      | "model"
-      | "nextAttemptAt"
-      | "startedAt"
-      | "status"
-      | "updatedAt"
-      | "workspaceId";
-    indexes: {
-      by_id: ["_id"];
-      by_creation_time: ["_creationTime"];
-      by_idempotency_key: ["idempotencyKey", "_creationTime"];
-      by_mention: ["mentionId", "_creationTime"];
-      by_model_status_and_created_at: [
-        "model",
-        "status",
-        "createdAt",
-        "_creationTime",
-      ];
-      by_status_and_lease_expires_at: [
-        "status",
-        "leaseExpiresAt",
-        "_creationTime",
-      ];
-      by_status_and_next_attempt_at: [
-        "status",
-        "nextAttemptAt",
-        "_creationTime",
-      ];
-      by_workspace_and_created_at: [
-        "workspaceId",
-        "createdAt",
-        "_creationTime",
-      ];
-      by_workspace_status_and_created_at: [
-        "workspaceId",
-        "status",
-        "createdAt",
-        "_creationTime",
-      ];
-    };
-    searchIndexes: {};
-    vectorIndexes: {};
-  };
   changelogEntries: {
     document: {
       body: string;
@@ -507,7 +433,7 @@ export type DataModel = {
         | "email_outbox"
         | "digest_preferences"
         | "mention_keyword_matches"
-        | "categorization_jobs"
+        | "mention_analysis_jobs"
         | "saved_views"
         | "feature_requests"
         | "mentions"
@@ -1101,6 +1027,80 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  mentionAnalysisJobs: {
+    document: {
+      attempts: number;
+      completedAt?: number;
+      createdAt: number;
+      idempotencyKey: string;
+      lastError?: string;
+      leaseExpiresAt?: number;
+      leaseToken?: string;
+      maxAttempts: number;
+      mentionId: Id<"mentions">;
+      model: string;
+      nextAttemptAt?: number;
+      startedAt?: number;
+      status: "pending" | "leased" | "completed" | "dead";
+      updatedAt: number;
+      workspaceId: Id<"workspaces">;
+      _id: Id<"mentionAnalysisJobs">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "attempts"
+      | "completedAt"
+      | "createdAt"
+      | "idempotencyKey"
+      | "lastError"
+      | "leaseExpiresAt"
+      | "leaseToken"
+      | "maxAttempts"
+      | "mentionId"
+      | "model"
+      | "nextAttemptAt"
+      | "startedAt"
+      | "status"
+      | "updatedAt"
+      | "workspaceId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_idempotency_key: ["idempotencyKey", "_creationTime"];
+      by_mention: ["mentionId", "_creationTime"];
+      by_model_status_and_created_at: [
+        "model",
+        "status",
+        "createdAt",
+        "_creationTime",
+      ];
+      by_status_and_lease_expires_at: [
+        "status",
+        "leaseExpiresAt",
+        "_creationTime",
+      ];
+      by_status_and_next_attempt_at: [
+        "status",
+        "nextAttemptAt",
+        "_creationTime",
+      ];
+      by_workspace_and_created_at: [
+        "workspaceId",
+        "createdAt",
+        "_creationTime",
+      ];
+      by_workspace_status_and_created_at: [
+        "workspaceId",
+        "status",
+        "createdAt",
+        "_creationTime",
+      ];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   mentionKeywordMatches: {
     document: {
       createdAt: number;
@@ -1147,6 +1147,7 @@ export type DataModel = {
   mentions: {
     document: {
       analysisState: "pending" | "leased" | "completed" | "failed";
+      analysisVersion?: string;
       authorDisplayName?: string;
       authorHandle?: string;
       body: string;
@@ -1156,15 +1157,19 @@ export type DataModel = {
       contentType: string;
       engagementScore: number;
       fallbackKey?: string;
+      feedState: "pending" | "visible" | "filtered";
       firstSeenAt: number;
       language?: string;
       lastMatchedAt: number;
       likeCount?: number;
       platform: "x" | "reddit" | "hacker_news";
       pointCount?: number;
+      priority?: "low" | "medium" | "high";
+      priorityReason?: string;
       providerItemId?: string;
       publishedAt: number;
       quoteCount?: number;
+      relevanceReason?: string;
       replyCount?: number;
       repostCount?: number;
       retentionExpiresAt?: number;
@@ -1173,6 +1178,7 @@ export type DataModel = {
       title?: string;
       trackingSourceId?: Id<"trackingSources">;
       updatedAt: number;
+      visibilityOverride?: "manually_restored";
       workspaceId: Id<"workspaces">;
       _id: Id<"mentions">;
       _creationTime: number;
@@ -1181,6 +1187,7 @@ export type DataModel = {
       | "_creationTime"
       | "_id"
       | "analysisState"
+      | "analysisVersion"
       | "authorDisplayName"
       | "authorHandle"
       | "body"
@@ -1190,15 +1197,19 @@ export type DataModel = {
       | "contentType"
       | "engagementScore"
       | "fallbackKey"
+      | "feedState"
       | "firstSeenAt"
       | "language"
       | "lastMatchedAt"
       | "likeCount"
       | "platform"
       | "pointCount"
+      | "priority"
+      | "priorityReason"
       | "providerItemId"
       | "publishedAt"
       | "quoteCount"
+      | "relevanceReason"
       | "replyCount"
       | "repostCount"
       | "retentionExpiresAt"
@@ -1207,6 +1218,7 @@ export type DataModel = {
       | "title"
       | "trackingSourceId"
       | "updatedAt"
+      | "visibilityOverride"
       | "workspaceId";
     indexes: {
       by_id: ["_id"];
@@ -1229,8 +1241,30 @@ export type DataModel = {
         "publishedAt",
         "_creationTime",
       ];
-      by_workspace_engagement_and_published_at: [
+      by_workspace_feed_state_and_published_at: [
         "workspaceId",
+        "feedState",
+        "publishedAt",
+        "_creationTime",
+      ];
+      by_workspace_feed_state_engagement_and_published_at: [
+        "workspaceId",
+        "feedState",
+        "engagementScore",
+        "publishedAt",
+        "_creationTime",
+      ];
+      by_workspace_feed_state_priority_and_published_at: [
+        "workspaceId",
+        "feedState",
+        "priority",
+        "publishedAt",
+        "_creationTime",
+      ];
+      by_workspace_feed_state_priority_engagement_and_published_at: [
+        "workspaceId",
+        "feedState",
+        "priority",
         "engagementScore",
         "publishedAt",
         "_creationTime",
@@ -1271,17 +1305,24 @@ export type DataModel = {
     searchIndexes: {
       search_body: {
         searchField: "searchText";
-        filterFields: "categoryId" | "platform" | "status" | "workspaceId";
+        filterFields:
+          | "categoryId"
+          | "feedState"
+          | "platform"
+          | "priority"
+          | "status"
+          | "workspaceId";
       };
     };
     vectorIndexes: {};
   };
   onboardingResearch: {
     document: {
-      companyDescription?: string;
       completedAt?: number;
       createdAt: number;
       errorCode?: string;
+      filteringContext?: string;
+      filteringGuidelines?: string;
       inputFingerprint: string;
       manualDescription?: string;
       startedAt: number;
@@ -1296,10 +1337,11 @@ export type DataModel = {
     fieldPaths:
       | "_creationTime"
       | "_id"
-      | "companyDescription"
       | "completedAt"
       | "createdAt"
       | "errorCode"
+      | "filteringContext"
+      | "filteringGuidelines"
       | "inputFingerprint"
       | "manualDescription"
       | "startedAt"
@@ -1497,6 +1539,7 @@ export type DataModel = {
         keywordIds?: Array<Id<"keywords">>;
         mentionStatuses?: Array<"new" | "saved" | "dismissed">;
         platforms?: Array<"x" | "reddit" | "hacker_news">;
+        priorities?: Array<"low" | "medium" | "high">;
         publishedAfter?: number;
         publishedBefore?: number;
       };
@@ -1521,6 +1564,7 @@ export type DataModel = {
       | "filters.keywordIds"
       | "filters.mentionStatuses"
       | "filters.platforms"
+      | "filters.priorities"
       | "filters.publishedAfter"
       | "filters.publishedBefore"
       | "icon"
@@ -2049,10 +2093,11 @@ export type DataModel = {
   };
   workspaces: {
     document: {
-      companyDescription?: string;
       createdAt: number;
       deletedAt?: number;
       deletionPendingAt?: number;
+      filteringContext?: string;
+      filteringGuidelines?: string;
       kind: "personal";
       lastMentionAt?: number;
       name: string;
@@ -2065,10 +2110,11 @@ export type DataModel = {
     fieldPaths:
       | "_creationTime"
       | "_id"
-      | "companyDescription"
       | "createdAt"
       | "deletedAt"
       | "deletionPendingAt"
+      | "filteringContext"
+      | "filteringGuidelines"
       | "kind"
       | "lastMentionAt"
       | "name"

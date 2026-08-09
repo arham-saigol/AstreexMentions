@@ -1,19 +1,20 @@
 import {
-  MAX_CATEGORIZATION_BATCH_SIZE,
-  normalizeCategorizationMentionText,
-  validateCategorizationBatch,
-  validateCategorizationCatalog,
-  validateCategorizationOutput,
-  type CategorizationCategory,
-  type CategorizationMention,
-  type CategorizationResult,
-} from "../lib/deepseekCategorization"
+  MAX_MENTION_ANALYSIS_BATCH_SIZE,
+  normalizeMentionAnalysisMentionText,
+  validateMentionAnalysisBatch,
+  validateMentionAnalysisCatalog,
+  validateMentionAnalysisOutput,
+  type MentionAnalysisCategory,
+  type MentionAnalysisContext,
+  type MentionAnalysisMention,
+  type MentionAnalysisResult,
+} from "../lib/deepseekMentionAnalysis"
 
-export const CATEGORIZATION_LEASE_MS = 4 * 60_000
-export const CATEGORIZATION_RETRY_BASE_MS = 30_000
-export const MAX_CATEGORIZATION_RETRY_DELAY_MS = 30 * 60_000
+export const MENTION_ANALYSIS_LEASE_MS = 4 * 60_000
+export const MENTION_ANALYSIS_RETRY_BASE_MS = 30_000
+export const MAX_MENTION_ANALYSIS_RETRY_DELAY_MS = 30 * 60_000
 
-export type CategorizationJobForClaim = {
+export type MentionAnalysisJobForClaim = {
   attempts: number
   id: string
   maxAttempts: number
@@ -22,7 +23,7 @@ export type CategorizationJobForClaim = {
   workspaceId: string
 }
 
-export type CategorizationFailurePlan =
+export type MentionAnalysisFailurePlan =
   | {
       completedAt: number
       lastError: string
@@ -34,16 +35,16 @@ export type CategorizationFailurePlan =
       status: "pending"
     }
 
-export class CategorizationOrchestrationError extends Error {
+export class MentionAnalysisOrchestrationError extends Error {
   readonly code: "INVALID_APPLICATION" | "INVALID_JOB" | "INVALID_SNAPSHOT"
 
   constructor(
-    code: CategorizationOrchestrationError["code"],
+    code: MentionAnalysisOrchestrationError["code"],
     message: string,
     options?: ErrorOptions,
   ) {
     super(message, options)
-    this.name = "CategorizationOrchestrationError"
+    this.name = "MentionAnalysisOrchestrationError"
     this.code = code
   }
 }
@@ -63,10 +64,10 @@ function deterministicHash(value: string): number {
   return hash >>> 0
 }
 
-export function canonicalCategorySnapshot(
-  categories: readonly CategorizationCategory[],
-): CategorizationCategory[] {
-  return validateCategorizationCatalog(categories)
+export function canonicalCategoryCatalog(
+  categories: readonly MentionAnalysisCategory[],
+): MentionAnalysisCategory[] {
+  return validateMentionAnalysisCatalog(categories)
     .map((category) => ({
       description: category.description,
       id: category.id,
@@ -75,28 +76,33 @@ export function canonicalCategorySnapshot(
     .sort((left, right) => left.id.localeCompare(right.id, "en"))
 }
 
-export function categorySnapshotJson(
-  categories: readonly CategorizationCategory[],
+export function analysisSnapshotJson(
+  categories: readonly MentionAnalysisCategory[],
+  context: MentionAnalysisContext,
 ): string {
-  return JSON.stringify({ categories: canonicalCategorySnapshot(categories) })
+  return JSON.stringify({
+    categories: canonicalCategoryCatalog(categories),
+    filteringContext: context.filteringContext,
+    filteringGuidelines: context.filteringGuidelines ?? "",
+  })
 }
 
 export function mentionText(input: { body: string; title?: string }): string {
   const body = input.body.trim()
   const title = input.title?.trim()
   if (body.length === 0) {
-    throw new CategorizationOrchestrationError(
+    throw new MentionAnalysisOrchestrationError(
       "INVALID_APPLICATION",
       "Mention body must be non-empty",
     )
   }
-  return normalizeCategorizationMentionText(
+  return normalizeMentionAnalysisMentionText(
     title ? `${title}\n\n${body}` : body,
   )
 }
 
-export function canClaimCategorizationJob(
-  job: CategorizationJobForClaim,
+export function canClaimMentionAnalysisJob(
+  job: MentionAnalysisJobForClaim,
   now: number,
 ): boolean {
   assertTimestamp(now, "now")
@@ -106,9 +112,9 @@ export function canClaimCategorizationJob(
     !Number.isInteger(job.maxAttempts) ||
     job.maxAttempts < 1
   ) {
-    throw new CategorizationOrchestrationError(
+    throw new MentionAnalysisOrchestrationError(
       "INVALID_JOB",
-      "Categorization job attempts are invalid",
+      "Mention analysis job attempts are invalid",
     )
   }
   return (
@@ -118,23 +124,23 @@ export function canClaimCategorizationJob(
   )
 }
 
-export function createCategorizationLease(input: {
-  jobs: readonly CategorizationJobForClaim[]
+export function createMentionAnalysisLease(input: {
+  jobs: readonly MentionAnalysisJobForClaim[]
   now: number
   snapshotJson: string
 }): { expiresAt: number; token: string } {
   assertTimestamp(input.now, "now")
   if (
     input.jobs.length === 0 ||
-    input.jobs.length > MAX_CATEGORIZATION_BATCH_SIZE
+    input.jobs.length > MAX_MENTION_ANALYSIS_BATCH_SIZE
   ) {
-    throw new CategorizationOrchestrationError(
+    throw new MentionAnalysisOrchestrationError(
       "INVALID_JOB",
-      `Categorization leases require 1-${MAX_CATEGORIZATION_BATCH_SIZE} jobs`,
+      `Mention analysis leases require 1-${MAX_MENTION_ANALYSIS_BATCH_SIZE} jobs`,
     )
   }
   if (input.snapshotJson.trim().length === 0) {
-    throw new CategorizationOrchestrationError(
+    throw new MentionAnalysisOrchestrationError(
       "INVALID_SNAPSHOT",
       "Category snapshot must be non-empty",
     )
@@ -145,12 +151,12 @@ export function createCategorizationLease(input: {
     input.jobs.some(
       (job) =>
         job.workspaceId !== workspaceId ||
-        !canClaimCategorizationJob(job, input.now),
+        !canClaimMentionAnalysisJob(job, input.now),
     )
   ) {
-    throw new CategorizationOrchestrationError(
+    throw new MentionAnalysisOrchestrationError(
       "INVALID_JOB",
-      "Categorization jobs must be due in one workspace",
+      "Mention analysis jobs must be due in one workspace",
     )
   }
 
@@ -160,12 +166,12 @@ export function createCategorizationLease(input: {
     .join(",")
   const snapshotKey = deterministicHash(input.snapshotJson).toString(16)
   return {
-    expiresAt: input.now + CATEGORIZATION_LEASE_MS,
-    token: `categorization:${encodeURIComponent(workspaceId)}:${snapshotKey}:${deterministicHash(jobKey).toString(16)}:${input.now}`,
+    expiresAt: input.now + MENTION_ANALYSIS_LEASE_MS,
+    token: `mention-analysis:${encodeURIComponent(workspaceId)}:${snapshotKey}:${deterministicHash(jobKey).toString(16)}:${input.now}`,
   }
 }
 
-export function categorizationRetryDelayMs(input: {
+export function mentionAnalysisRetryDelayMs(input: {
   attempts: number
   jobKey: string
   retryAfterMs?: number | undefined
@@ -184,16 +190,16 @@ export function categorizationRetryDelayMs(input: {
   }
 
   const exponential = Math.min(
-    MAX_CATEGORIZATION_RETRY_DELAY_MS,
-    CATEGORIZATION_RETRY_BASE_MS * 2 ** Math.min(input.attempts - 1, 20),
+    MAX_MENTION_ANALYSIS_RETRY_DELAY_MS,
+    MENTION_ANALYSIS_RETRY_BASE_MS * 2 ** Math.min(input.attempts - 1, 20),
   )
   const jitter =
     0.75 +
-    (deterministicHash(`categorization:${input.jobKey}:${input.attempts}`) /
+    (deterministicHash(`mention-analysis:${input.jobKey}:${input.attempts}`) /
       0x1_0000_0000) *
       0.5
   return Math.min(
-    MAX_CATEGORIZATION_RETRY_DELAY_MS,
+    MAX_MENTION_ANALYSIS_RETRY_DELAY_MS,
     Math.max(
       Math.round(exponential * jitter),
       Math.ceil(input.retryAfterMs ?? 0),
@@ -201,7 +207,7 @@ export function categorizationRetryDelayMs(input: {
   )
 }
 
-export function planCategorizationFailure(input: {
+export function planMentionAnalysisFailure(input: {
   attempts: number
   errorCode: string
   maxAttempts: number
@@ -209,7 +215,7 @@ export function planCategorizationFailure(input: {
   retryAfterMs?: number | undefined
   retryable: boolean
   stableJobKey: string
-}): CategorizationFailurePlan {
+}): MentionAnalysisFailurePlan {
   assertTimestamp(input.now, "now")
   if (
     !Number.isInteger(input.attempts) ||
@@ -217,9 +223,9 @@ export function planCategorizationFailure(input: {
     !Number.isInteger(input.maxAttempts) ||
     input.maxAttempts < 1
   ) {
-    throw new CategorizationOrchestrationError(
+    throw new MentionAnalysisOrchestrationError(
       "INVALID_JOB",
-      "Categorization failure attempts are invalid",
+      "Mention analysis failure attempts are invalid",
     )
   }
   const errorCode = input.errorCode.trim()
@@ -239,7 +245,7 @@ export function planCategorizationFailure(input: {
     lastError: errorCode,
     nextAttemptAt:
       input.now +
-      categorizationRetryDelayMs({
+      mentionAnalysisRetryDelayMs({
         attempts: input.attempts,
         jobKey: input.stableJobKey,
         retryAfterMs: input.retryAfterMs,
@@ -249,21 +255,21 @@ export function planCategorizationFailure(input: {
 }
 
 /** Revalidates the whole assignment before any storage mutation can begin. */
-export function validateCategorizationApplication(input: {
-  categories: readonly CategorizationCategory[]
-  mentions: readonly CategorizationMention[]
+export function validateMentionAnalysisApplication(input: {
+  categories: readonly MentionAnalysisCategory[]
+  mentions: readonly MentionAnalysisMention[]
   results: unknown
-}): CategorizationResult[] {
+}): MentionAnalysisResult[] {
   try {
-    return validateCategorizationOutput(
-      validateCategorizationBatch(input.mentions),
-      canonicalCategorySnapshot(input.categories),
+    return validateMentionAnalysisOutput(
+      validateMentionAnalysisBatch(input.mentions),
+      canonicalCategoryCatalog(input.categories),
       input.results,
     )
   } catch (error) {
-    throw new CategorizationOrchestrationError(
+    throw new MentionAnalysisOrchestrationError(
       "INVALID_APPLICATION",
-      "Categorization assignments failed total batch validation",
+      "Mention analysis assignments failed total batch validation",
       { cause: error },
     )
   }

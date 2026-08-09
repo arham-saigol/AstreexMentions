@@ -55,6 +55,16 @@ export const mentionAnalysisStateValidator = v.union(
   v.literal("completed"),
   v.literal("failed"),
 )
+export const mentionFeedStateValidator = v.union(
+  v.literal("pending"),
+  v.literal("visible"),
+  v.literal("filtered"),
+)
+export const mentionPriorityValidator = v.union(
+  v.literal("low"),
+  v.literal("medium"),
+  v.literal("high"),
+)
 
 /**
  * Creem may add subscription states. Keep the original non-empty provider value
@@ -257,7 +267,7 @@ export const deletionPurgeStageValidator = v.union(
   v.literal("email_outbox"),
   v.literal("digest_preferences"),
   v.literal("mention_keyword_matches"),
-  v.literal("categorization_jobs"),
+  v.literal("mention_analysis_jobs"),
   v.literal("saved_views"),
   v.literal("feature_requests"),
   v.literal("mentions"),
@@ -314,7 +324,8 @@ export default defineSchema({
     createdAt: v.number(),
     deletedAt: v.optional(v.number()),
     deletionPendingAt: v.optional(v.number()),
-    companyDescription: v.optional(v.string()),
+    filteringContext: v.optional(v.string()),
+    filteringGuidelines: v.optional(v.string()),
     kind: workspaceKindValidator,
     lastMentionAt: v.optional(v.number()),
     name: v.string(),
@@ -507,7 +518,8 @@ export default defineSchema({
   }).index("by_workspace", ["workspaceId"]),
 
   onboardingResearch: defineTable({
-    companyDescription: v.optional(v.string()),
+    filteringContext: v.optional(v.string()),
+    filteringGuidelines: v.optional(v.string()),
     completedAt: v.optional(v.number()),
     createdAt: v.number(),
     errorCode: v.optional(v.string()),
@@ -641,6 +653,7 @@ export default defineSchema({
 
   mentions: defineTable({
     analysisState: mentionAnalysisStateValidator,
+    analysisVersion: v.optional(v.string()),
     authorDisplayName: v.optional(v.string()),
     authorHandle: v.optional(v.string()),
     body: v.string(),
@@ -650,6 +663,7 @@ export default defineSchema({
     contentType: v.string(),
     engagementScore: v.number(),
     fallbackKey: v.optional(v.string()),
+    feedState: mentionFeedStateValidator,
     firstSeenAt: v.number(),
     language: v.optional(v.string()),
     retentionExpiresAt: v.optional(v.number()),
@@ -657,9 +671,12 @@ export default defineSchema({
     likeCount: v.optional(v.number()),
     platform: platformValidator,
     pointCount: v.optional(v.number()),
+    priority: v.optional(mentionPriorityValidator),
+    priorityReason: v.optional(v.string()),
     providerItemId: v.optional(v.string()),
     publishedAt: v.number(),
     quoteCount: v.optional(v.number()),
+    relevanceReason: v.optional(v.string()),
     replyCount: v.optional(v.number()),
     repostCount: v.optional(v.number()),
     searchText: v.string(),
@@ -667,6 +684,7 @@ export default defineSchema({
     title: v.optional(v.string()),
     trackingSourceId: v.optional(v.id("trackingSources")),
     updatedAt: v.number(),
+    visibilityOverride: v.optional(v.literal("manually_restored")),
     workspaceId: v.id("workspaces"),
   })
     .index("by_workspace_platform_content_provider_item", [
@@ -691,8 +709,27 @@ export default defineSchema({
       "status",
       "engagementScore",
     ])
-    .index("by_workspace_engagement_and_published_at", [
+    .index("by_workspace_feed_state_and_published_at", [
       "workspaceId",
+      "feedState",
+      "publishedAt",
+    ])
+    .index("by_workspace_feed_state_engagement_and_published_at", [
+      "workspaceId",
+      "feedState",
+      "engagementScore",
+      "publishedAt",
+    ])
+    .index("by_workspace_feed_state_priority_and_published_at", [
+      "workspaceId",
+      "feedState",
+      "priority",
+      "publishedAt",
+    ])
+    .index("by_workspace_feed_state_priority_engagement_and_published_at", [
+      "workspaceId",
+      "feedState",
+      "priority",
       "engagementScore",
       "publishedAt",
     ])
@@ -715,7 +752,14 @@ export default defineSchema({
     .index("by_status_and_published_at", ["status", "publishedAt"])
     .searchIndex("search_body", {
       searchField: "searchText",
-      filterFields: ["workspaceId", "status", "platform", "categoryId"],
+      filterFields: [
+        "workspaceId",
+        "feedState",
+        "priority",
+        "status",
+        "platform",
+        "categoryId",
+      ],
     }),
 
   mentionKeywordMatches: defineTable({
@@ -783,6 +827,7 @@ export default defineSchema({
       keywordIds: v.optional(v.array(v.id("keywords"))),
       mentionStatuses: v.optional(v.array(mentionStatusValidator)),
       platforms: v.optional(v.array(platformValidator)),
+      priorities: v.optional(v.array(mentionPriorityValidator)),
       publishedAfter: v.optional(v.number()),
       publishedBefore: v.optional(v.number()),
     }),
@@ -819,7 +864,7 @@ export default defineSchema({
     ])
     .index("by_workspace_and_updated_at", ["workspaceId", "updatedAt"]),
 
-  categorizationJobs: defineTable({
+  mentionAnalysisJobs: defineTable({
     attempts: v.number(),
     completedAt: v.optional(v.number()),
     createdAt: v.number(),

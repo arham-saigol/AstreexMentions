@@ -692,10 +692,21 @@ describe("customer saved view functions", () => {
         position: 0,
         sort: "newest",
       },
+      {
+        filters: {},
+        icon: "funnel",
+        id: "filtered",
+        name: "Filtered",
+        position: 1,
+        sort: "newest",
+      },
     ])
 
     const saved = (await customer.mutation(createSavedView, {
-      filters: { mentionStatuses: ["saved"] },
+      filters: {
+        mentionStatuses: ["saved"],
+        priorities: ["high", "medium"],
+      },
       icon: "funnel",
       name: "Saved mentions",
       sort: "newest",
@@ -710,15 +721,40 @@ describe("customer saved view functions", () => {
     ).rejects.toMatchObject({ data: { code: "INVALID_SAVED_VIEW" } })
 
     await expect(
+      customer.mutation(createSavedView, {
+        filters: {},
+        icon: "funnel",
+        name: " filtered ",
+        sort: "newest",
+      }),
+    ).rejects.toMatchObject({ data: { code: "INVALID_SAVED_VIEW" } })
+    await expect(
+      customer.mutation(createSavedView, {
+        filters: { priorities: ["high", "high"] },
+        icon: "funnel",
+        name: "Duplicate priorities",
+        sort: "newest",
+      }),
+    ).rejects.toMatchObject({
+      data: { code: "INVALID_SAVED_VIEW_FILTERS" },
+    })
+
+    await expect(
       customer.mutation(reorderSavedViews, {
-        savedViewIds: ["all-mentions", saved.id],
+        savedViewIds: ["all-mentions", "filtered", saved.id],
       }),
     ).resolves.toBeNull()
     const persisted = await t.run(
       async (ctx) => await ctx.db.query("savedViews").collect(),
     )
     expect(persisted).toHaveLength(1)
-    expect(persisted[0]?.name).toBe("Saved mentions")
+    expect(persisted[0]).toMatchObject({
+      filters: {
+        mentionStatuses: ["saved"],
+        priorities: ["high", "medium"],
+      },
+      name: "Saved mentions",
+    })
   })
 
   it("rejects creation after fifty active saved views", async () => {
@@ -750,7 +786,7 @@ describe("customer saved view functions", () => {
     ).rejects.toMatchObject({
       data: { code: "SAVED_VIEW_LIMIT_EXCEEDED" },
     })
-    await expect(customer.query(listSavedViews, {})).resolves.toHaveLength(51)
+    await expect(customer.query(listSavedViews, {})).resolves.toHaveLength(52)
   })
 })
 
