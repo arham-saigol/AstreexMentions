@@ -448,8 +448,6 @@ export declare const api: {
         {
           accessKind: "paid" | "free" | "none";
           evaluation: {
-            activatedAt: number;
-            exhaustedAt?: number;
             keywordLimit: number;
             mentionLimit: number;
             mentionsUsed: number;
@@ -752,9 +750,7 @@ export declare const api: {
       { now: number },
       {
         activeCount: number;
-        activeLimit: number;
         canCreate: boolean;
-        configuredLimit: number;
         count: number;
         limit: number;
         limitReached: boolean;
@@ -1025,7 +1021,7 @@ export declare const api: {
           }>;
         }
       | { state: "in_progress" }
-      | { retryAfter: number; state: "rate_limited" }
+      | { state: "rate_limited" }
       | { message: string; state: "provider_unconfigured" }
       | { message: string; retryable: boolean; state: "failed" }
     >;
@@ -1868,7 +1864,7 @@ export declare const internal: {
       },
       | { researchId: Id<"onboardingResearch">; state: "completed" }
       | { researchId: Id<"onboardingResearch">; state: "running" }
-      | { retryAfter: number; state: "rate_limited" }
+      | { state: "rate_limited" }
       | { researchId: Id<"onboardingResearch">; state: "started" }
     >;
     completeResearch: FunctionReference<

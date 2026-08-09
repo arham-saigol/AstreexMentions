@@ -49,7 +49,7 @@ describe("TinyFish onboarding provider boundary", () => {
       "Understand the company",
     )
 
-    expect(result.results[0]?.text).toHaveLength(MAX_TINYFISH_PAGE_CHARS)
+    expect(result[0]).toHaveLength(MAX_TINYFISH_PAGE_CHARS)
     const [, init] = fetch.mock.calls[0]!
     expect(new Headers(init?.headers).get("X-API-Key")).toBe("secret")
     expect(JSON.parse(String(init?.body))).toMatchObject({

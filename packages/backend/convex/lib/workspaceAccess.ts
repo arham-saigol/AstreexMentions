@@ -119,10 +119,9 @@ export async function ensureFreeEvaluationGrant(
   ctx: MutationCtx,
   workspaceId: WorkspaceId,
   now: number,
-): Promise<Doc<"freeEvaluationGrants">> {
-  const existing = await freeEvaluationGrant(ctx, workspaceId)
-  if (existing) return existing
-  const id = await ctx.db.insert("freeEvaluationGrants", {
+): Promise<void> {
+  if (await freeEvaluationGrant(ctx, workspaceId)) return
+  await ctx.db.insert("freeEvaluationGrants", {
     activatedAt: now,
     createdAt: now,
     mentionLimit: FREE_EVALUATION_MENTION_LIMIT,
@@ -130,9 +129,6 @@ export async function ensureFreeEvaluationGrant(
     updatedAt: now,
     workspaceId,
   })
-  const created = await ctx.db.get("freeEvaluationGrants", id)
-  if (!created) throw new Error("Free evaluation grant was not created")
-  return created
 }
 
 export async function resolveWorkspaceAllowance(

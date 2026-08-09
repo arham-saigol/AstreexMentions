@@ -8,7 +8,6 @@ import {
   MAX_DRAFT_KEYWORDS,
   normalizeKeywordPhrase,
   onboardingDraftSchema,
-  selectOnboardingPlan,
 } from "./onboarding-draft"
 
 function keyword(index: number) {
@@ -84,17 +83,7 @@ describe("onboarding draft", () => {
       status: "open",
       url: "https://checkout.example/session",
     }
-    const draft = {
-      ...createOnboardingDraft("Astreex"),
-      checkout,
-      selectedPlan: "growth" as const,
-    }
-
     expect(canReuseOnboardingCheckout(checkout, now)).toBe(true)
-    expect(selectOnboardingPlan(draft, "free")).toMatchObject({
-      checkout,
-      selectedPlan: "free",
-    })
     expect(
       canReuseOnboardingCheckout(
         { ...checkout, startedAt: now - CHECKOUT_INTENT_TTL_MS },

@@ -65,7 +65,7 @@ const completedValidator = v.object({
 const discoveryResultValidator = v.union(
   completedValidator,
   v.object({ state: v.literal("in_progress") }),
-  v.object({ retryAfter: v.number(), state: v.literal("rate_limited") }),
+  v.object({ state: v.literal("rate_limited") }),
   v.object({ message: v.string(), state: v.literal("provider_unconfigured") }),
   v.object({
     message: v.string(),
@@ -122,21 +122,6 @@ async function deepSeekJson(
     return JSON.parse(envelope.choices[0]!.message.content) as unknown
   } finally {
     clearTimeout(timeout)
-  }
-}
-
-function completedFromRow(row: {
-  companyDescription?: string
-  suggestionsJson?: string
-}) {
-  if (!row.companyDescription || !row.suggestionsJson) return null
-  const suggestions = z
-    .array(suggestionSchema)
-    .parse(JSON.parse(row.suggestionsJson) as unknown)
-  return {
-    companyDescription: row.companyDescription,
-    state: "completed" as const,
-    suggestions,
   }
 }
 
@@ -204,8 +189,16 @@ export const researchCompany = customerAction({
           workspaceId: ctx.workspace.id,
         },
       )
-      const completed = row ? completedFromRow(row) : null
-      return completed ?? { state: "in_progress" as const }
+      if (!row?.companyDescription || !row.suggestionsJson) {
+        return { state: "in_progress" as const }
+      }
+      return {
+        companyDescription: row.companyDescription,
+        state: "completed" as const,
+        suggestions: z
+          .array(suggestionSchema)
+          .parse(JSON.parse(row.suggestionsJson) as unknown),
+      }
     }
 
     const startedAt = Date.now()
@@ -220,7 +213,7 @@ export const researchCompany = customerAction({
           [websiteUrl],
           "Understand the company, its products, customers, brand names, and market alternatives for onboarding.",
         )
-        websiteMaterial = fetched.results[0]?.text ?? ""
+        websiteMaterial = fetched[0] ?? ""
         if (!websiteMaterial && !manualDescription) {
           throw new TinyFishIntegrationError(
             "REQUEST_FAILED",

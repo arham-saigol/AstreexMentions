@@ -142,7 +142,7 @@ export function UsageSettings() {
                 aria-hidden="true"
                 className="size-4"
               />
-              {"periodEndAt" in usage
+              {"periodEndAt" in usage && typeof usage.periodEndAt === "number"
                 ? `Resets ${formatDate(usage.periodEndAt)}`
                 : "One-time allowance; it does not reset"}
             </p>

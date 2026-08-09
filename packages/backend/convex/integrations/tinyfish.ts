@@ -8,23 +8,9 @@ export const MAX_TINYFISH_PAGE_CHARS = 24_000
 export const MAX_TINYFISH_SEARCH_RESULTS = 5
 export const DEFAULT_TINYFISH_TIMEOUT_MS = 45_000
 
-const fetchResultSchema = z
-  .object({
-    description: z.string().nullable().optional(),
-    final_url: z.string().url(),
-    format: z.literal("markdown"),
-    text: z.string(),
-    title: z.string().nullable().optional(),
-    url: z.string().url(),
-  })
-  .passthrough()
-const fetchErrorSchema = z
-  .object({ error: z.string(), url: z.string() })
-  .passthrough()
 const fetchResponseSchema = z
   .object({
-    errors: z.array(fetchErrorSchema),
-    results: z.array(fetchResultSchema),
+    results: z.array(z.object({ text: z.string() }).passthrough()),
   })
   .passthrough()
 const searchResultSchema = z
@@ -226,13 +212,9 @@ export function createTinyFishClient(options: {
           },
         )
       }
-      return {
-        errors: parsed.data.errors,
-        results: parsed.data.results.map((result) => ({
-          ...result,
-          text: result.text.slice(0, MAX_TINYFISH_PAGE_CHARS),
-        })),
-      }
+      return parsed.data.results.map((result) =>
+        result.text.slice(0, MAX_TINYFISH_PAGE_CHARS),
+      )
     },
 
     async search(query: string, purpose: string) {

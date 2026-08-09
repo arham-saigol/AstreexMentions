@@ -363,7 +363,6 @@ describe("keyword Convex functions", () => {
     expect(summary).toMatchObject({
       canCreate: true,
       count: 1,
-      activeLimit: 1,
       limit: 1,
       monitoringState: "active",
       remaining: 9,

@@ -33,7 +33,7 @@ export const beginResearch = internalMutation({
       researchId: v.id("onboardingResearch"),
       state: v.literal("running"),
     }),
-    v.object({ retryAfter: v.number(), state: v.literal("rate_limited") }),
+    v.object({ state: v.literal("rate_limited") }),
     v.object({
       researchId: v.id("onboardingResearch"),
       state: v.literal("started"),
@@ -68,38 +68,34 @@ export const beginResearch = internalMutation({
       key: String(args.workspaceId),
     })
     if (!limited.ok) {
-      return {
-        retryAfter: limited.retryAfter ?? now + HOUR,
-        state: "rate_limited" as const,
-      }
+      return { state: "rate_limited" as const }
     }
 
     let researchId: ResearchId
-    const document = {
-      companyDescription: undefined,
-      completedAt: undefined,
-      errorCode: undefined,
+    const runningResearch = {
       inputFingerprint: args.inputFingerprint,
-      manualDescription: args.manualDescription,
       startedAt: now,
       status: "running" as const,
-      suggestionsJson: undefined,
       updatedAt: now,
-      websiteUrl: args.websiteUrl,
     }
     if (existing) {
       researchId = existing._id
-      await ctx.db.patch("onboardingResearch", researchId, document)
+      await ctx.db.patch("onboardingResearch", researchId, {
+        ...runningResearch,
+        companyDescription: undefined,
+        completedAt: undefined,
+        errorCode: undefined,
+        manualDescription: args.manualDescription,
+        suggestionsJson: undefined,
+        websiteUrl: args.websiteUrl,
+      })
     } else {
       researchId = await ctx.db.insert("onboardingResearch", {
+        ...runningResearch,
         createdAt: now,
-        inputFingerprint: args.inputFingerprint,
         ...(args.manualDescription === undefined
           ? {}
           : { manualDescription: args.manualDescription }),
-        startedAt: now,
-        status: "running",
-        updatedAt: now,
         ...(args.websiteUrl === undefined
           ? {}
           : { websiteUrl: args.websiteUrl }),

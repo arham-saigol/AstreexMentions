@@ -33,8 +33,6 @@ const billingOverviewValidator = v.object({
   accessKind: v.union(v.literal("paid"), v.literal("free"), v.literal("none")),
   evaluation: v.union(
     v.object({
-      activatedAt: v.number(),
-      exhaustedAt: v.optional(v.number()),
       keywordLimit: v.number(),
       mentionLimit: v.number(),
       mentionsUsed: v.number(),
@@ -175,10 +173,6 @@ export const getBillingOverview = customerQuery({
       evaluation:
         allowance.kind === "free"
           ? {
-              activatedAt: allowance.grant.activatedAt,
-              ...(allowance.grant.exhaustedAt === undefined
-                ? {}
-                : { exhaustedAt: allowance.grant.exhaustedAt }),
               keywordLimit: allowance.keywordLimit,
               mentionLimit: allowance.mentionLimit,
               mentionsUsed: allowance.mentionsUsed,

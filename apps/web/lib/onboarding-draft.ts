@@ -2,7 +2,6 @@ import { z } from "zod"
 
 const onboardingPlatformSchema = z.enum(["x", "reddit", "hacker_news"])
 
-export const ONBOARDING_STEP_COUNT = 3
 export const MAX_DRAFT_KEYWORDS = 10
 export const CHECKOUT_INTENT_TTL_MS = 24 * 60 * 60 * 1_000
 
@@ -69,8 +68,6 @@ export type OnboardingDraft = z.infer<typeof onboardingDraftSchema>
 export type OnboardingKeywordDraft = z.infer<
   typeof onboardingKeywordDraftSchema
 >
-export type OnboardingStep = z.infer<typeof onboardingStepSchema>
-export type OnboardingPlan = NonNullable<OnboardingDraft["selectedPlan"]>
 
 const unusableCheckoutStatuses = new Set([
   "complete",
@@ -104,13 +101,6 @@ export function createOnboardingDraft(workspaceName: string): OnboardingDraft {
     websiteUrl: "",
     workspaceName: workspaceName.trim(),
   }
-}
-
-export function selectOnboardingPlan(
-  draft: OnboardingDraft,
-  planId: OnboardingPlan,
-): OnboardingDraft {
-  return { ...draft, selectedPlan: planId }
 }
 
 export function normalizeKeywordPhrase(value: string): string {

@@ -88,9 +88,7 @@ const monitoringStateValidator = v.union(
 )
 const keywordSummaryValidator = v.object({
   activeCount: v.number(),
-  activeLimit: v.number(),
   canCreate: v.boolean(),
-  configuredLimit: v.number(),
   count: v.number(),
   limit: v.number(),
   limitReached: v.boolean(),
@@ -734,9 +732,7 @@ export const getKeywordSummary = authenticatedQuery({
     const remaining = Math.max(0, MAX_DRAFT_KEYWORDS - keywords.length)
     return {
       activeCount,
-      activeLimit: allowance.keywordLimit,
       canCreate: remaining > 0,
-      configuredLimit: MAX_DRAFT_KEYWORDS,
       count: keywords.length,
       limit: allowance.keywordLimit,
       limitReached: activeCount >= allowance.keywordLimit,

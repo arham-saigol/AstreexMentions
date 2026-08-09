@@ -56,7 +56,6 @@ describe("decideProductAccess", () => {
           ...billing,
           accessKind: "free",
           evaluation: {
-            activatedAt: 1,
             keywordLimit: 1,
             mentionLimit: 100,
             mentionsUsed: 100,

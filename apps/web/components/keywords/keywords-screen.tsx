@@ -113,7 +113,7 @@ export function KeywordsScreen() {
   const keywords = listValue ?? []
   const summary = summaryValue ?? null
   const limit =
-    summary?.activeLimit ??
+    summary?.limit ??
     billing.usage?.keywordLimit ??
     billing.evaluation?.keywordLimit ??
     null
