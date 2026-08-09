@@ -575,6 +575,8 @@ async function completeAlreadyAnalyzedJob(
     !mention ||
     mention.workspaceId !== row.workspaceId ||
     mention.categoryId === undefined ||
+    mention.priority === undefined ||
+    mention.priorityReason === undefined ||
     mention.analysisState !== "completed"
   ) {
     return false

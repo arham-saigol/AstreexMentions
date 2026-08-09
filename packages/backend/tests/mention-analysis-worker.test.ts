@@ -395,6 +395,26 @@ describe("durable DeepSeek mention analysis worker", () => {
     },
   )
 
+  it("reanalyzes completed mentions that do not have priority results", async () => {
+    const t = createBackendTest()
+    const seeded = await seedMentionAnalysis(t, { mentionCount: 1 })
+    await t.run(
+      async (ctx) =>
+        await ctx.db.patch("mentions", seeded.mentionIds[0]!, {
+          analysisState: "completed",
+          categoryId: seeded.categories[0]!.id,
+        }),
+    )
+
+    await expect(
+      t.mutation(dispatchReference, { now: NOW }),
+    ).resolves.toMatchObject({ batches: 1, claimed: 1 })
+    const job = await t.run(
+      async (ctx) => await ctx.db.get("mentionAnalysisJobs", seeded.jobIds[0]!),
+    )
+    expect(job).toMatchObject({ attempts: 1, status: "leased" })
+  })
+
   it("never combines mention analysis jobs from different workspaces", async () => {
     const t = createBackendTest()
     await seedMentionAnalysis(t, { mentionCount: 30 })
