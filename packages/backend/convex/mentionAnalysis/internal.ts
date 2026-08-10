@@ -2,18 +2,20 @@ import { internal } from "../_generated/api"
 import { v } from "convex/values"
 
 import {
-  DEEPSEEK_CATEGORIZATION_MODEL,
-  MAX_CATEGORIZATION_BATCH_PROMPT_CHARS,
-  MAX_CATEGORIZATION_BATCH_SIZE,
-  type CategorizationCategory,
-  type CategorizationMention,
-} from "../lib/deepseekCategorization"
+  buildDeepSeekMentionAnalysisRequest,
+  DEEPSEEK_MENTION_ANALYSIS_MODEL,
+  MAX_MENTION_ANALYSIS_BATCH_SIZE,
+  MENTION_ANALYSIS_VERSION,
+  type MentionAnalysisCategory,
+  type MentionAnalysisContext,
+  type MentionAnalysisMention,
+} from "../lib/deepseekMentionAnalysis"
 import { isCategorySystemKey } from "../lib/categories"
 import { recordProviderMetricBuckets } from "../lib/providerMetricBuckets"
 import { incrementDailySystemMetric } from "../lib/systemMetricBuckets"
 import {
-  categorizedMentionMetric,
-  type CategorizedMentionGroup,
+  analyzedMentionMetric,
+  type AnalyzedMentionGroup,
 } from "../ingestion/model"
 import {
   internalMutation,
@@ -23,50 +25,52 @@ import {
 } from "../_generated/server"
 import type { Doc, Id } from "../_generated/dataModel"
 import {
-  parseCategorySnapshotJson,
-  parseCategorizationResultsJson,
+  parseAnalysisSnapshotJson,
+  parseMentionAnalysisResultsJson,
 } from "./contracts"
-import { transitionCategorizationStatusMetric } from "./metrics"
+import { transitionMentionAnalysisStatusMetric } from "./metrics"
 import {
-  categorySnapshotJson,
-  createCategorizationLease,
+  analysisSnapshotJson,
+  createMentionAnalysisLease,
   mentionText,
-  planCategorizationFailure,
-  validateCategorizationApplication,
-  type CategorizationJobForClaim,
+  planMentionAnalysisFailure,
+  validateMentionAnalysisApplication,
+  type MentionAnalysisJobForClaim,
 } from "./model"
 
 const MAX_DUE_SCAN = 256
 const MAX_BATCHES_PER_DISPATCH = 4
 const MAX_WORKSPACES_PER_DISPATCH = 16
 const BLOCKED_CONFIGURATION_RETRY_MS = 5 * 60_000
-const DEEPSEEK_CATEGORIZATION_OPERATION = "chat.completions"
+const DEEPSEEK_MENTION_ANALYSIS_OPERATION = `mention_analysis:${MENTION_ANALYSIS_VERSION}`
 const MAX_KEYWORD_CONTEXTS_PER_MENTION = 3
 
-type CategorizationJobId = Id<"categorizationJobs">
+type MentionAnalysisJobId = Id<"mentionAnalysisJobs">
 type CategoryId = Id<"categories">
 type MentionId = Id<"mentions">
 type ProviderRunId = Id<"providerRuns">
 type WorkspaceId = Id<"workspaces">
 
-export type CategorizationBatchLeaseArguments = {
-  categorySnapshotJson: string
-  jobIds: CategorizationJobId[]
+export type MentionAnalysisBatchLeaseArguments = {
+  analysisSnapshotJson: string
+  jobIds: MentionAnalysisJobId[]
   leaseToken: string
+  mentionContextJson: string
 }
 
 type LeasedBatch = {
-  jobs: Doc<"categorizationJobs">[]
+  jobs: Doc<"mentionAnalysisJobs">[]
   workspaceId: WorkspaceId
 }
 
-type EnabledCategorySnapshot = {
-  categories: CategorizationCategory[]
+type EnabledAnalysisSnapshot = {
+  categories: MentionAnalysisCategory[]
+  context: MentionAnalysisContext
   json: string
-  metricGroupByCategoryId: ReadonlyMap<string, CategorizedMentionGroup>
+  metricGroupByCategoryId: ReadonlyMap<string, AnalyzedMentionGroup>
 }
 
-export type CategorizationBatchExecutionContext =
+export type MentionAnalysisBatchExecutionContext =
   | { state: "stale_lease" }
   | {
       errorCode: string
@@ -74,17 +78,18 @@ export type CategorizationBatchExecutionContext =
       state: "invalid_batch"
     }
   | {
-      categories: CategorizationCategory[]
-      mentions: CategorizationMention[]
+      categories: MentionAnalysisCategory[]
+      context: MentionAnalysisContext
+      mentions: MentionAnalysisMention[]
       state: "ready"
     }
 
-function dueAt(row: Doc<"categorizationJobs">): number {
+function dueAt(row: Doc<"mentionAnalysisJobs">): number {
   return ((row.status === "leased" ? row.leaseExpiresAt : row.nextAttemptAt) ??
     0) as number
 }
 
-function hasValidAttemptCounters(row: Doc<"categorizationJobs">): boolean {
+function hasValidAttemptCounters(row: Doc<"mentionAnalysisJobs">): boolean {
   return (
     Number.isSafeInteger(row.attempts) &&
     (row.attempts as number) >= 0 &&
@@ -94,20 +99,20 @@ function hasValidAttemptCounters(row: Doc<"categorizationJobs">): boolean {
 }
 
 function jobForClaim(
-  row: Doc<"categorizationJobs">,
-): CategorizationJobForClaim {
+  row: Doc<"mentionAnalysisJobs">,
+): MentionAnalysisJobForClaim {
   return {
     attempts: row.attempts as number,
     id: String(row._id),
     maxAttempts: row.maxAttempts as number,
     nextAttemptAt: row.nextAttemptAt as number | undefined,
-    status: row.status as CategorizationJobForClaim["status"],
+    status: row.status as MentionAnalysisJobForClaim["status"],
     workspaceId: String(row.workspaceId),
   }
 }
 
 function providerRunIdempotencyKey(leaseToken: string): string {
-  return `deepseek:categorization:${leaseToken}`
+  return `deepseek:mention-analysis:${leaseToken}`
 }
 
 async function findProviderRun(
@@ -152,7 +157,7 @@ async function recordProviderMetric(
       durationMs: input.durationMs,
       failureCount: failureIncrement,
       inputItemCount: input.inputCount,
-      operation: DEEPSEEK_CATEGORIZATION_OPERATION,
+      operation: DEEPSEEK_MENTION_ANALYSIS_OPERATION,
       outputItemCount: input.outputCount,
       provider: "deepseek",
       rateLimitedCount: rateLimitedIncrement,
@@ -219,7 +224,7 @@ async function finishExpiredProviderRun(
     {
       durationMs: Math.max(0, now - (run.startedAt as number)),
       errorCode: "lease_expired",
-      errorMessage: "Categorization worker lease expired",
+      errorMessage: "Mention analysis worker lease expired",
       outputCount: 0,
       run,
       status: "failed",
@@ -230,30 +235,42 @@ async function finishExpiredProviderRun(
 
 async function patchMentionAnalysisState(
   ctx: MutationCtx,
-  row: Doc<"categorizationJobs">,
+  row: Doc<"mentionAnalysisJobs">,
   analysisState: "completed" | "failed" | "leased" | "pending",
   now: number,
 ): Promise<void> {
   const mentionId = row.mentionId as MentionId
   const mention = await ctx.db.get("mentions", mentionId)
   if (mention && mention.workspaceId === row.workspaceId) {
-    await ctx.db.patch("mentions", mentionId, { analysisState, updatedAt: now })
+    await ctx.db.patch("mentions", mentionId, {
+      analysisState,
+      ...(analysisState === "failed" ? { feedState: "visible" as const } : {}),
+      updatedAt: now,
+    })
+    if (analysisState === "failed") {
+      await incrementDailySystemMetric(ctx, {
+        bucketAt: now,
+        metric: "mention_analysis_terminal_failures",
+        updatedAt: now,
+        workspaceId: row.workspaceId as WorkspaceId,
+      })
+    }
   }
 }
 
 async function markJobDead(
   ctx: MutationCtx,
-  row: Doc<"categorizationJobs">,
+  row: Doc<"mentionAnalysisJobs">,
   errorCode: string,
   now: number,
 ): Promise<void> {
-  await transitionCategorizationStatusMetric(ctx, {
+  await transitionMentionAnalysisStatusMetric(ctx, {
     from: row.status as "leased" | "pending",
     to: "dead",
     updatedAt: now,
     workspaceId: row.workspaceId as WorkspaceId,
   })
-  await ctx.db.patch("categorizationJobs", row._id as CategorizationJobId, {
+  await ctx.db.patch("mentionAnalysisJobs", row._id as MentionAnalysisJobId, {
     completedAt: now,
     lastError: errorCode,
     leaseExpiresAt: undefined,
@@ -267,22 +284,22 @@ async function markJobDead(
 
 async function recoverExpiredJob(
   ctx: MutationCtx,
-  row: Doc<"categorizationJobs">,
+  row: Doc<"mentionAnalysisJobs">,
   now: number,
-): Promise<Doc<"categorizationJobs"> | null> {
+): Promise<Doc<"mentionAnalysisJobs"> | null> {
   await finishExpiredProviderRun(ctx, row.leaseToken as string | undefined, now)
   if ((row.attempts as number) >= (row.maxAttempts as number)) {
     await markJobDead(ctx, row, "lease_expired", now)
     return null
   }
 
-  await transitionCategorizationStatusMetric(ctx, {
+  await transitionMentionAnalysisStatusMetric(ctx, {
     from: "leased",
     to: "pending",
     updatedAt: now,
     workspaceId: row.workspaceId as WorkspaceId,
   })
-  await ctx.db.patch("categorizationJobs", row._id as CategorizationJobId, {
+  await ctx.db.patch("mentionAnalysisJobs", row._id as MentionAnalysisJobId, {
     lastError: "lease_expired",
     leaseExpiresAt: undefined,
     leaseToken: undefined,
@@ -305,19 +322,19 @@ async function recoverExpiredJob(
   }
 }
 
-async function dueCategorizationJobs(
+async function dueMentionAnalysisJobs(
   ctx: MutationCtx,
   now: number,
-): Promise<Doc<"categorizationJobs">[]> {
+): Promise<Doc<"mentionAnalysisJobs">[]> {
   const [pending, expired] = await Promise.all([
     ctx.db
-      .query("categorizationJobs")
+      .query("mentionAnalysisJobs")
       .withIndex("by_status_and_next_attempt_at", (q) =>
         q.eq("status", "pending").lte("nextAttemptAt", now),
       )
       .take(MAX_DUE_SCAN),
     ctx.db
-      .query("categorizationJobs")
+      .query("mentionAnalysisJobs")
       .withIndex("by_status_and_lease_expires_at", (q) =>
         q.eq("status", "leased").lte("leaseExpiresAt", now),
       )
@@ -331,12 +348,12 @@ async function dueCategorizationJobs(
         String(left._id).localeCompare(String(right._id), "en"),
     )
     .slice(0, MAX_DUE_SCAN)
-  const claimable: Doc<"categorizationJobs">[] = []
+  const claimable: Doc<"mentionAnalysisJobs">[] = []
 
   for (const row of rows) {
     if (
       !hasValidAttemptCounters(row) ||
-      row.model !== DEEPSEEK_CATEGORIZATION_MODEL
+      row.model !== DEEPSEEK_MENTION_ANALYSIS_MODEL
     ) {
       await markJobDead(ctx, row, "invalid_job", now)
       continue
@@ -358,10 +375,18 @@ async function dueCategorizationJobs(
   return claimable
 }
 
-async function enabledCategorySnapshot(
+async function enabledAnalysisSnapshot(
   db: DatabaseReader,
   workspaceId: WorkspaceId,
-): Promise<EnabledCategorySnapshot | null> {
+): Promise<EnabledAnalysisSnapshot | null> {
+  const workspace = await db.get("workspaces", workspaceId)
+  if (
+    !workspace ||
+    typeof workspace.filteringContext !== "string" ||
+    workspace.filteringContext.trim().length === 0
+  ) {
+    return null
+  }
   const rows = await db
     .query("categories")
     .withIndex("by_workspace_deleted_enabled_and_sort_order", (q) =>
@@ -387,10 +412,22 @@ async function enabledCategorySnapshot(
     name: row.name as string,
   }))
   try {
-    const json = categorySnapshotJson(categories)
-    const parsed = parseCategorySnapshotJson(json)
+    const context: MentionAnalysisContext = {
+      filteringContext: workspace.filteringContext,
+      ...(workspace.filteringGuidelines
+        ? { filteringGuidelines: workspace.filteringGuidelines }
+        : {}),
+    }
+    const json = analysisSnapshotJson(categories, context)
+    const parsed = parseAnalysisSnapshotJson(json)
     return {
       categories: parsed.categories,
+      context: {
+        filteringContext: parsed.filteringContext,
+        ...(parsed.filteringGuidelines
+          ? { filteringGuidelines: parsed.filteringGuidelines }
+          : {}),
+      },
       json,
       metricGroupByCategoryId: new Map(
         rows.map((row) => [
@@ -406,12 +443,12 @@ async function enabledCategorySnapshot(
 
 async function currentBatchLease(
   db: DatabaseReader,
-  args: CategorizationBatchLeaseArguments,
+  args: MentionAnalysisBatchLeaseArguments,
   now: number,
 ): Promise<LeasedBatch | null> {
   if (
     args.jobIds.length === 0 ||
-    args.jobIds.length > MAX_CATEGORIZATION_BATCH_SIZE ||
+    args.jobIds.length > MAX_MENTION_ANALYSIS_BATCH_SIZE ||
     new Set(args.jobIds.map(String)).size !== args.jobIds.length ||
     args.leaseToken.trim().length === 0
   ) {
@@ -419,7 +456,9 @@ async function currentBatchLease(
   }
 
   const jobs = await Promise.all(
-    args.jobIds.map(async (jobId) => await db.get("categorizationJobs", jobId)),
+    args.jobIds.map(
+      async (jobId) => await db.get("mentionAnalysisJobs", jobId),
+    ),
   )
   const first = jobs[0]
   if (!first) {
@@ -437,24 +476,23 @@ async function currentBatchLease(
         job.leaseToken !== args.leaseToken ||
         job.leaseExpiresAt !== leaseExpiresAt ||
         job.workspaceId !== workspaceId ||
-        job.model !== DEEPSEEK_CATEGORIZATION_MODEL,
+        job.model !== DEEPSEEK_MENTION_ANALYSIS_MODEL,
     )
   ) {
     return null
   }
 
   return {
-    jobs: jobs.filter((job): job is Doc<"categorizationJobs"> => job !== null),
+    jobs: jobs.filter((job): job is Doc<"mentionAnalysisJobs"> => job !== null),
     workspaceId,
   }
 }
 
-async function categorizationMention(
+async function mentionAnalysisMention(
   db: DatabaseReader,
   mention: Doc<"mentions">,
-  companyDescription: string | undefined,
   now: number,
-): Promise<CategorizationMention | null> {
+): Promise<MentionAnalysisMention | null> {
   if (
     mention.retentionExpiresAt !== undefined &&
     mention.retentionExpiresAt <= now
@@ -489,7 +527,6 @@ async function categorizationMention(
         body: mention.body,
         ...(mention.title === undefined ? {} : { title: mention.title }),
       }),
-      ...(companyDescription ? { companyDescription } : {}),
       ...(keywords.length ? { keywords } : {}),
     }
   } catch {
@@ -497,21 +534,23 @@ async function categorizationMention(
   }
 }
 
+function mentionContextJson(
+  mentions: readonly MentionAnalysisMention[],
+): string {
+  return JSON.stringify(mentions)
+}
+
 async function mentionsForBatch(
   db: DatabaseReader,
   batch: LeasedBatch,
   now: number,
-): Promise<CategorizationMention[] | null> {
-  const [workspace, mentionRows] = await Promise.all([
-    db.get("workspaces", batch.workspaceId),
-    Promise.all(
-      batch.jobs.map(
-        async (job) => await db.get("mentions", job.mentionId as MentionId),
-      ),
+): Promise<MentionAnalysisMention[] | null> {
+  const mentionRows = await Promise.all(
+    batch.jobs.map(
+      async (job) => await db.get("mentions", job.mentionId as MentionId),
     ),
-  ])
+  )
   if (
-    !workspace ||
     mentionRows.some(
       (mention, index) =>
         !mention ||
@@ -524,26 +563,18 @@ async function mentionsForBatch(
   const mentions = await Promise.all(
     mentionRows
       .filter((mention): mention is Doc<"mentions"> => mention !== null)
-      .map(
-        async (mention) =>
-          await categorizationMention(
-            db,
-            mention,
-            workspace.companyDescription,
-            now,
-          ),
-      ),
+      .map(async (mention) => await mentionAnalysisMention(db, mention, now)),
   )
   return mentions.some((mention) => mention === null)
     ? null
     : mentions.filter(
-        (mention): mention is CategorizationMention => mention !== null,
+        (mention): mention is MentionAnalysisMention => mention !== null,
       )
 }
 
-async function completeAlreadyCategorizedJob(
+async function completeAlreadyAnalyzedJob(
   ctx: MutationCtx,
-  row: Doc<"categorizationJobs">,
+  row: Doc<"mentionAnalysisJobs">,
   now: number,
 ): Promise<boolean> {
   const mention = await ctx.db.get("mentions", row.mentionId as MentionId)
@@ -551,18 +582,20 @@ async function completeAlreadyCategorizedJob(
     !mention ||
     mention.workspaceId !== row.workspaceId ||
     mention.categoryId === undefined ||
+    mention.priority === undefined ||
+    mention.priorityReason === undefined ||
     mention.analysisState !== "completed"
   ) {
     return false
   }
 
-  await transitionCategorizationStatusMetric(ctx, {
+  await transitionMentionAnalysisStatusMetric(ctx, {
     from: row.status as "leased" | "pending",
     to: "completed",
     updatedAt: now,
     workspaceId: row.workspaceId as WorkspaceId,
   })
-  await ctx.db.patch("categorizationJobs", row._id as CategorizationJobId, {
+  await ctx.db.patch("mentionAnalysisJobs", row._id as MentionAnalysisJobId, {
     completedAt: now,
     lastError: undefined,
     leaseExpiresAt: undefined,
@@ -576,18 +609,17 @@ async function completeAlreadyCategorizedJob(
 
 async function claimableRowsWithMentions(
   ctx: MutationCtx,
-  rows: readonly Doc<"categorizationJobs">[],
+  rows: readonly Doc<"mentionAnalysisJobs">[],
   now: number,
 ): Promise<
-  Array<{ mention: CategorizationMention; row: Doc<"categorizationJobs"> }>
+  Array<{ mention: MentionAnalysisMention; row: Doc<"mentionAnalysisJobs"> }>
 > {
   const claimable: Array<{
-    mention: CategorizationMention
-    row: Doc<"categorizationJobs">
+    mention: MentionAnalysisMention
+    row: Doc<"mentionAnalysisJobs">
   }> = []
-  const companyDescriptionByWorkspace = new Map<string, string | undefined>()
   for (const row of rows) {
-    if (await completeAlreadyCategorizedJob(ctx, row, now)) {
+    if (await completeAlreadyAnalyzedJob(ctx, row, now)) {
       continue
     }
     const mention = await ctx.db.get("mentions", row.mentionId as MentionId)
@@ -595,23 +627,7 @@ async function claimableRowsWithMentions(
       await markJobDead(ctx, row, "invalid_mention", now)
       continue
     }
-    const workspaceKey = String(row.workspaceId)
-    if (!companyDescriptionByWorkspace.has(workspaceKey)) {
-      const workspace = await ctx.db.get(
-        "workspaces",
-        row.workspaceId as WorkspaceId,
-      )
-      companyDescriptionByWorkspace.set(
-        workspaceKey,
-        workspace?.companyDescription,
-      )
-    }
-    const context = await categorizationMention(
-      ctx.db,
-      mention,
-      companyDescriptionByWorkspace.get(workspaceKey),
-      now,
-    )
+    const context = await mentionAnalysisMention(ctx.db, mention, now)
     if (!context) {
       await markJobDead(ctx, row, "invalid_mention", now)
       continue
@@ -623,33 +639,37 @@ async function claimableRowsWithMentions(
 
 function promptBoundedJobs(
   candidates: readonly {
-    mention: CategorizationMention
-    row: Doc<"categorizationJobs">
+    mention: MentionAnalysisMention
+    row: Doc<"mentionAnalysisJobs">
   }[],
-): Doc<"categorizationJobs">[] {
-  const selected: CategorizationMention[] = []
+  categories: readonly MentionAnalysisCategory[],
+  context: MentionAnalysisContext,
+): Doc<"mentionAnalysisJobs">[] | null {
+  const selected: MentionAnalysisMention[] = []
   for (const candidate of candidates) {
-    const next = [...selected, candidate.mention]
-    if (
-      selected.length > 0 &&
-      JSON.stringify({ mentions: next }).length >
-        MAX_CATEGORIZATION_BATCH_PROMPT_CHARS
-    ) {
+    try {
+      buildDeepSeekMentionAnalysisRequest(
+        [...selected, candidate.mention],
+        categories,
+        context,
+      )
+      selected.push(candidate.mention)
+    } catch {
+      if (selected.length === 0) return null
       break
     }
-    selected.push(candidate.mention)
   }
   return candidates.slice(0, selected.length).map(({ row }) => row)
 }
 
-export const dispatchDueCategorizationJobs = internalMutation({
+export const dispatchDueMentionAnalysisJobs = internalMutation({
   args: { now: v.optional(v.number()) },
   handler: async (ctx, args) => {
     const now = args.now ?? Date.now()
-    const queue = await dueCategorizationJobs(ctx, now)
+    const queue = await dueMentionAnalysisJobs(ctx, now)
     const snapshotByWorkspace = new Map<
       string,
-      EnabledCategorySnapshot | null
+      EnabledAnalysisSnapshot | null
     >()
     const consideredWorkspaces = new Set<string>()
     let batches = 0
@@ -665,10 +685,11 @@ export const dispatchDueCategorizationJobs = internalMutation({
       const workspaceId = first.workspaceId as WorkspaceId
       const workspaceKey = String(workspaceId)
       consideredWorkspaces.add(workspaceKey)
-      const selected: Doc<"categorizationJobs">[] = []
+      const selected: Doc<"mentionAnalysisJobs">[] = []
       for (
         let index = 0;
-        index < queue.length && selected.length < MAX_CATEGORIZATION_BATCH_SIZE;
+        index < queue.length &&
+        selected.length < MAX_MENTION_ANALYSIS_BATCH_SIZE;
       ) {
         if (queue[index]!.workspaceId === workspaceId) {
           selected.push(queue[index]!)
@@ -680,7 +701,7 @@ export const dispatchDueCategorizationJobs = internalMutation({
 
       let snapshot = snapshotByWorkspace.get(workspaceKey)
       if (snapshot === undefined) {
-        snapshot = await enabledCategorySnapshot(ctx.db, workspaceId)
+        snapshot = await enabledAnalysisSnapshot(ctx.db, workspaceId)
         snapshotByWorkspace.set(workspaceKey, snapshot)
       }
       if (!snapshot) {
@@ -695,29 +716,55 @@ export const dispatchDueCategorizationJobs = internalMutation({
       }
 
       const claimable = await claimableRowsWithMentions(ctx, selected, now)
-      const eligible = promptBoundedJobs(claimable)
+      const eligible = promptBoundedJobs(
+        claimable,
+        snapshot.categories,
+        snapshot.context,
+      )
+      if (eligible === null) {
+        const [oversized, ...remaining] = claimable
+        if (oversized) {
+          blockedCatalog += 1
+          await markJobDead(
+            ctx,
+            oversized.row,
+            "analysis_prompt_too_large",
+            now,
+          )
+        }
+        for (const { row } of remaining) {
+          queue.push(row)
+        }
+        continue
+      }
       for (const { row } of claimable.slice(eligible.length)) {
         queue.push(row)
       }
       if (eligible.length === 0) {
         continue
       }
-      const lease = createCategorizationLease({
+      const selectedMentionContextJson = mentionContextJson(
+        claimable.slice(0, eligible.length).map(({ mention }) => mention),
+      )
+      const lease = createMentionAnalysisLease({
         jobs: eligible.map(jobForClaim),
         now,
-        snapshotJson: snapshot.json,
+        snapshotJson: JSON.stringify({
+          analysis: snapshot.json,
+          mentions: selectedMentionContextJson,
+        }),
       })
-      const jobIds = eligible.map((row) => row._id as CategorizationJobId)
+      const jobIds = eligible.map((row) => row._id as MentionAnalysisJobId)
       for (const row of eligible) {
-        await transitionCategorizationStatusMetric(ctx, {
+        await transitionMentionAnalysisStatusMetric(ctx, {
           from: "pending",
           to: "leased",
           updatedAt: now,
           workspaceId,
         })
         await ctx.db.patch(
-          "categorizationJobs",
-          row._id as CategorizationJobId,
+          "mentionAnalysisJobs",
+          row._id as MentionAnalysisJobId,
           {
             attempts: (row.attempts as number) + 1,
             completedAt: undefined,
@@ -734,11 +781,12 @@ export const dispatchDueCategorizationJobs = internalMutation({
       }
       await ctx.scheduler.runAfter(
         0,
-        internal.categorization.actions.executeCategorizationBatch,
+        internal.mentionAnalysis.actions.executeMentionAnalysisBatch,
         {
-          categorySnapshotJson: snapshot.json,
+          analysisSnapshotJson: snapshot.json,
           jobIds,
           leaseToken: lease.token,
+          mentionContextJson: selectedMentionContextJson,
         },
       )
       batches += 1
@@ -754,13 +802,14 @@ export const dispatchDueCategorizationJobs = internalMutation({
   },
 })
 
-export const loadCategorizationBatchContext = internalQuery({
+export const loadMentionAnalysisBatchContext = internalQuery({
   args: {
-    categorySnapshotJson: v.string(),
-    jobIds: v.array(v.id("categorizationJobs")),
+    analysisSnapshotJson: v.string(),
+    jobIds: v.array(v.id("mentionAnalysisJobs")),
     leaseToken: v.string(),
+    mentionContextJson: v.string(),
   },
-  handler: async (ctx, args): Promise<CategorizationBatchExecutionContext> => {
+  handler: async (ctx, args): Promise<MentionAnalysisBatchExecutionContext> => {
     const now = Date.now()
     const batch = await currentBatchLease(ctx.db, args, now)
     if (!batch) {
@@ -778,16 +827,16 @@ export const loadCategorizationBatchContext = internalQuery({
         state: "invalid_batch",
       }
     }
-    const currentSnapshot = await enabledCategorySnapshot(
+    const currentSnapshot = await enabledAnalysisSnapshot(
       ctx.db,
       batch.workspaceId,
     )
     if (
       !currentSnapshot ||
-      currentSnapshot.json !== args.categorySnapshotJson
+      currentSnapshot.json !== args.analysisSnapshotJson
     ) {
       return {
-        errorCode: "category_snapshot_changed",
+        errorCode: "analysis_snapshot_changed",
         retryable: true,
         state: "invalid_batch",
       }
@@ -800,20 +849,29 @@ export const loadCategorizationBatchContext = internalQuery({
         state: "invalid_batch",
       }
     }
+    if (mentionContextJson(mentions) !== args.mentionContextJson) {
+      return {
+        errorCode: "analysis_snapshot_changed",
+        retryable: true,
+        state: "invalid_batch",
+      }
+    }
 
     return {
       categories: currentSnapshot.categories,
+      context: currentSnapshot.context,
       mentions,
       state: "ready",
     }
   },
 })
 
-export const releaseCategorizationBlockedConfiguration = internalMutation({
+export const releaseMentionAnalysisBlockedConfiguration = internalMutation({
   args: {
-    categorySnapshotJson: v.string(),
-    jobIds: v.array(v.id("categorizationJobs")),
+    analysisSnapshotJson: v.string(),
+    jobIds: v.array(v.id("mentionAnalysisJobs")),
     leaseToken: v.string(),
+    mentionContextJson: v.string(),
   },
   handler: async (ctx, args) => {
     const now = Date.now()
@@ -823,21 +881,25 @@ export const releaseCategorizationBlockedConfiguration = internalMutation({
     }
 
     for (const job of batch.jobs) {
-      await transitionCategorizationStatusMetric(ctx, {
+      await transitionMentionAnalysisStatusMetric(ctx, {
         from: "leased",
         to: "pending",
         updatedAt: now,
         workspaceId: batch.workspaceId,
       })
-      await ctx.db.patch("categorizationJobs", job._id as CategorizationJobId, {
-        attempts: Math.max(0, (job.attempts as number) - 1),
-        lastError: "blocked_config",
-        leaseExpiresAt: undefined,
-        leaseToken: undefined,
-        nextAttemptAt: now + BLOCKED_CONFIGURATION_RETRY_MS,
-        status: "pending",
-        updatedAt: now,
-      })
+      await ctx.db.patch(
+        "mentionAnalysisJobs",
+        job._id as MentionAnalysisJobId,
+        {
+          attempts: Math.max(0, (job.attempts as number) - 1),
+          lastError: "blocked_config",
+          leaseExpiresAt: undefined,
+          leaseToken: undefined,
+          nextAttemptAt: now + BLOCKED_CONFIGURATION_RETRY_MS,
+          status: "pending",
+          updatedAt: now,
+        },
+      )
       await patchMentionAnalysisState(ctx, job, "pending", now)
     }
     return {
@@ -847,11 +909,12 @@ export const releaseCategorizationBlockedConfiguration = internalMutation({
   },
 })
 
-export const startCategorizationProviderRun = internalMutation({
+export const startMentionAnalysisProviderRun = internalMutation({
   args: {
-    categorySnapshotJson: v.string(),
-    jobIds: v.array(v.id("categorizationJobs")),
+    analysisSnapshotJson: v.string(),
+    jobIds: v.array(v.id("mentionAnalysisJobs")),
     leaseToken: v.string(),
+    mentionContextJson: v.string(),
   },
   handler: async (ctx, args) => {
     const now = Date.now()
@@ -867,14 +930,19 @@ export const startCategorizationProviderRun = internalMutation({
     ) {
       return { state: "stale_lease" as const }
     }
-    const currentSnapshot = await enabledCategorySnapshot(
+    const currentSnapshot = await enabledAnalysisSnapshot(
       ctx.db,
       batch.workspaceId,
     )
     if (
       !currentSnapshot ||
-      currentSnapshot.json !== args.categorySnapshotJson
+      currentSnapshot.json !== args.analysisSnapshotJson
     ) {
+      return { state: "snapshot_changed" as const }
+    }
+
+    const mentions = await mentionsForBatch(ctx.db, batch, now)
+    if (!mentions || mentionContextJson(mentions) !== args.mentionContextJson) {
       return { state: "snapshot_changed" as const }
     }
 
@@ -889,7 +957,7 @@ export const startCategorizationProviderRun = internalMutation({
       createdAt: now,
       idempotencyKey,
       inputCount: batch.jobs.length,
-      operation: DEEPSEEK_CATEGORIZATION_OPERATION,
+      operation: DEEPSEEK_MENTION_ANALYSIS_OPERATION,
       outputCount: 0,
       provider: "deepseek",
       startedAt: now,
@@ -902,12 +970,13 @@ export const startCategorizationProviderRun = internalMutation({
   },
 })
 
-export const applyCategorizationBatch = internalMutation({
+export const applyMentionAnalysisBatch = internalMutation({
   args: {
-    categorySnapshotJson: v.string(),
+    analysisSnapshotJson: v.string(),
     durationMs: v.number(),
-    jobIds: v.array(v.id("categorizationJobs")),
+    jobIds: v.array(v.id("mentionAnalysisJobs")),
     leaseToken: v.string(),
+    mentionContextJson: v.string(),
     resultsJson: v.string(),
   },
   handler: async (ctx, args) => {
@@ -928,22 +997,22 @@ export const applyCategorizationBatch = internalMutation({
     ) {
       return { state: "stale_lease" as const }
     }
-    const currentSnapshot = await enabledCategorySnapshot(
+    const currentSnapshot = await enabledAnalysisSnapshot(
       ctx.db,
       batch.workspaceId,
     )
     if (
       !currentSnapshot ||
-      currentSnapshot.json !== args.categorySnapshotJson
+      currentSnapshot.json !== args.analysisSnapshotJson
     ) {
-      throw new TypeError("Categorization category snapshot changed")
+      throw new TypeError("Mention analysis analysis snapshot changed")
     }
     const mentions = await mentionsForBatch(ctx.db, batch, now)
-    if (!mentions) {
-      throw new TypeError("Categorization mention batch is invalid")
+    if (!mentions || mentionContextJson(mentions) !== args.mentionContextJson) {
+      throw new TypeError("Mention analysis mention batch is invalid")
     }
-    const parsedResults = parseCategorizationResultsJson(args.resultsJson)
-    const results = validateCategorizationApplication({
+    const parsedResults = parseMentionAnalysisResultsJson(args.resultsJson)
+    const results = validateMentionAnalysisApplication({
       categories: currentSnapshot.categories,
       mentions,
       results: parsedResults,
@@ -968,39 +1037,64 @@ export const applyCategorizationBatch = internalMutation({
         ? currentSnapshot.metricGroupByCategoryId.get(result.categoryId)
         : undefined
       if (!result || !categoryId || !metricGroup) {
-        throw new TypeError("Categorization result cannot be applied")
+        throw new TypeError("Mention analysis result cannot be applied")
       }
       const mention = await ctx.db.get("mentions", mentionId)
       if (!mention || mention.workspaceId !== batch.workspaceId) {
-        throw new TypeError("Categorization mention is unavailable")
+        throw new TypeError("Mention analysis mention is unavailable")
       }
       await ctx.db.patch("mentions", mentionId, {
         analysisState: "completed",
+        analysisVersion: MENTION_ANALYSIS_VERSION,
         categoryId,
+        feedState: result.relevant ? "visible" : "filtered",
+        priority: result.priority,
+        priorityReason: result.priorityReason,
+        relevanceReason: result.relevanceReason,
         updatedAt: now,
       })
-      await transitionCategorizationStatusMetric(ctx, {
+      await transitionMentionAnalysisStatusMetric(ctx, {
         from: "leased",
         to: "completed",
         updatedAt: now,
         workspaceId: batch.workspaceId,
       })
-      await ctx.db.patch("categorizationJobs", job._id as CategorizationJobId, {
-        completedAt: now,
-        lastError: undefined,
-        leaseExpiresAt: undefined,
-        leaseToken: undefined,
-        nextAttemptAt: undefined,
-        status: "completed",
-        updatedAt: now,
-      })
+      await ctx.db.patch(
+        "mentionAnalysisJobs",
+        job._id as MentionAnalysisJobId,
+        {
+          completedAt: now,
+          lastError: undefined,
+          leaseExpiresAt: undefined,
+          leaseToken: undefined,
+          nextAttemptAt: undefined,
+          status: "completed",
+          updatedAt: now,
+        },
+      )
       await incrementDailySystemMetric(ctx, {
         bucketAt: mention.firstSeenAt as number,
-        metric: categorizedMentionMetric(metricGroup),
-        scope: "global",
+        metric: result.relevant
+          ? "mentions_analyzed_relevant"
+          : "mentions_analyzed_filtered",
         updatedAt: now,
         workspaceId: batch.workspaceId,
       })
+      if (result.relevant) {
+        await incrementDailySystemMetric(ctx, {
+          bucketAt: mention.firstSeenAt as number,
+          metric: analyzedMentionMetric(metricGroup),
+          scope: "global",
+          updatedAt: now,
+          workspaceId: batch.workspaceId,
+        })
+        await incrementDailySystemMetric(ctx, {
+          bucketAt: mention.firstSeenAt as number,
+          metric: `mentions_priority:${result.priority}`,
+          updatedAt: now,
+          workspaceId: batch.workspaceId,
+        })
+      }
     }
     await finishProviderRun(
       ctx,
@@ -1016,14 +1110,15 @@ export const applyCategorizationBatch = internalMutation({
   },
 })
 
-export const failCategorizationBatch = internalMutation({
+export const failMentionAnalysisBatch = internalMutation({
   args: {
-    categorySnapshotJson: v.string(),
+    analysisSnapshotJson: v.string(),
     durationMs: v.number(),
     errorCode: v.string(),
     errorMessage: v.string(),
-    jobIds: v.array(v.id("categorizationJobs")),
+    jobIds: v.array(v.id("mentionAnalysisJobs")),
     leaseToken: v.string(),
+    mentionContextJson: v.string(),
     retryable: v.boolean(),
     retryAfterMs: v.optional(v.number()),
   },
@@ -1038,7 +1133,7 @@ export const failCategorizationBatch = internalMutation({
     let pending = 0
 
     for (const job of batch.jobs) {
-      const plan = planCategorizationFailure({
+      const plan = planMentionAnalysisFailure({
         attempts: job.attempts as number,
         errorCode: args.errorCode,
         maxAttempts: job.maxAttempts as number,
@@ -1049,15 +1144,15 @@ export const failCategorizationBatch = internalMutation({
       })
       if (plan.status === "dead") {
         dead += 1
-        await transitionCategorizationStatusMetric(ctx, {
+        await transitionMentionAnalysisStatusMetric(ctx, {
           from: "leased",
           to: "dead",
           updatedAt: now,
           workspaceId: batch.workspaceId,
         })
         await ctx.db.patch(
-          "categorizationJobs",
-          job._id as CategorizationJobId,
+          "mentionAnalysisJobs",
+          job._id as MentionAnalysisJobId,
           {
             completedAt: plan.completedAt,
             lastError: plan.lastError,
@@ -1071,15 +1166,15 @@ export const failCategorizationBatch = internalMutation({
         await patchMentionAnalysisState(ctx, job, "failed", now)
       } else {
         pending += 1
-        await transitionCategorizationStatusMetric(ctx, {
+        await transitionMentionAnalysisStatusMetric(ctx, {
           from: "leased",
           to: "pending",
           updatedAt: now,
           workspaceId: batch.workspaceId,
         })
         await ctx.db.patch(
-          "categorizationJobs",
-          job._id as CategorizationJobId,
+          "mentionAnalysisJobs",
+          job._id as MentionAnalysisJobId,
           {
             completedAt: undefined,
             lastError: plan.lastError,

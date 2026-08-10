@@ -5,28 +5,28 @@ import { internal } from "../_generated/api"
 import { v } from "convex/values"
 
 import {
-  createDeepSeekCategorizationRequester,
+  createDeepSeekMentionAnalysisRequester,
   DeepSeekIntegrationError,
   readDeepSeekRuntimeConfiguration,
 } from "../integrations/deepseek"
 import {
-  buildDeepSeekCategorizationRequest,
-  CategorizationValidationError,
-} from "../lib/deepseekCategorization"
+  buildDeepSeekMentionAnalysisRequest,
+  MentionAnalysisValidationError,
+} from "../lib/deepseekMentionAnalysis"
 import { env, internalAction } from "../_generated/server"
 import {
-  CategorizationOrchestrationError,
-  validateCategorizationApplication,
+  MentionAnalysisOrchestrationError,
+  validateMentionAnalysisApplication,
 } from "./model"
 
-type SafeCategorizationFailure = {
+type SafeMentionAnalysisFailure = {
   code: string
   message: string
   retryAfterMs?: number | undefined
   retryable: boolean
 }
 
-function safeFailure(error: unknown): SafeCategorizationFailure {
+function safeFailure(error: unknown): SafeMentionAnalysisFailure {
   if (error instanceof DeepSeekIntegrationError) {
     return {
       code: error.code,
@@ -36,31 +36,42 @@ function safeFailure(error: unknown): SafeCategorizationFailure {
     }
   }
   if (
-    error instanceof CategorizationValidationError ||
-    error instanceof CategorizationOrchestrationError
+    error instanceof MentionAnalysisValidationError &&
+    error.code !== "INVALID_OUTPUT"
+  ) {
+    return {
+      code: "invalid_analysis_request",
+      message: "DeepSeek mention analysis request could not be built",
+      retryable: false,
+    }
+  }
+  if (
+    error instanceof MentionAnalysisValidationError ||
+    error instanceof MentionAnalysisOrchestrationError
   ) {
     return {
       code: "invalid_model_output",
-      message: "DeepSeek categorization output failed total batch validation",
+      message: "DeepSeek mention analysis output failed total batch validation",
       retryable: true,
     }
   }
   return {
-    code: "categorization_execution_failed",
-    message: "DeepSeek categorization execution failed",
+    code: "mention_analysis_execution_failed",
+    message: "DeepSeek mention analysis execution failed",
     retryable: true,
   }
 }
 
-export const executeCategorizationBatch = internalAction({
+export const executeMentionAnalysisBatch = internalAction({
   args: {
-    categorySnapshotJson: v.string(),
-    jobIds: v.array(v.id("categorizationJobs")),
+    analysisSnapshotJson: v.string(),
+    jobIds: v.array(v.id("mentionAnalysisJobs")),
     leaseToken: v.string(),
+    mentionContextJson: v.string(),
   },
   handler: async (ctx, args) => {
     const context = await ctx.runQuery(
-      internal.categorization.internal.loadCategorizationBatchContext,
+      internal.mentionAnalysis.internal.loadMentionAnalysisBatchContext,
       args,
     )
     if (context.state === "stale_lease") {
@@ -68,12 +79,12 @@ export const executeCategorizationBatch = internalAction({
     }
     if (context.state === "invalid_batch") {
       return await ctx.runMutation(
-        internal.categorization.internal.failCategorizationBatch,
+        internal.mentionAnalysis.internal.failMentionAnalysisBatch,
         {
           ...args,
           durationMs: 0,
           errorCode: context.errorCode,
-          errorMessage: "Categorization batch context is invalid",
+          errorMessage: "Mention analysis batch context is invalid",
           retryable: context.retryable,
         },
       )
@@ -82,8 +93,8 @@ export const executeCategorizationBatch = internalAction({
     const configuration = readDeepSeekRuntimeConfiguration(env)
     if (configuration.state === "provider_unconfigured") {
       await ctx.runMutation(
-        internal.categorization.internal
-          .releaseCategorizationBlockedConfiguration,
+        internal.mentionAnalysis.internal
+          .releaseMentionAnalysisBlockedConfiguration,
         args,
       )
       return {
@@ -93,21 +104,22 @@ export const executeCategorizationBatch = internalAction({
       }
     }
 
-    let request: ReturnType<typeof buildDeepSeekCategorizationRequest>
-    let requester: ReturnType<typeof createDeepSeekCategorizationRequester>
+    let request: ReturnType<typeof buildDeepSeekMentionAnalysisRequest>
+    let requester: ReturnType<typeof createDeepSeekMentionAnalysisRequester>
     try {
-      request = buildDeepSeekCategorizationRequest(
+      request = buildDeepSeekMentionAnalysisRequest(
         context.mentions,
         context.categories,
+        context.context,
       )
-      requester = createDeepSeekCategorizationRequester({
+      requester = createDeepSeekMentionAnalysisRequester({
         apiKey: configuration.apiKey,
         timeoutMs: configuration.timeoutMs,
       })
     } catch (error) {
       const failure = safeFailure(error)
       return await ctx.runMutation(
-        internal.categorization.internal.failCategorizationBatch,
+        internal.mentionAnalysis.internal.failMentionAnalysisBatch,
         {
           ...args,
           durationMs: 0,
@@ -122,19 +134,19 @@ export const executeCategorizationBatch = internalAction({
     }
 
     const start = (await ctx.runMutation(
-      internal.categorization.internal.startCategorizationProviderRun,
+      internal.mentionAnalysis.internal.startMentionAnalysisProviderRun,
       args,
     )) as {
       state: "duplicate" | "snapshot_changed" | "stale_lease" | "started"
     }
     if (start.state === "snapshot_changed") {
       return await ctx.runMutation(
-        internal.categorization.internal.failCategorizationBatch,
+        internal.mentionAnalysis.internal.failMentionAnalysisBatch,
         {
           ...args,
           durationMs: 0,
-          errorCode: "category_snapshot_changed",
-          errorMessage: "Enabled category snapshot changed before execution",
+          errorCode: "analysis_snapshot_changed",
+          errorMessage: "Enabled analysis snapshot changed before execution",
           retryable: true,
         },
       )
@@ -146,13 +158,13 @@ export const executeCategorizationBatch = internalAction({
     const startedAt = Date.now()
     try {
       const rawOutput = await requester(request, new AbortController().signal)
-      const results = validateCategorizationApplication({
+      const results = validateMentionAnalysisApplication({
         categories: context.categories,
         mentions: context.mentions,
         results: rawOutput,
       })
       return await ctx.runMutation(
-        internal.categorization.internal.applyCategorizationBatch,
+        internal.mentionAnalysis.internal.applyMentionAnalysisBatch,
         {
           ...args,
           durationMs: Math.max(0, Date.now() - startedAt),
@@ -162,7 +174,7 @@ export const executeCategorizationBatch = internalAction({
     } catch (error) {
       const failure = safeFailure(error)
       return await ctx.runMutation(
-        internal.categorization.internal.failCategorizationBatch,
+        internal.mentionAnalysis.internal.failMentionAnalysisBatch,
         {
           ...args,
           durationMs: Math.max(0, Date.now() - startedAt),

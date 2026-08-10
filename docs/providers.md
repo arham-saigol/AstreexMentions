@@ -125,7 +125,7 @@ https://news.ycombinator.com/item?id={objectID}
 
 `HN_REQUESTS_PER_HOUR` is a positive integer with default `9000`. It is the hourly request budget, and the minute claim cap is `min(12, HN_REQUESTS_PER_HOUR)`. A lower value reduces both limits; a higher value never raises the minute cap above 12. Invalid input makes the shared tracking-dispatch configuration fail closed.
 
-## Categorization: DeepSeek
+## Mention analysis: DeepSeek
 
 | Property       | Contract                                         |
 | -------------- | ------------------------------------------------ |
@@ -145,38 +145,48 @@ The integration validates and sends this strict request shape:
   "thinking": { "type": "enabled" },
   "response_format": { "type": "json_object" },
   "messages": [
-    { "role": "system", "content": "<classification contract>" },
-    { "role": "user", "content": "{\"mentions\":[...]}" }
+    { "role": "system", "content": "<mention analysis contract>" },
+    {
+      "role": "user",
+      "content": "{\"context\":{...},\"mentions\":[...]}"
+    }
   ]
 }
 ```
 
 The prompt:
 
-- includes only the enabled category IDs/names/descriptions;
-- treats mention text as untrusted data, never instructions;
-- requires exactly one category for every input mention;
+- includes the reviewed filtering context and guidelines once per batch;
+- includes bounded matched-keyword context with each mention;
+- includes only enabled category IDs, names, and descriptions;
+- defines relevance and low, medium, and high-priority policy;
+- treats all supplied text as untrusted data, never as instructions;
 - requires JSON only and forbids extra IDs, omissions, duplicates, and extra fields.
 
-A batch contains 1–50 unique, non-empty mentions. Category IDs must also be unique and non-empty. The response content must be valid JSON with exactly:
+A batch contains at most 20 unique, non-empty mentions. Its prompt cannot exceed 48,000 characters. All text fields and output reasons have fixed limits. The response content must be valid JSON with exactly:
 
 ```json
 {
   "results": [
-    { "mentionId": "<input id>", "categoryId": "<enabled category id>" }
+    {
+      "mentionId": "<input id>",
+      "relevant": true,
+      "relevanceReason": "<bounded explanation>",
+      "priority": "low",
+      "priorityReason": "<bounded explanation>",
+      "categoryId": "<enabled category id>"
+    }
   ]
 }
 ```
 
-Validation is total over the input mentions: every input mention ID must appear exactly once, and every assigned category ID must come from the enabled catalog. Categories may be reused across mentions. Unknown categories, invented mentions, omissions, duplicates, extra envelope fields, or extra result fields reject the whole batch before any assignment is exposed to storage.
+Validation covers all input mentions. Every input ID must appear exactly once. Every category ID must come from the enabled catalog. An invalid ID, priority, reason, or object shape rejects the full batch before storage changes.
 
-The pure retry helper defaults to three attempts, a 30-second request timeout, and 500 ms exponential backoff with a 0.75–1.25 jitter multiplier. It retries malformed output, aborts, transport/type failures, and provider errors marked retryable; permanent request/auth errors stop immediately. Queue primitives separately define four-minute leases and deterministic 30-second exponential retry capped at 30 minutes.
+The one-minute Convex dispatcher groups prompt-bounded jobs from one workspace under a four-minute lease. Each lease has an exact analysis snapshot. The dispatcher schedules at most four batches. It calls `createDeepSeekMentionAnalysisRequester` only after it validates the lease, mentions, workspace, and snapshot. The catalog must include exactly one enabled permanent system `Other` category.
 
-The one-minute Convex categorization dispatcher now consumes these jobs. It groups 1–50 jobs from one workspace under a four-minute lease and an exact enabled-category snapshot, schedules at most four batches per dispatch, and calls `createDeepSeekCategorizationRequester` only after rechecking the lease, mentions, workspace, and category catalog. The catalog must include exactly one enabled permanent system `Other` category.
+A result applies only after full-batch validation succeeds. Success atomically stores all analysis fields, feed state, and job state. Provider runs and metrics use a versioned `mention_analysis:` operation. Retryable errors use deterministic queue backoff from 30 seconds to 30 minutes. Permanent or exhausted jobs become `dead`. Linked mentions fail open as visible and unclassified. Missing or invalid DeepSeek configuration causes no request or provider telemetry. It restores the claimed attempt and returns jobs to pending for five minutes.
 
-A result is applied only after total validation succeeds for every mention in the batch. Success atomically updates all mention categories and job states and records a `deepseek` provider run plus hourly `chat.completions` metrics. Retryable failures use deterministic queue backoff from 30 seconds up to 30 minutes; non-retryable or exhausted jobs become `dead`. Missing/invalid DeepSeek configuration makes no request, writes no provider telemetry, restores the claimed attempt, and returns the jobs to pending for five minutes.
-
-Fixture-backed and `convex-test` worker coverage does not prove that a real account can access `deepseek-v4-pro`, accepts the implemented request fields, or returns valid production classifications.
+Fixture-backed and `convex-test` worker coverage does not prove that a real account can access `deepseek-v4-pro`, accepts the implemented request fields, or returns valid production analysis.
 
 ## Email: Resend
 
@@ -261,7 +271,7 @@ If timestamp and type are equal, the lexicographically greater event ID wins. Ol
 - Monitoring adapters: `packages/backend/convex/integrations/providers/`
 - Monitoring action: `packages/backend/convex/scheduling/actions.ts`
 - DeepSeek transport: `packages/backend/convex/integrations/deepseek.ts`
-- DeepSeek validation: `packages/backend/convex/lib/deepseekCategorization.ts`
+- DeepSeek validation: `packages/backend/convex/lib/deepseekMentionAnalysis.ts`
 - Resend transport: `packages/backend/convex/integrations/resend.ts`
 - Resend outbox: `packages/backend/convex/email/internal.ts`
 - Resend webhook: `packages/backend/convex/email/resendHttp.ts` and `email/webhookInternal.ts`

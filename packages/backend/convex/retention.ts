@@ -3,7 +3,7 @@ import { v } from "convex/values"
 
 import type { Id } from "./_generated/dataModel"
 import { internalMutation } from "./_generated/server"
-import { transitionCategorizationStatusMetric } from "./categorization/metrics"
+import { transitionMentionAnalysisStatusMetric } from "./mentionAnalysis/metrics"
 
 export const RETENTION_BATCH_SIZE = 25
 const MAX_MATCHES_PER_MENTION = 16
@@ -45,18 +45,16 @@ export const purgeExpiredFreeMentions = internalMutation({
       }
 
       const jobs = await ctx.db
-        .query("categorizationJobs")
+        .query("mentionAnalysisJobs")
         .withIndex("by_mention", (q) => q.eq("mentionId", mentionId))
         .take(MAX_JOBS_PER_MENTION + 1)
       for (const job of jobs.slice(0, MAX_JOBS_PER_MENTION)) {
-        if (job.status !== "completed" && job.status !== "dead") {
-          await transitionCategorizationStatusMetric(ctx, {
-            from: job.status,
-            updatedAt: now,
-            workspaceId: mention.workspaceId,
-          })
-        }
-        await ctx.db.delete("categorizationJobs", job._id)
+        await transitionMentionAnalysisStatusMetric(ctx, {
+          from: job.status,
+          updatedAt: now,
+          workspaceId: mention.workspaceId,
+        })
+        await ctx.db.delete("mentionAnalysisJobs", job._id)
       }
       if (jobs.length > MAX_JOBS_PER_MENTION) {
         needsContinuation = true

@@ -24,7 +24,7 @@ const workflow = [
   [
     "02",
     "Start with the right mentions",
-    "Astreex sorts each mention into questions, complaints, praise, bugs, feature requests, and your custom categories.",
+    "AI keeps clearly unrelated results in a reviewable Filtered view, then assigns priority and a category to the rest.",
   ],
   [
     "03",
@@ -84,11 +84,11 @@ const faqs = [
   ],
   [
     "How does Astreex categorize mentions?",
-    "AI sorts mentions into questions, complaints, praise, bugs, feature requests, competitor mentions, and your custom categories. You can always read the original post.",
+    "AI checks relevance, assigns low, medium, or high priority, and sorts each mention into a built-in or custom category. Filtered results remain reviewable.",
   ],
   [
     "What changes between plans?",
-    "Every plan includes all product features. Plans differ only by the number of keywords and mentions that you can monitor each month.",
+    "Every plan includes all product features. Plans differ by keyword and mention capacity. A mention counts when Astreex collects it, including a result later kept in the reviewable Filtered view.",
   ],
 ] as const
 
@@ -110,9 +110,9 @@ export default function HomePage() {
               Find the customer conversations worth your attention.
             </h1>
             <p className="t-stagger-line t-stagger-line--2 text-muted-foreground mt-7 max-w-[52ch] text-lg leading-[1.6]">
-              Track keywords across X, Reddit, and Hacker News. Astreex sorts
-              each mention into questions, complaints, praise, bugs, and feature
-              requests, so you know where to look first.
+              Track keywords across X, Reddit, and Hacker News. AI filters
+              clearly unrelated results, assigns priority, and categorizes the
+              conversations worth reviewing.
             </p>
             <div className="mt-9 flex flex-wrap items-center gap-3">
               <PressButton href="/sign-up">

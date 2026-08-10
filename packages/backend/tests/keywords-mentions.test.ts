@@ -18,6 +18,7 @@ const modules = {
 }
 
 const testSchema = defineSchema({
+  auditEvents: defineTable(v.any()),
   categories: defineTable(v.any()),
   keywords: defineTable(v.any())
     .index("by_workspace_phrase_and_deleted_at", [
@@ -35,9 +36,27 @@ const testSchema = defineSchema({
     .index("by_keyword_and_mention", ["keywordId", "mentionId"])
     .index("by_workspace_and_mention", ["workspaceId", "mentionId"]),
   mentions: defineTable(v.any())
-    .index("by_workspace_and_published_at", ["workspaceId", "publishedAt"])
-    .index("by_workspace_engagement_and_published_at", [
+    .index("by_workspace_feed_state_and_published_at", [
       "workspaceId",
+      "feedState",
+      "publishedAt",
+    ])
+    .index("by_workspace_feed_state_engagement_and_published_at", [
+      "workspaceId",
+      "feedState",
+      "engagementScore",
+      "publishedAt",
+    ])
+    .index("by_workspace_feed_state_priority_and_published_at", [
+      "workspaceId",
+      "feedState",
+      "priority",
+      "publishedAt",
+    ])
+    .index("by_workspace_feed_state_priority_engagement_and_published_at", [
+      "workspaceId",
+      "feedState",
+      "priority",
       "engagementScore",
       "publishedAt",
     ]),
@@ -136,11 +155,13 @@ const listMentionsReference = makeFunctionReference<
   "query",
   {
     cursor?: string
+    feed?: "visible" | "filtered"
     filters?: {
       categoryIds?: GenericId<"categories">[]
       keywordIds?: KeywordId[]
       mentionStatuses?: Array<"new" | "saved" | "dismissed">
       platforms?: Array<"x" | "reddit" | "hacker_news">
+      priorities?: Array<"low" | "medium" | "high">
       publishedAfter?: number
       publishedBefore?: number
     }
@@ -156,6 +177,11 @@ const getMentionReference = makeFunctionReference<
   { mentionId: MentionId; now: number },
   unknown
 >("mentions:getMention")
+const restoreFilteredMentionReference = makeFunctionReference<
+  "mutation",
+  { mentionId: MentionId },
+  unknown
+>("mentions:restoreFilteredMention")
 const updateMentionStatusReference = makeFunctionReference<
   "mutation",
   { mentionId: MentionId; status: "new" | "saved" | "dismissed" },
@@ -865,6 +891,7 @@ async function seedMentions(t: BackendTest, customer: SeededCustomer) {
     for (const [index, definition] of definitions.entries()) {
       const mentionId = (await ctx.db.insert("mentions", {
         analysisState: "completed",
+        feedState: "visible",
         authorDisplayName: `Author ${index}`,
         body: definition.body,
         canonicalUrl: `https://example.com/mention/${index}`,
@@ -875,7 +902,10 @@ async function seedMentions(t: BackendTest, customer: SeededCustomer) {
         firstSeenAt: now - 4_000,
         lastMatchedAt: now - 4_000,
         platform: definition.platform,
+        priority: (["high", "medium", "low"] as const)[index],
+        priorityReason: "Fixture priority reason",
         publishedAt: definition.publishedAt,
+        relevanceReason: "Fixture relevance reason",
         searchText: `${definition.title} ${definition.body}`.toLocaleLowerCase(
           "en",
         ),
@@ -972,6 +1002,7 @@ describe("mention Convex functions", () => {
       for (let index = 0; index < 251; index += 1) {
         await ctx.db.insert("mentions", {
           analysisState: "completed",
+          feedState: "visible",
           body: `Unrelated result ${index}`,
           canonicalUrl: `https://example.com/unrelated/${index}`,
           contentType: "post",
@@ -1011,6 +1042,7 @@ describe("mention Convex functions", () => {
       const insertMention = async (suffix: string, publishedAt: number) =>
         (await ctx.db.insert("mentions", {
           analysisState: "completed",
+          feedState: "visible",
           body: `Tied engagement ${suffix}`,
           canonicalUrl: `https://example.com/tied/${suffix}`,
           contentType: "post",
@@ -1073,6 +1105,75 @@ describe("mention Convex functions", () => {
         now: Date.now(),
       }),
     ).rejects.toMatchObject({ data: { code: "MENTION_NOT_FOUND" } })
+  })
+
+  it("separates filtered mentions, supports priority filters, and restores tenant-safely", async () => {
+    const t = createBackendTest()
+    const customer = await seedCustomer(t, {
+      mentionsUsed: 7,
+      paid: true,
+      suffix: "mention-filtering",
+    })
+    const otherCustomer = await seedCustomer(t, {
+      paid: true,
+      suffix: "mention-filtering-other",
+    })
+    const seeded = await seedMentions(t, customer)
+    await t.run(async (ctx) => {
+      await ctx.db.patch("mentions", seeded.mentionIds[0]!, {
+        feedState: "filtered",
+        relevanceReason: "The keyword has a clearly unrelated meaning.",
+      })
+    })
+
+    const visible = mentionPage(
+      await customer.client.query(listMentionsReference, {
+        filters: { priorities: ["medium"] },
+        now: Date.now(),
+      }),
+    )
+    expect(visible.items.map((item) => item.id)).toEqual([seeded.mentionIds[1]])
+    const filtered = mentionPage(
+      await customer.client.query(listMentionsReference, {
+        feed: "filtered",
+        now: Date.now(),
+      }),
+    )
+    expect(filtered.items).toEqual([
+      expect.objectContaining({
+        feedState: "filtered",
+        id: seeded.mentionIds[0],
+        priority: "high",
+        relevanceReason: "The keyword has a clearly unrelated meaning.",
+      }),
+    ])
+
+    await expect(
+      otherCustomer.client.mutation(restoreFilteredMentionReference, {
+        mentionId: seeded.mentionIds[0]!,
+      }),
+    ).rejects.toMatchObject({ data: { code: "MENTION_NOT_FOUND" } })
+    await customer.client.mutation(restoreFilteredMentionReference, {
+      mentionId: seeded.mentionIds[0]!,
+    })
+    const state = await t.run(async (ctx) => ({
+      auditEvents: await ctx.db.query("auditEvents").collect(),
+      mention: await ctx.db.get("mentions", seeded.mentionIds[0]!),
+      usage: await ctx.db
+        .query("usageCycles")
+        .withIndex("by_workspace_status_and_period_end", (q) =>
+          q.eq("workspaceId", customer.workspaceId),
+        )
+        .first(),
+    }))
+    expect(state.mention).toMatchObject({
+      feedState: "visible",
+      relevanceReason: "The keyword has a clearly unrelated meaning.",
+    })
+    expect(state.usage?.mentionsUsed).toBe(7)
+    expect(state.auditEvents).toEqual([
+      expect.objectContaining({ action: "mention.restored" }),
+    ])
   })
 
   it("allows every mention status to be reversed without side effects", async () => {

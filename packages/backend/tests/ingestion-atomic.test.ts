@@ -53,7 +53,7 @@ function candidate(name: string): IngestionCandidate {
 // loading a strict schema. A permissive test schema preserves the production
 // indexes exercised by the service and lets the exact persisted fields run.
 const ingestionTestSchema = defineSchema({
-  categorizationJobs: defineTable(v.any()).index("by_idempotency_key", [
+  mentionAnalysisJobs: defineTable(v.any()).index("by_idempotency_key", [
     "idempotencyKey",
   ]),
   emailOutbox: defineTable(v.any()).index("by_idempotency_key", [
@@ -261,7 +261,7 @@ async function applyChunk(
 
 async function snapshot(t: BackendTest, seeded: SeededWorkspace) {
   return await t.run(async (ctx) => ({
-    jobs: await ctx.db.query("categorizationJobs").collect(),
+    jobs: await ctx.db.query("mentionAnalysisJobs").collect(),
     matches: await ctx.db.query("mentionKeywordMatches").collect(),
     mentions: await ctx.db.query("mentions").collect(),
     metrics: await ctx.db.query("systemMetricBuckets").collect(),
@@ -325,7 +325,7 @@ describe("serializable atomic ingestion", () => {
       applyChunk(t, chunk(seeded, { candidates: [original] }), NOW),
     ).resolves.toMatchObject({
       associationsAdded: 1,
-      categorizationJobsEnqueued: 1,
+      mentionAnalysisJobsEnqueued: 1,
       inserted: 1,
       rediscovered: 0,
       state: "applied",
@@ -338,7 +338,7 @@ describe("serializable atomic ingestion", () => {
       ),
     ).resolves.toMatchObject({
       associationsAdded: 0,
-      categorizationJobsEnqueued: 0,
+      mentionAnalysisJobsEnqueued: 0,
       inserted: 0,
       rediscovered: 1,
     })
@@ -353,7 +353,7 @@ describe("serializable atomic ingestion", () => {
       ),
     ).resolves.toMatchObject({
       associationsAdded: 1,
-      categorizationJobsEnqueued: 0,
+      mentionAnalysisJobsEnqueued: 0,
       inserted: 0,
       rediscovered: 1,
     })
@@ -456,7 +456,7 @@ describe("serializable atomic ingestion", () => {
 
     await expect(applyChunk(t, input)).resolves.toEqual({
       associationsAdded: 2,
-      categorizationJobsEnqueued: 2,
+      mentionAnalysisJobsEnqueued: 2,
       checkpoint: "hold",
       inserted: 2,
       nextPosition: 42,
@@ -515,7 +515,7 @@ describe("serializable atomic ingestion", () => {
     expect(concurrentlyPausedRun?.finishedAt).toBe(NOW)
 
     await expect(applyChunk(t, input, NOW + 1)).resolves.toMatchObject({
-      categorizationJobsEnqueued: 0,
+      mentionAnalysisJobsEnqueued: 0,
       checkpoint: "hold",
       inserted: 0,
       rediscovered: 2,

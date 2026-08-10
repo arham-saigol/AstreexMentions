@@ -14,7 +14,8 @@ const saveConfiguration = makeFunctionReference<
   "mutation",
   {
     accessPath: "free" | "starter" | "growth" | "scale"
-    companyDescription: string
+    filteringContext: string
+    filteringGuidelines: string
     keywords: Array<{
       brandCandidate?: boolean
       description?: string
@@ -98,7 +99,8 @@ describe("atomic onboarding configuration", () => {
     await expect(
       client.mutation(saveConfiguration, {
         accessPath: "free",
-        companyDescription: "A company that monitors customer conversations.",
+        filteringContext: "A company that monitors customer conversations.",
+        filteringGuidelines: "Keep ambiguous names relevant.",
         keywords,
         workspaceName: "Astreex",
       }),
@@ -110,7 +112,8 @@ describe("atomic onboarding configuration", () => {
 
     await client.mutation(saveConfiguration, {
       accessPath: "free",
-      companyDescription: "A company that monitors customer conversations.",
+      filteringContext: "A company that monitors customer conversations.",
+      filteringGuidelines: "Keep ambiguous names relevant.",
       keywords,
       workspaceName: "Astreex",
     })
@@ -148,7 +151,8 @@ describe("atomic onboarding configuration", () => {
         .every((source) => source.status === "paused"),
     ).toBe(true)
     expect(state.workspace).toMatchObject({
-      companyDescription: "A company that monitors customer conversations.",
+      filteringContext: "A company that monitors customer conversations.",
+      filteringGuidelines: "Keep ambiguous names relevant.",
       name: "Astreex",
     })
   })
@@ -158,7 +162,8 @@ describe("atomic onboarding configuration", () => {
     await expect(
       client.mutation(saveConfiguration, {
         accessPath: "growth",
-        companyDescription: "Paid onboarding context.",
+        filteringContext: "Paid onboarding context.",
+        filteringGuidelines: "Keep ambiguous names relevant.",
         keywords,
         workspaceName: "Paid workspace",
       }),

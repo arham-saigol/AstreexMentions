@@ -39,12 +39,13 @@ const pendingCheckoutSchema = z
 export const onboardingDraftSchema = z
   .object({
     checkout: pendingCheckoutSchema.optional(),
-    companyDescription: z.string().trim().max(1_000),
+    filteringContext: z.string().trim().max(1_000),
+    filteringGuidelines: z.string().trim().max(1_000),
     keywords: z.array(onboardingKeywordDraftSchema).max(MAX_DRAFT_KEYWORDS),
     manualDescription: z.string().trim().max(1_000),
     selectedPlan: z.enum(["free", "starter", "growth", "scale"]).nullable(),
     step: onboardingStepSchema,
-    version: z.literal(2),
+    version: z.literal(3),
     websiteUrl: z.string().trim().max(2_000),
     workspaceName: z.string().trim().max(160),
   })
@@ -93,12 +94,13 @@ export function canReuseOnboardingCheckout(
 
 export function createOnboardingDraft(workspaceName: string): OnboardingDraft {
   return {
-    companyDescription: "",
+    filteringContext: "",
+    filteringGuidelines: "",
     keywords: [],
     manualDescription: "",
     selectedPlan: null,
     step: 1,
-    version: 2,
+    version: 3,
     websiteUrl: "",
     workspaceName: workspaceName.trim(),
   }
@@ -127,7 +129,7 @@ export function mergeResearchKeywordDrafts(
 }
 
 export function draftStorageKey(workspaceId: string): string {
-  return `astreex:onboarding:${workspaceId}:v2`
+  return `astreex:onboarding:${workspaceId}:v3`
 }
 
 export function clearOnboardingDraftStorage(

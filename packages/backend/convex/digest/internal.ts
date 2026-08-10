@@ -10,12 +10,7 @@ import {
 import { planDailyDigest } from "../lib/dailyDigest"
 import { isCategorySystemKey } from "../lib/categories"
 import { withoutUndefinedValues } from "../lib/jobRuntime"
-import {
-  env,
-  internalMutation,
-  internalQuery,
-  type MutationCtx,
-} from "../_generated/server"
+import { env, internalMutation, type MutationCtx } from "../_generated/server"
 import type { Doc, Id } from "../_generated/dataModel"
 import {
   digestCategory,
@@ -246,9 +241,10 @@ export const aggregateDailyDigestPage = internalMutation({
     const workspaceId = run.workspaceId
     const page = await ctx.db
       .query("mentions")
-      .withIndex("by_workspace_and_published_at", (q) =>
+      .withIndex("by_workspace_feed_state_and_published_at", (q) =>
         q
           .eq("workspaceId", workspaceId)
+          .eq("feedState", "visible")
           .gte("publishedAt", run.windowStartAt)
           .lt("publishedAt", run.windowEndAt),
       )
@@ -271,7 +267,9 @@ export const aggregateDailyDigestPage = internalMutation({
       )
     ).filter(
       (mention): mention is Doc<"mentions"> =>
-        mention !== null && mention.workspaceId === workspaceId,
+        mention !== null &&
+        mention.workspaceId === workspaceId &&
+        mention.feedState === "visible",
     )
     const mentionLimit =
       typeof run.mentionLimit === "number" ? run.mentionLimit : 10
@@ -286,7 +284,7 @@ export const aggregateDailyDigestPage = internalMutation({
       const platform = platformFromRow(mention)
       const categoryId =
         mention.categoryId === undefined
-          ? "uncategorized"
+          ? "unanalyzed"
           : String(mention.categoryId)
       counts.total += 1
       counts.platforms[platform] += 1
@@ -342,7 +340,7 @@ export const aggregateDailyDigestPage = internalMutation({
   },
 })
 
-export const loadDailyDigestRenderContext = internalQuery({
+export const loadDailyDigestRenderContext = internalMutation({
   args: { digestRunId: v.id("digestRuns") },
   handler: async (ctx, args) => {
     const run = await ctx.db.get("digestRuns", args.digestRunId)
@@ -382,18 +380,55 @@ export const loadDailyDigestRenderContext = internalQuery({
     const categoryById = new Map(
       categoryRows.map((category) => [String(category._id), category]),
     )
-    const snapshotRows = (
-      await Promise.all(
-        (run.mentionIds as MentionId[]).map(
-          async (mentionId) => await ctx.db.get("mentions", mentionId),
-        ),
-      )
-    ).filter(
+    const mentionRows = await Promise.all(
+      (run.mentionIds as MentionId[]).map(
+        async (mentionId) => await ctx.db.get("mentions", mentionId),
+      ),
+    )
+    const snapshotRows = mentionRows.filter(
       (mention): mention is Doc<"mentions"> =>
         mention !== null &&
         mention.workspaceId === workspaceId &&
+        mention.feedState === "visible" &&
         (mention.firstSeenAt as number) <= (run.createdAt as number),
     )
+    const aggregateCounts = parseDigestAggregationCounts(run.digestCountsJson)
+    for (const mention of mentionRows) {
+      if (
+        !mention ||
+        mention.workspaceId !== workspaceId ||
+        mention.feedState === "visible" ||
+        (mention.firstSeenAt as number) > (run.createdAt as number)
+      ) {
+        continue
+      }
+      const categoryId =
+        mention.categoryId === undefined
+          ? "unanalyzed"
+          : String(mention.categoryId)
+      aggregateCounts.categories[categoryId] = Math.max(
+        0,
+        (aggregateCounts.categories[categoryId] ?? 0) - 1,
+      )
+      aggregateCounts.platforms[mention.platform] = Math.max(
+        0,
+        aggregateCounts.platforms[mention.platform] - 1,
+      )
+      aggregateCounts.total = Math.max(0, aggregateCounts.total - 1)
+    }
+    const updatedAt = Date.now()
+    if (aggregateCounts.total === 0) {
+      await ctx.db.patch("digestRuns", args.digestRunId, {
+        completedAt: updatedAt,
+        digestCountsJson: JSON.stringify(aggregateCounts),
+        mentionCount: 0,
+        mentionIds: [],
+        status: "skipped_empty",
+        updatedAt,
+      })
+      return { state: "not_pending" as const }
+    }
+
     const mentions = snapshotRows.map((mention) => {
       const category =
         mention.categoryId === undefined
@@ -407,11 +442,13 @@ export const loadDailyDigestRenderContext = internalQuery({
           : {}),
       }
     })
-    const topMentionIds = (run.mentionIds as MentionId[]).map(String)
-    if (topMentionIds.length !== mentions.length) {
-      throw new TypeError("Digest mention snapshot is unavailable")
-    }
-    const aggregateCounts = parseDigestAggregationCounts(run.digestCountsJson)
+    const topMentionIds = snapshotRows.map(({ _id }) => String(_id))
+    await ctx.db.patch("digestRuns", args.digestRunId, {
+      digestCountsJson: JSON.stringify(aggregateCounts),
+      mentionCount: aggregateCounts.total,
+      mentionIds: snapshotRows.map(({ _id }) => _id),
+      updatedAt,
+    })
     const byCategory = {
       Bug: 0,
       Complaint: 0,
@@ -425,9 +462,7 @@ export const loadDailyDigestRenderContext = internalQuery({
       aggregateCounts.categories,
     )) {
       const category =
-        categoryId === "uncategorized"
-          ? undefined
-          : categoryById.get(categoryId)
+        categoryId === "unanalyzed" ? undefined : categoryById.get(categoryId)
       const label = digestCategory(
         isCategorySystemKey(category?.systemKey)
           ? category.systemKey

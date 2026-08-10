@@ -3,30 +3,31 @@ import type { Id } from "../_generated/dataModel"
 import { adjustSystemMetricGauge } from "../lib/systemMetricBuckets"
 import type { MutationCtx } from "../_generated/server"
 
-export const CATEGORIZATION_STATUS_METRIC_PREFIX = "categorization_jobs_status:"
-export const CATEGORIZATION_JOB_STATUSES = [
+export const MENTION_ANALYSIS_STATUS_METRIC_PREFIX =
+  "mention_analysis_jobs_status:"
+export const MENTION_ANALYSIS_JOB_STATUSES = [
   "pending",
   "leased",
   "completed",
   "dead",
 ] as const
 
-export type CategorizationJobStatus =
-  (typeof CATEGORIZATION_JOB_STATUSES)[number]
+export type MentionAnalysisJobStatus =
+  (typeof MENTION_ANALYSIS_JOB_STATUSES)[number]
 
 type WorkspaceId = Id<"workspaces">
 
-export function categorizationStatusMetric(
-  status: CategorizationJobStatus,
+export function mentionAnalysisStatusMetric(
+  status: MentionAnalysisJobStatus,
 ): string {
-  return `${CATEGORIZATION_STATUS_METRIC_PREFIX}${status}`
+  return `${MENTION_ANALYSIS_STATUS_METRIC_PREFIX}${status}`
 }
 
-export async function transitionCategorizationStatusMetric(
+export async function transitionMentionAnalysisStatusMetric(
   ctx: MutationCtx,
   input: {
-    from?: CategorizationJobStatus | undefined
-    to?: CategorizationJobStatus | undefined
+    from?: MentionAnalysisJobStatus | undefined
+    to?: MentionAnalysisJobStatus | undefined
     updatedAt: number
     workspaceId: WorkspaceId
   },
@@ -37,7 +38,7 @@ export async function transitionCategorizationStatusMetric(
   if (input.from) {
     await adjustSystemMetricGauge(ctx, {
       delta: -1,
-      metric: categorizationStatusMetric(input.from),
+      metric: mentionAnalysisStatusMetric(input.from),
       updatedAt: input.updatedAt,
       workspaceId: input.workspaceId,
     })
@@ -45,7 +46,7 @@ export async function transitionCategorizationStatusMetric(
   if (input.to) {
     await adjustSystemMetricGauge(ctx, {
       delta: 1,
-      metric: categorizationStatusMetric(input.to),
+      metric: mentionAnalysisStatusMetric(input.to),
       updatedAt: input.updatedAt,
       workspaceId: input.workspaceId,
     })

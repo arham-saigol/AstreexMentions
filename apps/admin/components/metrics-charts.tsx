@@ -415,7 +415,7 @@ export function CategoryBreakdownChart({
         </>
       ) : (
         <EmptyChartState>
-          No categorized mentions were returned for this date range.
+          No analyzed mentions were returned for this date range.
         </EmptyChartState>
       )}
     </section>

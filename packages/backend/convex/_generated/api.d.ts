@@ -141,13 +141,6 @@ export declare const api: {
       "public",
       { days: 7 | 30 | 90; endAt: number },
       {
-        categorization: {
-          completed: number;
-          failed: number;
-          leased: number;
-          pending: number;
-          total: number;
-        };
         categoryBreakdown: Array<{ category: string; count: number }>;
         digestDelivery: {
           bounced: number;
@@ -160,6 +153,20 @@ export declare const api: {
           scheduled: number;
           sent: number;
           suppressed: number;
+          total: number;
+        };
+        feedOutcomes: {
+          filtered: number;
+          priorities: { high: number; low: number; medium: number };
+          relevant: number;
+          restorations: number;
+          terminalFailures: number;
+        };
+        mentionAnalysis: {
+          completed: number;
+          failed: number;
+          leased: number;
+          pending: number;
           total: number;
         };
         mentionVolume: Array<{ count: number; timestamp: number }>;
@@ -876,6 +883,7 @@ export declare const api: {
       "public",
       { mentionId: Id<"mentions">; now: number },
       {
+        analysisState: "pending" | "leased" | "completed" | "failed";
         authorDisplayName?: string;
         authorHandle?: string;
         body: string;
@@ -888,12 +896,16 @@ export declare const api: {
         } | null;
         commentCount?: number;
         engagementScore: number;
+        feedState: "pending" | "visible" | "filtered";
         id: Id<"mentions">;
         likeCount?: number;
         matchedKeywords: Array<{ id: Id<"keywords">; phrase: string }>;
         platform: "x" | "reddit" | "hacker_news";
         pointCount?: number;
+        priority?: "low" | "medium" | "high";
+        priorityReason?: string;
         publishedAt: number;
+        relevanceReason?: string;
         replyCount?: number;
         repostCount?: number;
         status: "new" | "saved" | "dismissed";
@@ -905,11 +917,13 @@ export declare const api: {
       "public",
       {
         cursor?: string;
+        feed?: "visible" | "filtered";
         filters?: {
           categoryIds?: Array<Id<"categories">>;
           keywordIds?: Array<Id<"keywords">>;
           mentionStatuses?: Array<"new" | "saved" | "dismissed">;
           platforms?: Array<"x" | "reddit" | "hacker_news">;
+          priorities?: Array<"low" | "medium" | "high">;
           publishedAfter?: number;
           publishedBefore?: number;
         };
@@ -921,6 +935,7 @@ export declare const api: {
       {
         isDone: boolean;
         items: Array<{
+          analysisState: "pending" | "leased" | "completed" | "failed";
           authorDisplayName?: string;
           authorHandle?: string;
           body: string;
@@ -933,12 +948,16 @@ export declare const api: {
           } | null;
           commentCount?: number;
           engagementScore: number;
+          feedState: "pending" | "visible" | "filtered";
           id: Id<"mentions">;
           likeCount?: number;
           matchedKeywords: Array<{ id: Id<"keywords">; phrase: string }>;
           platform: "x" | "reddit" | "hacker_news";
           pointCount?: number;
+          priority?: "low" | "medium" | "high";
+          priorityReason?: string;
           publishedAt: number;
+          relevanceReason?: string;
           replyCount?: number;
           repostCount?: number;
           status: "new" | "saved" | "dismissed";
@@ -950,11 +969,12 @@ export declare const api: {
         totalCount?: number;
       }
     >;
-    updateMentionStatus: FunctionReference<
+    restoreFilteredMention: FunctionReference<
       "mutation",
       "public",
-      { mentionId: Id<"mentions">; status: "new" | "saved" | "dismissed" },
+      { mentionId: Id<"mentions"> },
       {
+        analysisState: "pending" | "leased" | "completed" | "failed";
         authorDisplayName?: string;
         authorHandle?: string;
         body: string;
@@ -967,12 +987,50 @@ export declare const api: {
         } | null;
         commentCount?: number;
         engagementScore: number;
+        feedState: "pending" | "visible" | "filtered";
         id: Id<"mentions">;
         likeCount?: number;
         matchedKeywords: Array<{ id: Id<"keywords">; phrase: string }>;
         platform: "x" | "reddit" | "hacker_news";
         pointCount?: number;
+        priority?: "low" | "medium" | "high";
+        priorityReason?: string;
         publishedAt: number;
+        relevanceReason?: string;
+        replyCount?: number;
+        repostCount?: number;
+        status: "new" | "saved" | "dismissed";
+        title?: string;
+      }
+    >;
+    updateMentionStatus: FunctionReference<
+      "mutation",
+      "public",
+      { mentionId: Id<"mentions">; status: "new" | "saved" | "dismissed" },
+      {
+        analysisState: "pending" | "leased" | "completed" | "failed";
+        authorDisplayName?: string;
+        authorHandle?: string;
+        body: string;
+        canonicalUrl: string;
+        category: {
+          colorToken?: string;
+          id: Id<"categories">;
+          name: string;
+          systemKey?: string;
+        } | null;
+        commentCount?: number;
+        engagementScore: number;
+        feedState: "pending" | "visible" | "filtered";
+        id: Id<"mentions">;
+        likeCount?: number;
+        matchedKeywords: Array<{ id: Id<"keywords">; phrase: string }>;
+        platform: "x" | "reddit" | "hacker_news";
+        pointCount?: number;
+        priority?: "low" | "medium" | "high";
+        priorityReason?: string;
+        publishedAt: number;
+        relevanceReason?: string;
         replyCount?: number;
         repostCount?: number;
         status: "new" | "saved" | "dismissed";
@@ -986,7 +1044,8 @@ export declare const api: {
       "public",
       {
         accessPath: "free" | "starter" | "growth" | "scale";
-        companyDescription: string;
+        filteringContext: string;
+        filteringGuidelines: string;
         keywords: Array<{
           brandCandidate?: boolean;
           description?: string;
@@ -1011,7 +1070,8 @@ export declare const api: {
       "public",
       { manualDescription?: string; websiteUrl?: string },
       | {
-          companyDescription: string;
+          filteringContext: string;
+          filteringGuidelines: string;
           state: "completed";
           suggestions: Array<{
             brandCandidate: boolean;
@@ -1036,6 +1096,7 @@ export declare const api: {
           keywordIds?: Array<Id<"keywords">>;
           mentionStatuses?: Array<"new" | "saved" | "dismissed">;
           platforms?: Array<"x" | "reddit" | "hacker_news">;
+          priorities?: Array<"low" | "medium" | "high">;
           publishedAfter?: number;
           publishedBefore?: number;
         };
@@ -1049,6 +1110,7 @@ export declare const api: {
           keywordIds?: Array<Id<"keywords">>;
           mentionStatuses?: Array<"new" | "saved" | "dismissed">;
           platforms?: Array<"x" | "reddit" | "hacker_news">;
+          priorities?: Array<"low" | "medium" | "high">;
           publishedAfter?: number;
           publishedBefore?: number;
         };
@@ -1075,6 +1137,7 @@ export declare const api: {
           keywordIds?: Array<Id<"keywords">>;
           mentionStatuses?: Array<"new" | "saved" | "dismissed">;
           platforms?: Array<"x" | "reddit" | "hacker_news">;
+          priorities?: Array<"low" | "medium" | "high">;
           publishedAfter?: number;
           publishedBefore?: number;
         };
@@ -1100,6 +1163,7 @@ export declare const api: {
           keywordIds?: Array<Id<"keywords">>;
           mentionStatuses?: Array<"new" | "saved" | "dismissed">;
           platforms?: Array<"x" | "reddit" | "hacker_news">;
+          priorities?: Array<"low" | "medium" | "high">;
           publishedAfter?: number;
           publishedBefore?: number;
         };
@@ -1114,6 +1178,7 @@ export declare const api: {
           keywordIds?: Array<Id<"keywords">>;
           mentionStatuses?: Array<"new" | "saved" | "dismissed">;
           platforms?: Array<"x" | "reddit" | "hacker_news">;
+          priorities?: Array<"low" | "medium" | "high">;
           publishedAfter?: number;
           publishedBefore?: number;
         };
@@ -1473,85 +1538,6 @@ export declare const internal: {
       { reassignedCount: number; state: "completed" | "in_progress" | "stale" }
     >;
   };
-  categorization: {
-    actions: {
-      executeCategorizationBatch: FunctionReference<
-        "action",
-        "internal",
-        {
-          categorySnapshotJson: string;
-          jobIds: Array<Id<"categorizationJobs">>;
-          leaseToken: string;
-        },
-        any
-      >;
-    };
-    internal: {
-      applyCategorizationBatch: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          categorySnapshotJson: string;
-          durationMs: number;
-          jobIds: Array<Id<"categorizationJobs">>;
-          leaseToken: string;
-          resultsJson: string;
-        },
-        any
-      >;
-      dispatchDueCategorizationJobs: FunctionReference<
-        "mutation",
-        "internal",
-        { now?: number },
-        any
-      >;
-      failCategorizationBatch: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          categorySnapshotJson: string;
-          durationMs: number;
-          errorCode: string;
-          errorMessage: string;
-          jobIds: Array<Id<"categorizationJobs">>;
-          leaseToken: string;
-          retryAfterMs?: number;
-          retryable: boolean;
-        },
-        any
-      >;
-      loadCategorizationBatchContext: FunctionReference<
-        "query",
-        "internal",
-        {
-          categorySnapshotJson: string;
-          jobIds: Array<Id<"categorizationJobs">>;
-          leaseToken: string;
-        },
-        any
-      >;
-      releaseCategorizationBlockedConfiguration: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          categorySnapshotJson: string;
-          jobIds: Array<Id<"categorizationJobs">>;
-          leaseToken: string;
-        },
-        any
-      >;
-      startCategorizationProviderRun: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          categorySnapshotJson: string;
-          jobIds: Array<Id<"categorizationJobs">>;
-          leaseToken: string;
-        },
-        any
-      >;
-    };
-  };
   deletion: {
     actions: {
       runAccountDeletion: FunctionReference<
@@ -1725,7 +1711,7 @@ export declare const internal: {
         any
       >;
       loadDailyDigestRenderContext: FunctionReference<
-        "query",
+        "mutation",
         "internal",
         { digestRunId: Id<"digestRuns"> },
         any
@@ -1852,6 +1838,91 @@ export declare const internal: {
       >;
     };
   };
+  mentionAnalysis: {
+    actions: {
+      executeMentionAnalysisBatch: FunctionReference<
+        "action",
+        "internal",
+        {
+          analysisSnapshotJson: string;
+          jobIds: Array<Id<"mentionAnalysisJobs">>;
+          leaseToken: string;
+          mentionContextJson: string;
+        },
+        any
+      >;
+    };
+    internal: {
+      applyMentionAnalysisBatch: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          analysisSnapshotJson: string;
+          durationMs: number;
+          jobIds: Array<Id<"mentionAnalysisJobs">>;
+          leaseToken: string;
+          mentionContextJson: string;
+          resultsJson: string;
+        },
+        any
+      >;
+      dispatchDueMentionAnalysisJobs: FunctionReference<
+        "mutation",
+        "internal",
+        { now?: number },
+        any
+      >;
+      failMentionAnalysisBatch: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          analysisSnapshotJson: string;
+          durationMs: number;
+          errorCode: string;
+          errorMessage: string;
+          jobIds: Array<Id<"mentionAnalysisJobs">>;
+          leaseToken: string;
+          mentionContextJson: string;
+          retryAfterMs?: number;
+          retryable: boolean;
+        },
+        any
+      >;
+      loadMentionAnalysisBatchContext: FunctionReference<
+        "query",
+        "internal",
+        {
+          analysisSnapshotJson: string;
+          jobIds: Array<Id<"mentionAnalysisJobs">>;
+          leaseToken: string;
+          mentionContextJson: string;
+        },
+        any
+      >;
+      releaseMentionAnalysisBlockedConfiguration: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          analysisSnapshotJson: string;
+          jobIds: Array<Id<"mentionAnalysisJobs">>;
+          leaseToken: string;
+          mentionContextJson: string;
+        },
+        any
+      >;
+      startMentionAnalysisProviderRun: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          analysisSnapshotJson: string;
+          jobIds: Array<Id<"mentionAnalysisJobs">>;
+          leaseToken: string;
+          mentionContextJson: string;
+        },
+        any
+      >;
+    };
+  };
   onboardingResearchInternal: {
     beginResearch: FunctionReference<
       "mutation",
@@ -1871,8 +1942,9 @@ export declare const internal: {
       "mutation",
       "internal",
       {
-        companyDescription: string;
         durationMs: number;
+        filteringContext: string;
+        filteringGuidelines: string;
         inputFingerprint: string;
         researchId: Id<"onboardingResearch">;
         suggestionsJson: string;

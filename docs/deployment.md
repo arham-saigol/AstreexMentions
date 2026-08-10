@@ -290,7 +290,7 @@ Subscribe to the delivery events that the repository understands:
 
 Email delivery is durable: messages are written to an outbox, a one-minute cron dispatches pending entries, Resend requests use idempotency keys, and signed webhook events update delivery state.
 
-## 7. Monitoring and categorization providers
+## 7. Monitoring and analysis providers
 
 ### Xquik
 
@@ -322,7 +322,7 @@ The Hacker News adapter calls the public Algolia endpoint `https://hn.algolia.co
 - Request behavior: JSON response format, temperature `0`, high reasoning effort, thinking enabled
 - Optional timeout: `DEEPSEEK_TIMEOUT_MS`, default `120000`
 
-The model name is fixed in code; there is no environment variable for selecting a different model. A one-minute Convex cron dispatches durable same-workspace batches of up to 50 jobs through four-minute leases, total-result validation, and atomic application. Missing/invalid DeepSeek configuration returns jobs to pending for five minutes without consuming an attempt or writing provider telemetry. A successful typecheck or fixture-backed worker test does not prove that the account has access to `deepseek-v4-pro`.
+The model name is fixed in code. No environment variable selects a different model. A one-minute Convex cron dispatches same-workspace batches of up to 20 jobs. The worker uses four-minute leases, full-result validation, and atomic application. Missing or invalid DeepSeek configuration returns jobs to pending without a consumed attempt or provider telemetry. The retry delay is five minutes. Local validation does not prove that the account can use `deepseek-v4-pro`.
 
 ## 8. Deploy the controlled Convex production backend
 

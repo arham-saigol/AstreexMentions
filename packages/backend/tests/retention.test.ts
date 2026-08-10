@@ -78,6 +78,7 @@ describe("free mention retention", () => {
       ) =>
         await ctx.db.insert("mentions", {
           analysisState: "pending",
+          feedState: "pending",
           body: `Mention ${index}`,
           canonicalUrl: `https://example.com/${index}`,
           contentType: "tweet",
@@ -114,7 +115,7 @@ describe("free mention retention", () => {
             })
           }
         }
-        await ctx.db.insert("categorizationJobs", {
+        await ctx.db.insert("mentionAnalysisJobs", {
           attempts: 0,
           createdAt: NOW,
           idempotencyKey: `retention:${index}`,
@@ -128,6 +129,10 @@ describe("free mention retention", () => {
         })
       }
       const paidMentionId = await insertMention(999)
+      await ctx.db.patch("mentions", paidMentionId, {
+        analysisState: "failed",
+        feedState: "visible",
+      })
       return { expiredIds, paidMentionId, workspaceId }
     })
 
@@ -146,7 +151,7 @@ describe("free mention retention", () => {
       state: "completed",
     })
     const remaining = await t.run(async (ctx) => ({
-      jobs: await ctx.db.query("categorizationJobs").collect(),
+      jobs: await ctx.db.query("mentionAnalysisJobs").collect(),
       matches: await ctx.db.query("mentionKeywordMatches").collect(),
       mentions: await ctx.db.query("mentions").collect(),
     }))

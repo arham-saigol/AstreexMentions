@@ -207,6 +207,11 @@ export const PUBLIC_FUNCTION_AUTHORIZATION_INVENTORY = {
     kind: "query",
     wrapper: "authenticatedQuery",
   },
+  "mentions:restoreFilteredMention": {
+    authorization: "authenticated_identity_current_workspace",
+    kind: "mutation",
+    wrapper: "authenticatedMutation",
+  },
   "mentions:updateMentionStatus": {
     authorization: "authenticated_identity_current_workspace",
     kind: "mutation",

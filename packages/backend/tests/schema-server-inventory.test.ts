@@ -20,7 +20,7 @@ const REQUIRED_TABLES = [
   "mentionKeywordMatches",
   "categories",
   "savedViews",
-  "categorizationJobs",
+  "mentionAnalysisJobs",
   "digestPreferences",
   "digestRuns",
   "emailOutbox",
@@ -133,11 +133,32 @@ describe("complete Convex schema", () => {
       "status",
       "publishedAt",
     ])
-    expectIndex("mentions", "by_workspace_engagement_and_published_at", [
+    expectIndex("mentions", "by_workspace_feed_state_and_published_at", [
       "workspaceId",
-      "engagementScore",
+      "feedState",
       "publishedAt",
     ])
+    expectIndex(
+      "mentions",
+      "by_workspace_feed_state_engagement_and_published_at",
+      ["workspaceId", "feedState", "engagementScore", "publishedAt"],
+    )
+    expectIndex(
+      "mentions",
+      "by_workspace_feed_state_priority_and_published_at",
+      ["workspaceId", "feedState", "priority", "publishedAt"],
+    )
+    expectIndex(
+      "mentions",
+      "by_workspace_feed_state_priority_engagement_and_published_at",
+      [
+        "workspaceId",
+        "feedState",
+        "priority",
+        "engagementScore",
+        "publishedAt",
+      ],
+    )
     expectIndex("mentions", "by_workspace_status_and_engagement", [
       "workspaceId",
       "status",
@@ -183,8 +204,8 @@ describe("complete Convex schema", () => {
       "deletedAt",
       "updatedAt",
     ])
-    expectIndex("categorizationJobs", "by_mention", ["mentionId"])
-    expectIndex("categorizationJobs", "by_idempotency_key", ["idempotencyKey"])
+    expectIndex("mentionAnalysisJobs", "by_mention", ["mentionId"])
+    expectIndex("mentionAnalysisJobs", "by_idempotency_key", ["idempotencyKey"])
     expectIndex("digestPreferences", "by_enabled_and_next_run_at", [
       "enabled",
       "nextRunAt",
@@ -295,8 +316,8 @@ describe("complete Convex schema", () => {
         name: "email/internal:dispatchPendingEmails",
         schedule: { minutes: 1, type: "interval" },
       }),
-      "dispatch mention categorization jobs": expect.objectContaining({
-        name: "categorization/internal:dispatchDueCategorizationJobs",
+      "dispatch mention analysis jobs": expect.objectContaining({
+        name: "mentionAnalysis/internal:dispatchDueMentionAnalysisJobs",
         schedule: { minutes: 1, type: "interval" },
       }),
       "dispatch persisted tracking schedules": expect.objectContaining({

@@ -1,11 +1,11 @@
 import { z } from "zod"
 
 import {
-  DEEPSEEK_CATEGORIZATION_MODEL,
+  DEEPSEEK_MENTION_ANALYSIS_MODEL,
   DeepSeekRequestError,
-  type DeepSeekCategorizationRequest,
+  type DeepSeekMentionAnalysisRequest,
   type DeepSeekRequester,
-} from "../lib/deepseekCategorization"
+} from "../lib/deepseekMentionAnalysis"
 
 export const DEEPSEEK_CHAT_COMPLETIONS_URL =
   "https://api.deepseek.com/chat/completions"
@@ -19,10 +19,10 @@ const userMessageSchema = z
   .object({ content: nonEmptyStringSchema, role: z.literal("user") })
   .strict()
 
-export const deepSeekCategorizationRequestSchema = z
+export const deepSeekMentionAnalysisRequestSchema = z
   .object({
     messages: z.tuple([systemMessageSchema, userMessageSchema]),
-    model: z.literal(DEEPSEEK_CATEGORIZATION_MODEL),
+    model: z.literal(DEEPSEEK_MENTION_ANALYSIS_MODEL),
     reasoning_effort: z.literal("high"),
     response_format: z.object({ type: z.literal("json_object") }).strict(),
     temperature: z.literal(0),
@@ -205,7 +205,7 @@ function responseError(
   if (status === 400 || status === 404 || status === 409 || status === 422) {
     return new DeepSeekIntegrationError(
       "INVALID_REQUEST",
-      "DeepSeek rejected the categorization request",
+      "DeepSeek rejected the mention analysis request",
       { retryable: false, status },
     )
   }
@@ -217,9 +217,9 @@ function responseError(
 }
 
 function outboundRequest(
-  request: DeepSeekCategorizationRequest,
-): z.output<typeof deepSeekCategorizationRequestSchema> {
-  const parsed = deepSeekCategorizationRequestSchema.safeParse({
+  request: DeepSeekMentionAnalysisRequest,
+): z.output<typeof deepSeekMentionAnalysisRequestSchema> {
+  const parsed = deepSeekMentionAnalysisRequestSchema.safeParse({
     ...request,
     reasoning_effort: "high",
     thinking: { type: "enabled" },
@@ -227,14 +227,14 @@ function outboundRequest(
   if (!parsed.success) {
     throw new DeepSeekIntegrationError(
       "INVALID_REQUEST",
-      "DeepSeek categorization request is invalid",
+      "DeepSeek mention analysis request is invalid",
       { cause: parsed.error, retryable: false },
     )
   }
   return parsed.data
 }
 
-export function createDeepSeekCategorizationRequester(options: {
+export function createDeepSeekMentionAnalysisRequester(options: {
   apiKey: string
   fetch?: typeof fetch | undefined
   logger?: DeepSeekLogger | undefined

@@ -75,7 +75,7 @@ function createSchedulingHarness() {
     },
     async readPersistedState(seeded: SeededTrackingSource) {
       return await t.run(async (ctx) => ({
-        jobs: await ctx.db.query("categorizationJobs").collect(),
+        jobs: await ctx.db.query("mentionAnalysisJobs").collect(),
         matches: await ctx.db.query("mentionKeywordMatches").collect(),
         mentions: await ctx.db.query("mentions").collect(),
         pages: await ctx.db.query("trackingProviderPages").collect(),
@@ -284,7 +284,7 @@ describe("durable tracking action", () => {
       t.action(executeTrackingSource, actionArguments(seeded)),
     ).resolves.toEqual({
       associationsAdded: 2,
-      categorizationJobsEnqueued: 2,
+      mentionAnalysisJobsEnqueued: 2,
       inserted: 2,
       rediscovered: 0,
       state: "applied",
@@ -336,7 +336,7 @@ describe("durable tracking action", () => {
       t.action(executeTrackingSource, actionArguments(seeded)),
     ).resolves.toEqual({
       associationsAdded: 2,
-      categorizationJobsEnqueued: 2,
+      mentionAnalysisJobsEnqueued: 2,
       inserted: 2,
       rediscovered: 0,
       state: "applied",

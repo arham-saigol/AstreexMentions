@@ -13,7 +13,7 @@ A completed onboarding must activate monitoring immediately for either the free 
 - The free option is available only during onboarding and in the plan-selection UI. Do **not** add a Free card to the public pricing section.
 - Pricing/onboarding copy may say: **“First 100 mentions free.”**
 - A free workspace has one active keyword and a non-resetting, lifetime allowance of 100 newly collected mentions.
-- It has the same platforms (X, Reddit, Hacker News), categorization, custom categories, digests, and other product capabilities as paid plans. Limits are only active-keyword capacity and the 100-mention allowance.
+- It has the same platforms (X, Reddit, Hacker News), mention analysis, custom categories, digests, and other product capabilities as paid plans. Limits are only active-keyword capacity and the 100-mention allowance.
 - When the 100th unique mention is committed, stop collection atomically and show a clear upgrade state. Do not silently drop later provider results.
 - Free-tier mentions expire 60 days after collection. Do not advertise this on the public pricing page. Enforce it in the product and retention machinery; expired mentions must not be returned by dashboard APIs and must be purged in bounded background work.
 - A paid subscription takes precedence over the evaluation allowance. Paid usage remains the existing recurring, provider-authoritative usage-cycle model. A lapsed paid subscription may use any unconsumed free allowance; it must not receive a new one. Reconcile active keywords whenever paid entitlement starts, changes capacity, or ends: activate the deterministic paid subset only after the authoritative subscription update, and reduce it to the free subset if access falls back to free.
@@ -21,7 +21,7 @@ A completed onboarding must activate monitoring immediately for either the free 
 ### Keywords and plan capacity
 
 - Remove the onboarding distinction between brand, competitor, and other keywords. A keyword has one user-visible form: phrase, optional description, and selected platforms.
-- Add an optional keyword description with a 160-character maximum. It is context for categorization and future relevance filtering, not a provider query.
+- Add an optional keyword description with a 160-character maximum. It is context for mention analysis, not a provider query.
 - The discovery system may keep a non-user-facing `brand candidate` signal solely to choose the best initial active keyword. It must never add a brand keyword the user did not select.
 - Save every keyword selected during onboarding. Only activate the number covered by the selected plan/evaluation: one for free, or the paid plan’s keyword limit.
 - When a selection exceeds capacity, activate the selected brand candidate first if one exists; otherwise retain the user’s selection order. Persist the remaining keywords as paused for the plan-capacity reason. Show a toast after completion that names the active and paused counts and directs the user to Keywords.
@@ -53,7 +53,7 @@ The existing category-configuration onboarding screens are removed. Default cate
 - Existing paid entitlement and recurring counters live in `subscriptions` and `usageCycles`; ingestion in `packages/backend/convex/ingestion/service.ts` atomically increments `mentionsUsed` and pauses sources at a cap. Reuse that transactional cap behavior for the evaluation rather than implementing client-side counting.
 - `packages/backend/convex/keywords.ts` currently makes every no-subscription source paused with reason `paid`; `apps/web/lib/product-access.ts` correspondingly treats non-subscribers as preview/onboarding only. Both need an explicit free-evaluation access path.
 - The public pricing section is in `apps/web/app/(public)/page.tsx`; keep its three paid cards and add only the agreed subheading/copy about the first 100 mentions.
-- The existing DeepSeek categorizer only receives mention text and category definitions (`packages/backend/convex/categorization/internal.ts` and `packages/backend/convex/lib/deepseekCategorization.ts`). It will need keyword/company context at that prompt boundary for descriptions to influence categorization.
+- Separately from this rollout, the DeepSeek mention analysis pipeline receives mention text, category definitions, filtering fields, and matched-keyword context (`packages/backend/convex/mentionAnalysis/internal.ts` and `packages/backend/convex/lib/deepseekMentionAnalysis.ts`).
 
 ## Implementation plan
 
@@ -79,14 +79,14 @@ Refactor `packages/backend/convex/keywords.ts`, `packages/backend/convex/mention
 - Update create/update/pause/resume keyword APIs to accept and return descriptions and enforce active capacity server-side. Resuming a paused keyword must fail when a slot is occupied; pausing an active keyword then resuming another is the supported swap path. Do not rely on button disabled state for authorization or quotas.
 - Adapt ingestion’s existing serializable cap check to resolve either paid usage or the free grant, increment the appropriate counter exactly once for a newly inserted mention, set the free mention expiry, and pause eligible sources when the selected allowance is exhausted. Rediscovery must not consume allowance or extend a free mention’s retention.
 - Update mention monitoring-state queries and product access decisions so free workspaces are `active` until the allowance is exhausted, rather than `unpaid`/preview. Preserve the paid provider configuration error state only for paid checkout actions.
-- Extend the categorization batch loader and `packages/backend/convex/lib/deepseekCategorization.ts` to include bounded workspace/company context and the descriptions of the mention’s matched keywords (not merely the tracking source). Keep prompt length bounds and existing category validation intact; use deterministic truncation when a mention has several matches.
+- The mention analysis batch loader includes bounded filtering context and matched-keyword descriptions. Loading and application validate relevance, priority, category and mention IDs, bounded reasons, extra fields, batch cardinality, and atomic whole-batch application while preserving prompt limits.
 
 ### 3. Implement free-mention retention
 
 Add an internal retention module (for example `packages/backend/convex/retention.ts`) and register a bounded cron in `packages/backend/convex/crons.ts`.
 
 - Dashboard mention queries must exclude rows whose free retention expiry is at or before the caller-provided `now`; never read the wall clock inside reactive queries.
-- In fixed batches, find expired mentions with the new index; delete their keyword-match and categorization-job children before deleting the mention. Handle an in-flight categorization job as stale rather than allowing it to recreate or update an expired mention.
+- In fixed batches, find expired mentions with the new index; delete their keyword-match and mention-analysis-job children before deleting the mention. Handle an in-flight analysis job as stale rather than allowing it to recreate or update an expired mention.
 - Keep the worker idempotent, transaction-bounded, and safe to retry. Continue through batches using scheduled continuations if needed; do not collect an unbounded retention set.
 - Update any dashboard counts, empty states, saved views, and keyword summaries that assume every stored mention is visible.
 
@@ -147,7 +147,7 @@ Manually verify a new signed-in workspace through: website discovery success/fai
 - Free monitoring works across every existing platform/feature until one active keyword has collected 100 unique mentions, then stops atomically and clearly prompts upgrade.
 - The free allowance never resets or reappears after retries, billing changes, or a paid plan ending; entitlement changes reconcile the active keyword subset without granting collection from a client-selected paid plan.
 - Selected overflow keywords are saved, visibly paused, and can be swapped into the active slot without data loss; a selected brand candidate is preferred, but no unselected keyword is created.
-- Keyword descriptions are limited to 160 characters, editable, tenant-scoped, and reach categorization/future-filter context without changing provider queries.
+- Keyword descriptions are limited to 160 characters, editable, tenant-scoped, and reach mention-analysis context without changing provider queries.
 - Mentions collected under free access stop appearing after 60 days and are purged safely; paid mentions are unaffected.
 - TinyFish and DeepSeek credentials remain server-side; website/search/model inputs and outputs are bounded and validated; external discovery is rate-limited and safe to retry.
 - The public pricing page still has only the three paid plan cards and only the agreed “first 100 mentions free” supporting copy.

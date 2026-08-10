@@ -5,7 +5,7 @@ import {
   syncUsagePausedWorkspaceMetric,
   transitionSubscriptionMetrics,
 } from "../lib/operationalMetrics"
-import { transitionCategorizationStatusMetric } from "../categorization/metrics"
+import { transitionMentionAnalysisStatusMetric } from "../mentionAnalysis/metrics"
 import { onboardingResearchRateLimiter } from "../lib/onboardingResearchRateLimit"
 import {
   internalMutation,
@@ -70,7 +70,7 @@ export type AccountDeletionExecutionContext =
 const WORKSPACE_INDEXED_PURGE_STAGES = [
   "audit_events",
   "billing_checkouts",
-  "categorization_jobs",
+  "mention_analysis_jobs",
   "categories",
   "digest_preferences",
   "digest_runs",
@@ -547,9 +547,9 @@ async function workspaceRows(
           q.eq("workspaceId", workspaceId),
         )
         .take(limit)
-    case "categorization_jobs":
+    case "mention_analysis_jobs":
       return await db
-        .query("categorizationJobs")
+        .query("mentionAnalysisJobs")
         .withIndex("by_workspace_and_created_at", (q) =>
           q.eq("workspaceId", workspaceId),
         )
@@ -688,15 +688,15 @@ async function purgeWorkspaceIndexedStage(
   workspaceId: WorkspaceId,
   now: number,
 ): Promise<number> {
-  if (stage === "categorization_jobs") {
+  if (stage === "mention_analysis_jobs") {
     const rows = await ctx.db
-      .query("categorizationJobs")
+      .query("mentionAnalysisJobs")
       .withIndex("by_workspace_and_created_at", (q) =>
         q.eq("workspaceId", workspaceId),
       )
       .take(ACCOUNT_DELETION_BATCH_SIZE)
     for (const row of rows) {
-      await transitionCategorizationStatusMetric(ctx, {
+      await transitionMentionAnalysisStatusMetric(ctx, {
         from: row.status,
         updatedAt: now,
         workspaceId,

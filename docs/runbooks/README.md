@@ -20,12 +20,12 @@ The exact-admin-only `/metrics` page renders selectable 7/30/90-day ranges with:
 - global `mentions_ingested` count in the range;
 - applied `email_delivery_delivered` webhook count in the range;
 - daily mention volume;
-- direct mention counts by current category for mentions whose `firstSeenAt` is in range;
+- analyzed relevant mention counts by applied category, bucketed by `firstSeenAt`;
 - provider request, success, failure, and average-latency totals.
 
-The backend query also returns provider max latency/input/output/rate-limit/retry totals, mention platform totals, subscriptions, categorization, delivery states, and usage-paused workspace count. The current admin frontend schema does not parse or render those additional fields. Inspect the underlying Convex tables for incident triage.
+The backend query also returns provider max latency/input/output/rate-limit/retry totals, mention platform totals, subscriptions, mention analysis, delivery states, and usage-paused workspace count. The current admin frontend schema does not parse or render those additional fields. Inspect the underlying Convex tables for incident triage.
 
-Provider metric names are the persisted `provider` values. Tracking runs use `x`, `reddit_posts`, `reddit_comments`, and `hacker_news`; categorization uses `deepseek`; email and billing use `resend` and `creem`.
+Provider metric names are the persisted `provider` values. Tracking runs use `x`, `reddit_posts`, `reddit_comments`, and `hacker_news`; mention analysis uses `deepseek`; email and billing use `resend` and `creem`.
 
 ## Runbooks
 
@@ -33,7 +33,7 @@ Provider metric names are the persisted `provider` values. Tracking runs use `x`
 - [Creem webhook lag and replay](./creem-webhook-lag-replay.md)
 - [Queue backlog and expired leases](./queue-backlog-expired-leases.md)
 - [Usage cap and resume](./usage-cap-resume.md)
-- [Categorization failures](./categorization-failures.md)
+- [Mention analysis failures](./mention-analysis-failures.md)
 - [Resend failures](./resend-failures.md)
 - [Account deletion](./account-deletion.md)
 - [Admin lockout](./admin-lockout.md)

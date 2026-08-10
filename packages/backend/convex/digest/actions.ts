@@ -29,7 +29,7 @@ type DigestRenderContext =
 export const renderDailyDigest = internalAction({
   args: { digestRunId: v.id("digestRuns") },
   handler: async (ctx, args) => {
-    const context = (await ctx.runQuery(
+    const context = (await ctx.runMutation(
       internal.digest.internal.loadDailyDigestRenderContext,
       args,
     )) as DigestRenderContext

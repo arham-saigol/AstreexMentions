@@ -11,7 +11,7 @@ This document describes deterministic/fixture-backed behavior. It does not imply
 1. dispatch durable account deletions;
 2. retry pending Creem billing events;
 3. dispatch due tracking sources;
-4. dispatch due categorization jobs;
+4. dispatch due mention analysis jobs;
 5. dispatch due daily digest preferences;
 6. dispatch pending/expired-lease email outbox rows.
 
@@ -162,7 +162,7 @@ Malformed JSON or an invalid normalized shape is a retryable provider execution 
 
 ## Atomic ingestion and deduplication
 
-One provider response is split into durable batches of at most 25 candidates. Every batch is staged before any is marked ready, then each ready batch is applied in one Convex serializable mutation, including scope checks, dedupe reads, inserts/rediscovery patches, usage accounting, keyword association, categorization enqueue, warning enqueue, metrics, and cap pause.
+One provider response is split into durable batches of at most 25 candidates. Every batch is staged before any is marked ready, then each ready batch is applied in one Convex serializable mutation, including scope checks, dedupe reads, inserts/rediscovery patches, usage accounting, keyword association, mention analysis enqueue, warning enqueue, metrics, and cap pause.
 
 A candidate must match its source type. Canonical mention dedupe is workspace-scoped:
 
@@ -174,7 +174,7 @@ If provider and fallback identities resolve to different rows, ingestion fails r
 New mentions:
 
 - increment `mentionsUsed` exactly once;
-- enqueue at most one categorization job using `categorization:mention:{mentionId}`;
+- set `feedState: "pending"` and enqueue at most one mention analysis job using `mention-analysis:mention:{mentionId}`;
 - increment global and workspace mention metrics;
 - enqueue 80%/100% usage warnings when newly crossed.
 
@@ -186,15 +186,15 @@ At the mention cap, active workspace sources are atomically paused for usage. Th
 
 Verified Creem events are deduplicated by provider event ID. Pending target/configuration failures retry after 30 seconds; the cron processes at most 16 due events each minute. Current processing runs directly in the mutation and does not use the schema's optional billing-event lease fields.
 
-### DeepSeek categorization
+### DeepSeek mention analysis
 
-The categorization cron scans up to 256 due pending or expired-lease jobs, considers at most 16 workspaces, and schedules at most four batches per dispatch. Each batch contains 1–50 jobs from one workspace, so one dispatch claims at most 200 jobs.
+The mention analysis cron scans up to 256 due or expired jobs. It considers at most 16 workspaces and schedules at most four batches. Each prompt-bounded batch contains at most 20 jobs from one workspace. Thus, one dispatch claims at most 80 jobs.
 
-A claim snapshots the enabled category IDs, names, and descriptions; the catalog must contain exactly one enabled permanent system `Other` category. Jobs receive one shared four-minute lease and the linked mentions move to `analysisState: "leased"`. The action rechecks the lease, category snapshot, mention/workspace links, and full input before calling DeepSeek.
+A claim snapshots the workspace filtering fields and the enabled category catalog. The catalog must contain exactly one enabled permanent system `Other` category. Jobs receive one shared four-minute lease. Linked mentions move to `analysisState: "leased"` and remain out of both customer feeds. Before the provider call, the action validates the lease, complete snapshot, mention links, workspace, and full input.
 
-The entire model result is validated before one mutation applies any category. Success marks every job/mention completed and records a `deepseek` `providerRuns` row plus hourly `chat.completions` metrics. A changed category snapshot or malformed/partial model result retries the whole batch without partial assignment. Retryable failures use deterministic 30-second exponential backoff capped at 30 minutes; non-retryable or exhausted jobs become `dead` and their mentions become `failed`. Ingestion defaults jobs to three maximum attempts.
+The worker validates the entire model result before one mutation applies a result. Every mention must receive relevance, priority, one enabled category, and bounded reasons. Success completes the jobs and mentions. It also sets feed state and records a versioned `deepseek` provider run with hourly metrics. A changed snapshot or invalid result retries the full batch without partial application. Retryable errors use deterministic 30-second exponential backoff capped at 30 minutes. Permanent or exhausted jobs become `dead`. Their mentions fail open as visible and unclassified. Ingestion gives each job three maximum attempts.
 
-Missing or invalid DeepSeek runtime configuration performs no provider call or telemetry write: it removes the lease, decrements the just-claimed attempt, returns jobs/mentions to pending, and schedules another check in five minutes. A catalog without the required `Other` category is reported as blocked and remains due without consuming attempts.
+Missing or invalid DeepSeek configuration causes no provider call or telemetry write. The worker releases the lease and restores the claimed attempt. It returns jobs and mentions to pending and adds a five-minute delay. Missing filtering context or an invalid catalog blocks due jobs without consuming attempts.
 
 ### Daily digest
 
@@ -210,7 +210,7 @@ See [providers.md](./providers.md) for the exact Resend transport and webhook pr
 
 ## Current limitations
 
-- Categorization has no admin requeue/repair control or configurable provider budget/circuit. A broken enabled-category catalog leaves due jobs pending until the catalog is repaired.
+- Mention analysis has no admin requeue/repair control or configurable provider budget/circuit. Missing filtering context or a broken enabled-category catalog leaves due jobs pending until the workspace is repaired.
 - FetchLayer pagination is resumed by durably increasing the provider-managed page depth; repeated prefix items are deduplicated.
 - Fixture-backed and `convex-test` suites validate deterministic worker behavior, not provider credentials, quotas, payment state, DNS, or webhook delivery.
 
@@ -236,7 +236,7 @@ available only before `quiescedAt`.
 - Provider execution action: `packages/backend/convex/scheduling/actions.ts`
 - Atomic ingestion: `packages/backend/convex/ingestion/service.ts`
 - Crons: `packages/backend/convex/crons.ts`
-- Categorization dispatcher/state: `packages/backend/convex/categorization/internal.ts`
-- Categorization action: `packages/backend/convex/categorization/actions.ts`
+- Mention analysis dispatcher and state: `packages/backend/convex/mentionAnalysis/internal.ts`
+- Mention analysis action: `packages/backend/convex/mentionAnalysis/actions.ts`
 - Digest dispatcher: `packages/backend/convex/digest/internal.ts`
 - Email outbox dispatcher: `packages/backend/convex/email/internal.ts`

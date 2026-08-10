@@ -23,7 +23,7 @@ export const ACCOUNT_DELETION_PURGE_STAGES = [
   "email_outbox",
   "digest_preferences",
   "mention_keyword_matches",
-  "categorization_jobs",
+  "mention_analysis_jobs",
   "saved_views",
   "feature_requests",
   "mentions",

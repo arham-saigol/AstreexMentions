@@ -18,7 +18,7 @@ const schema = defineSchema({
     "workspaceId",
     "systemKey",
   ]),
-  categorizationJobs: defineTable(v.any()),
+  mentionAnalysisJobs: defineTable(v.any()),
   changelogEntries: defineTable(v.any())
     .index("by_slug", ["slug"])
     .index("by_status_and_published_at", ["status", "publishedAt"])
@@ -649,7 +649,32 @@ describe("admin metrics", () => {
           value: 1,
         },
         {
-          metric: "mentions_categorized:question",
+          metric: "mentions_analyzed_category:question",
+          scope: "global",
+          value: 1,
+        },
+        {
+          metric: "mentions_analyzed_relevant",
+          scope: "global",
+          value: 1,
+        },
+        {
+          metric: "mentions_analyzed_filtered",
+          scope: "global",
+          value: 2,
+        },
+        {
+          metric: "mentions_priority:high",
+          scope: "global",
+          value: 1,
+        },
+        {
+          metric: "mention_analysis_terminal_failures",
+          scope: "global",
+          value: 1,
+        },
+        {
+          metric: "mentions_restored",
           scope: "global",
           value: 1,
         },
@@ -698,9 +723,9 @@ describe("admin metrics", () => {
       await ctx.db.patch("workspaces", bootstrap.workspaceId, {
         lastMentionAt: now,
       })
-      await ctx.db.insert("categorizationJobs", { status: "completed" })
-      await ctx.db.insert("categorizationJobs", { status: "pending" })
-      await ctx.db.insert("categorizationJobs", { status: "dead" })
+      await ctx.db.insert("mentionAnalysisJobs", { status: "completed" })
+      await ctx.db.insert("mentionAnalysisJobs", { status: "pending" })
+      await ctx.db.insert("mentionAnalysisJobs", { status: "dead" })
       for (const [status, value] of [
         ["completed", 1],
         ["pending", 1],
@@ -713,7 +738,7 @@ describe("admin metrics", () => {
           count: value,
           granularity: "hour",
           maximum: value,
-          metric: `categorization_jobs_status:${status}`,
+          metric: `mention_analysis_jobs_status:${status}`,
           minimum: value,
           scope: "global",
           sum: value,
@@ -778,10 +803,17 @@ describe("admin metrics", () => {
     expect(result.categoryBreakdown).toEqual(
       expect.arrayContaining([
         { category: "Question", count: 1 },
-        { category: "Uncategorized", count: 4 },
+        { category: "Unclassified", count: 1 },
       ]),
     )
-    expect(result.categorization).toEqual({
+    expect(result.feedOutcomes).toEqual({
+      filtered: 2,
+      priorities: { high: 1, low: 0, medium: 0 },
+      relevant: 1,
+      restorations: 1,
+      terminalFailures: 1,
+    })
+    expect(result.mentionAnalysis).toEqual({
       completed: 1,
       failed: 1,
       leased: 0,

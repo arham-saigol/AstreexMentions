@@ -49,6 +49,8 @@ import { useState } from "react"
 
 import { MentionFilterPopover } from "@/components/mentions/mention-filter-popover"
 import {
+  ALL_MENTIONS_VIEW_ID,
+  FILTERED_VIEW_ID,
   copyMentionFilters,
   mentionFilterCount,
   type MentionCategory,
@@ -338,91 +340,102 @@ export function SavedViews({
               All Mentions
             </Button>
 
-            {views.map((view, index) => {
-              const active = selectedViewId === view.id
-              const filterCount = mentionFilterCount(view.filters)
-              return (
-                <div
-                  key={view.id}
-                  className={cn(
-                    "border-border flex items-center rounded-md border",
-                    active ? "bg-secondary" : "bg-background",
-                  )}
-                >
-                  <button
-                    type="button"
-                    aria-pressed={active}
+            {views
+              .filter((view) => view.id !== ALL_MENTIONS_VIEW_ID)
+              .map((view, index, displayedViews) => {
+                const active = selectedViewId === view.id
+                const syntheticFiltered = view.id === FILTERED_VIEW_ID
+                const filterCount = mentionFilterCount(view.filters)
+                return (
+                  <div
+                    key={view.id}
                     className={cn(
-                      "focus-visible:ring-ring inline-flex h-8 max-w-56 items-center gap-2 rounded-l-md px-3 text-xs font-medium outline-none focus-visible:ring-2",
-                      active
-                        ? "text-secondary-foreground"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                      "border-border flex items-center rounded-md border",
+                      active ? "bg-secondary" : "bg-background",
                     )}
-                    onClick={() => onSelectView(view)}
                   >
-                    <span className="truncate">{view.name}</span>
-                    {filterCount > 0 && (
-                      <Badge variant="muted" className="px-1.5">
-                        {filterCount}
-                      </Badge>
+                    <button
+                      type="button"
+                      aria-pressed={active}
+                      className={cn(
+                        "focus-visible:ring-ring inline-flex h-8 max-w-56 items-center gap-2 rounded-l-md px-3 text-xs font-medium outline-none focus-visible:ring-2",
+                        active
+                          ? "text-secondary-foreground"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                      )}
+                      onClick={() => onSelectView(view)}
+                    >
+                      <span className="truncate">{view.name}</span>
+                      {filterCount > 0 && (
+                        <Badge variant="muted" className="px-1.5">
+                          {filterCount}
+                        </Badge>
+                      )}
+                    </button>
+                    {!syntheticFiltered && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            size="icon-sm"
+                            variant="ghost"
+                            className="rounded-l-none border-l"
+                            aria-label={`Manage ${view.name} saved view`}
+                          >
+                            <DotsThreeIcon aria-hidden="true" weight="bold" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-48">
+                          <DropdownMenuItem
+                            onSelect={() => setDialog({ mode: "rename", view })}
+                          >
+                            <PencilSimpleIcon aria-hidden="true" />
+                            Rename
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onSelect={() => setDialog({ mode: "edit", view })}
+                          >
+                            <FunnelSimpleIcon aria-hidden="true" />
+                            Edit filters
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            disabled={index <= 1}
+                            onSelect={() => void reorder(view, -1)}
+                          >
+                            <ArrowLeftIcon aria-hidden="true" />
+                            Move left
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            disabled={index === displayedViews.length - 1}
+                            onSelect={() => void reorder(view, 1)}
+                          >
+                            <ArrowRightIcon aria-hidden="true" />
+                            Move right
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            variant="destructive"
+                            onSelect={() => setDeleteView(view)}
+                          >
+                            <TrashIcon aria-hidden="true" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     )}
-                  </button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        size="icon-sm"
-                        variant="ghost"
-                        className="rounded-l-none border-l"
-                        aria-label={`Manage ${view.name} saved view`}
-                      >
-                        <DotsThreeIcon aria-hidden="true" weight="bold" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="w-48">
-                      <DropdownMenuItem
-                        onSelect={() => setDialog({ mode: "rename", view })}
-                      >
-                        <PencilSimpleIcon aria-hidden="true" />
-                        Rename
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onSelect={() => setDialog({ mode: "edit", view })}
-                      >
-                        <FunnelSimpleIcon aria-hidden="true" />
-                        Edit filters
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        disabled={index === 0}
-                        onSelect={() => void reorder(view, -1)}
-                      >
-                        <ArrowLeftIcon aria-hidden="true" />
-                        Move left
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        disabled={index === views.length - 1}
-                        onSelect={() => void reorder(view, 1)}
-                      >
-                        <ArrowRightIcon aria-hidden="true" />
-                        Move right
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        variant="destructive"
-                        onSelect={() => setDeleteView(view)}
-                      >
-                        <TrashIcon aria-hidden="true" />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              )
-            })}
+                  </div>
+                )
+              })}
 
             <Button
               size="sm"
               variant="outline"
+              disabled={selectedViewId === FILTERED_VIEW_ID}
+              title={
+                selectedViewId === FILTERED_VIEW_ID
+                  ? "Filtered cannot be used as the basis for a custom view"
+                  : undefined
+              }
               onClick={() => setDialog({ mode: "create" })}
             >
               <PlusIcon aria-hidden="true" />
