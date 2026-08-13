@@ -73,8 +73,8 @@ function ProductNavigation() {
               className={cn(
                 "relative inline-flex h-10 items-center gap-2 rounded-md px-2 text-[13px] font-medium transition-colors duration-[var(--motion-control)] max-[380px]:gap-0 sm:px-3 md:w-full md:px-3 max-[380px]:[&>svg]:hidden",
                 active
-                  ? "bg-card text-foreground shadow-xs"
-                  : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                  ? "bg-[var(--brand-soft)] text-[var(--brand-soft-ink)]"
+                  : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
               )}
             >
               <NavigationIcon
@@ -110,7 +110,7 @@ function ConfigurationNavigation() {
         <button
           key={section}
           type="button"
-          className="text-muted-foreground hover:bg-secondary hover:text-foreground flex h-10 w-full items-center gap-2 rounded-md px-3 text-left text-[13px] font-medium transition-colors"
+          className="text-muted-foreground hover:bg-muted/60 hover:text-foreground flex h-10 w-full items-center gap-2 rounded-md px-3 text-left text-[13px] font-medium transition-colors"
           onClick={(event) => openSettings(section, event.currentTarget)}
         >
           <Icon aria-hidden="true" className="size-4" />
@@ -201,7 +201,7 @@ function AccessNotice() {
   }
 
   return (
-    <div className="border-border bg-secondary border-b" role="status">
+    <div className="border-border bg-card border-b" role="status">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-1 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
         <p className="text-foreground text-sm font-medium">
           Preview mode — monitoring is not active.
@@ -217,6 +217,8 @@ function AccessNotice() {
 }
 
 export function ProductShell({ children }: { children: ReactNode }) {
+  const { workspace } = useProductContext()
+
   return (
     <ProductDialogsProvider>
       <div className="bg-background min-h-dvh md:grid md:grid-cols-[232px_minmax(0,1fr)]">
@@ -226,36 +228,36 @@ export function ProductShell({ children }: { children: ReactNode }) {
         >
           Skip to main content
         </a>
-        <aside className="border-sidebar-border bg-sidebar sticky top-0 hidden h-dvh flex-col border-r px-4 py-5 md:flex">
+        <aside className="border-sidebar-border bg-sidebar sticky top-0 hidden h-dvh flex-col border-r px-3 py-5 md:flex">
           <Link
             href="/app"
             aria-label="Astreex dashboard home"
-            className="px-2"
+            className="px-3"
           >
             <AstreexWordmark className="text-base" markClassName="size-6" />
           </Link>
-          <div className="mt-10">
-            <p className="text-muted-foreground mb-2 px-3 text-xs font-semibold tracking-[0.06em] uppercase">
+          <div className="mt-8">
+            <p className="text-muted-foreground mb-1.5 px-3 text-[11px] font-semibold tracking-[0.08em] uppercase">
               Listen
             </p>
             <ProductNavigation />
           </div>
           <div className="mt-6">
-            <p className="text-muted-foreground mb-2 px-3 text-xs font-semibold tracking-[0.06em] uppercase">
+            <p className="text-muted-foreground mb-1.5 px-3 text-[11px] font-semibold tracking-[0.08em] uppercase">
               Configure
             </p>
             <ConfigurationNavigation />
           </div>
-          <div className="mt-auto flex items-center justify-between border-t pt-4">
-            <span className="text-muted-foreground pl-2 text-xs">
-              Workspace
+          <div className="mt-auto flex items-center gap-2 border-t pt-3">
+            <span className="text-muted-foreground min-w-0 flex-1 truncate pl-2 text-xs">
+              {workspace.workspace.name}
             </span>
             <ProductAvatarMenu />
           </div>
         </aside>
 
         <div className="min-w-0">
-          <header className="border-border bg-background sticky top-0 z-40 border-b md:hidden">
+          <header className="border-border bg-sidebar sticky top-0 z-40 border-b md:hidden">
             <div className="flex h-14 items-center gap-2 px-3 sm:px-4">
               <Link
                 href="/app"
@@ -273,12 +275,10 @@ export function ProductShell({ children }: { children: ReactNode }) {
             </div>
           </header>
           <AccessNotice />
-          <main
-            id="product-main-content"
-            tabIndex={-1}
-            className="bg-card mx-auto min-h-dvh w-full max-w-[1280px] px-4 py-8 sm:px-8 sm:py-10 lg:px-12"
-          >
-            {children}
+          <main id="product-main-content" tabIndex={-1} className="min-h-dvh">
+            <div className="mx-auto w-full max-w-[1200px] px-4 py-8 sm:px-8 sm:py-10 lg:px-10">
+              {children}
+            </div>
           </main>
         </div>
       </div>

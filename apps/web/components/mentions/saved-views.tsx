@@ -332,7 +332,7 @@ export function SavedViews({
           <div className="flex w-max items-center gap-2">
             <Button
               size="sm"
-              variant={selectedViewId === null ? "secondary" : "ghost"}
+              variant={selectedViewId === null ? "outline" : "ghost"}
               aria-pressed={selectedViewId === null}
               onClick={onSelectAll}
             >
@@ -350,8 +350,10 @@ export function SavedViews({
                   <div
                     key={view.id}
                     className={cn(
-                      "border-border flex items-center rounded-md border",
-                      active ? "bg-secondary" : "bg-background",
+                      "border-border flex items-center rounded-md border transition-[border-color,box-shadow,background-color] duration-[var(--motion-control)]",
+                      active
+                        ? "border-input bg-card shadow-xs"
+                        : "bg-transparent",
                     )}
                   >
                     <button
