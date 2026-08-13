@@ -5,29 +5,34 @@ import type * as React from "react"
 import { cn } from "../lib/utils"
 
 const buttonVariants = cva(
-  "inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-transparent text-sm leading-none font-medium transition-[background-color,color,border-color,transform] duration-[var(--motion-control)] ease-[var(--ease-editorial)] outline-none active:scale-[0.98] disabled:pointer-events-none disabled:opacity-45 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+  "relative inline-flex shrink-0 select-none items-center justify-center gap-2 whitespace-nowrap rounded-[var(--radius-sm)] border text-[13px] leading-none font-semibold outline-none transition-[background-color,border-color,box-shadow,color,transform] duration-[var(--motion-control)] ease-[var(--ease-out)] active:translate-y-px active:scale-[0.985] disabled:pointer-events-none disabled:opacity-45 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-[15px] [&_svg]:stroke-[2] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
   {
     variants: {
       variant: {
+        // Primary — signal coral fill with near-black text (kit btn-primary).
         default:
-          "bg-primary text-primary-foreground hover:bg-[var(--brand-hover)] active:bg-[var(--brand-pressed)]",
-        destructive:
-          "bg-destructive text-destructive-foreground hover:brightness-[1.08]",
+          "bg-primary text-primary-foreground border-transparent shadow-[var(--shadow-control)] hover:bg-[var(--brand-hover)] active:bg-[var(--brand-pressed)]",
+        // Secondary — quiet surface button (kit default .btn).
         outline:
-          "border-[var(--line-strong)] bg-card text-foreground hover:border-[var(--ink-tertiary)]",
+          "border-[var(--line-strong)] bg-card text-foreground shadow-[var(--shadow-control)] hover:border-[var(--line-strong)] hover:bg-[var(--surface-hover)] hover:shadow-[var(--shadow-sm)] hover:-translate-y-px",
         secondary:
-          "border-border bg-secondary text-secondary-foreground hover:border-[var(--line-strong)] hover:bg-[var(--surface-strong)]",
+          "border-transparent bg-secondary text-secondary-foreground hover:bg-[var(--surface-hover)] hover:text-foreground",
         ghost:
-          "text-[var(--ink-secondary)] hover:bg-secondary hover:text-foreground",
-        link: "text-foreground underline-offset-4 hover:underline",
+          "border-transparent bg-transparent text-[var(--ink-secondary)] shadow-none hover:bg-[var(--surface-hover)] hover:text-foreground",
+        link: "border-transparent bg-transparent text-foreground underline-offset-4 shadow-none hover:underline",
+        // Destructive — soft red tint with red text (kit btn-danger). Solid
+        // red (`bg-destructive`) and error text (`text-destructive`) both read
+        // as the red hue via the destructive token.
+        destructive:
+          "border-transparent bg-[var(--red-bg)] text-[var(--red)] shadow-[var(--shadow-control)] hover:bg-[color-mix(in_srgb,var(--red)_12%,transparent)] hover:text-[var(--red)] active:bg-[color-mix(in_srgb,var(--red)_18%,transparent)]",
       },
       size: {
-        default: "px-[18px] py-[11px]",
-        sm: "gap-1.5 px-3 py-2 text-[13px]",
-        lg: "px-[22px] py-3.5 text-[15px]",
-        icon: "size-10 p-0",
-        "icon-sm": "size-8 p-0",
-        "icon-lg": "size-10 p-0",
+        default: "h-[var(--control-h)] px-3.5",
+        sm: "h-[calc(var(--control-h)-6px)] gap-1.5 px-2.5 text-[12px]",
+        lg: "h-[calc(var(--control-h)+8px)] px-[18px] text-[14px]",
+        icon: "size-[var(--control-h)] p-0",
+        "icon-sm": "size-[calc(var(--control-h)-6px)] p-0",
+        "icon-lg": "size-[calc(var(--control-h)+8px)] p-0",
       },
     },
     defaultVariants: {
@@ -42,21 +47,42 @@ function Button({
   variant,
   size,
   asChild = false,
+  loading = false,
   type,
+  disabled,
+  children,
   ...props
 }: React.ComponentProps<"button"> &
   VariantProps<typeof buttonVariants> & {
     asChild?: boolean
+    loading?: boolean
   }) {
   const Component = asChild ? Slot : "button"
+  const isDisabled = disabled || loading
 
   return (
     <Component
       data-slot="button"
+      data-loading={loading || undefined}
+      aria-busy={loading || undefined}
       className={cn(buttonVariants({ variant, size, className }))}
-      {...(!asChild && { type: type ?? "button" })}
+      {...(!asChild && { disabled: isDisabled, type: type ?? "button" })}
       {...props}
-    />
+    >
+      {asChild ? (
+        children
+      ) : loading ? (
+        <>
+          <span
+            aria-hidden="true"
+            className="size-3.5 animate-spin rounded-full border-2 border-current/30 border-t-current"
+          />
+          <span className="sr-only">Loading…</span>
+        </>
+      ) : (
+        children
+      )}
+    </Component>
   )
 }
 

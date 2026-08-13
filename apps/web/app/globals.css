@@ -1,4 +1,5 @@
 @import "@astreex/ui/styles.css";
+@reference "@astreex/ui/styles.css";
 
 @source "../**/*.{ts,tsx}";
 @source "../../../packages/ui/src/**/*.{ts,tsx}";

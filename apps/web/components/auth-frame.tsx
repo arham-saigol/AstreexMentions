@@ -23,14 +23,11 @@ export function AuthFrame({
       <aside className="relative overflow-hidden border-b bg-[var(--canvas-soft)] lg:border-r lg:border-b-0">
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute -top-40 -right-40 size-[36rem] bg-[radial-gradient(circle,rgba(183,121,58,0.10),transparent_64%)]"
+          className="pointer-events-none absolute -top-40 -right-40 size-[36rem] bg-[radial-gradient(circle,color-mix(in_srgb,var(--accent)_14%,transparent),transparent_64%)]"
         />
         <div className="relative mx-auto flex h-full w-full max-w-xl flex-col px-6 py-7 sm:px-10 lg:px-12 lg:py-10">
           <Link href="/" aria-label="Astreex home" className="w-fit">
-            <AstreexWordmark
-              className="text-primary-foreground"
-              markClassName="text-primary-foreground"
-            />
+            <AstreexWordmark />
           </Link>
           <div className="my-auto hidden py-10 lg:block lg:py-16">
             <p className="editorial-eyebrow">{eyebrow}</p>

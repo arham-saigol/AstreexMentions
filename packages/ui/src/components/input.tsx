@@ -12,9 +12,9 @@ function Input({
       type={type}
       data-slot="input"
       className={cn(
-        "border-input bg-card text-foreground placeholder:text-muted-foreground selection:text-foreground flex h-10 w-full min-w-0 rounded-md border px-3 py-2 text-sm transition-[border-color,box-shadow] duration-[var(--motion-control)] outline-none selection:bg-[var(--brand-soft)] disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50",
-        "focus-visible:border-foreground hover:border-[var(--ink-tertiary)] focus-visible:shadow-[0_0_0_3px_rgba(27,26,24,0.06)]",
-        "aria-invalid:border-destructive aria-invalid:shadow-[0_0_0_3px_rgba(159,47,45,0.08)]",
+        "border-input bg-[var(--surface-inset)] text-foreground placeholder:text-[var(--text-tertiary)] selection:text-foreground flex h-[var(--control-h)] w-full min-w-0 rounded-[var(--radius-sm)] border px-3 py-2 text-[13px] shadow-[var(--shadow-control)] transition-[border-color,box-shadow] duration-[var(--motion-control)] outline-none selection:bg-[var(--brand-soft)] hover:border-[var(--line-strong)] disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50",
+        "focus-visible:border-[var(--focus)] focus-visible:shadow-[0_0_0_3px_color-mix(in_srgb,var(--focus)_16%,transparent)]",
+        "aria-invalid:border-[var(--red)] aria-invalid:shadow-[0_0_0_3px_color-mix(in_srgb,var(--red)_16%,transparent)]",
         "file:text-foreground file:mr-3 file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium",
         className,
       )}

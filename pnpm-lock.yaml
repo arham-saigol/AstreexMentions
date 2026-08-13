@@ -292,12 +292,6 @@ importers:
 
   packages/ui:
     dependencies:
-      '@astryxdesign/core':
-        specifier: 0.3.0
-        version: 0.3.0(@stylexjs/stylex@0.19.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      '@astryxdesign/theme-neutral':
-        specifier: 0.3.0
-        version: 0.3.0(@astryxdesign/core@0.3.0(@stylexjs/stylex@0.19.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)
       '@radix-ui/react-alert-dialog':
         specifier: ^1.1.0
         version: 1.1.23(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -5183,12 +5177,14 @@ snapshots:
       intl-messageformat: 11.2.13
       react: 19.2.8
       react-dom: 19.2.8(react@19.2.8)
+    optional: true
 
   '@astryxdesign/theme-neutral@0.3.0(@astryxdesign/core@0.3.0(@stylexjs/stylex@0.19.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)':
     dependencies:
       '@astryxdesign/core': 0.3.0(@stylexjs/stylex@0.19.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       lucide-react: 1.29.0(react@19.2.8)
       react: 19.2.8
+    optional: true
 
   '@babel/code-frame@7.29.7':
     dependencies:
@@ -5775,13 +5771,16 @@ snapshots:
 
   '@floating-ui/utils@0.2.12': {}
 
-  '@formatjs/fast-memoize@3.1.7': {}
+  '@formatjs/fast-memoize@3.1.7':
+    optional: true
 
   '@formatjs/icu-messageformat-parser@3.5.16':
     dependencies:
       '@formatjs/icu-skeleton-parser': 2.1.11
+    optional: true
 
-  '@formatjs/icu-skeleton-parser@2.1.11': {}
+  '@formatjs/icu-skeleton-parser@2.1.11':
+    optional: true
 
   '@humanfs/core@0.19.2':
     dependencies:
@@ -6482,6 +6481,7 @@ snapshots:
       css-mediaquery: 0.1.2
       invariant: 2.2.4
       styleq: 0.2.1
+    optional: true
 
   '@swc/helpers@0.5.15':
     dependencies:
@@ -7207,7 +7207,8 @@ snapshots:
       shebang-command: 2.0.0
       which: 2.0.2
 
-  css-mediaquery@0.1.2: {}
+  css-mediaquery@0.1.2:
+    optional: true
 
   css-tree@3.2.1:
     dependencies:
@@ -8109,10 +8110,12 @@ snapshots:
     dependencies:
       '@formatjs/fast-memoize': 3.1.7
       '@formatjs/icu-messageformat-parser': 3.5.16
+    optional: true
 
   invariant@2.2.4:
     dependencies:
       loose-envify: 1.4.0
+    optional: true
 
   is-alphabetical@2.0.1: {}
 
@@ -9706,7 +9709,8 @@ snapshots:
     optionalDependencies:
       '@babel/core': 7.29.7
 
-  styleq@0.2.1: {}
+  styleq@0.2.1:
+    optional: true
 
   supports-color@7.2.0:
     dependencies:

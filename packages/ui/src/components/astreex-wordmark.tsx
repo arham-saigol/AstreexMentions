@@ -16,12 +16,12 @@ function AstreexWordmark({
     <span
       data-slot="astreex-wordmark"
       className={cn(
-        "text-foreground inline-flex items-center gap-2.5 font-serif text-[22px] font-medium tracking-[-0.02em]",
+        "text-foreground inline-flex items-center gap-2.5 text-[18px] font-bold tracking-[-0.045em]",
         className,
       )}
       {...props}
     >
-      <AstreexMark className={cn("size-7", markClassName)} />
+      <AstreexMark className={cn("size-[25px]", markClassName)} />
       <span>Astreex</span>
     </span>
   )

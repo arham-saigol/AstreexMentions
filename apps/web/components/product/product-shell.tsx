@@ -38,6 +38,7 @@ import {
 } from "@/components/product/product-dialogs"
 import { useProductContext } from "@/components/product/product-context"
 import type { SettingsSectionId } from "@/components/product/settings-dialog-shell"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 const productNavigation = [
   { href: "/app/mentions", label: "Mentions", icon: AtSign },
@@ -71,16 +72,16 @@ function ProductNavigation() {
               href={href}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "relative inline-flex h-10 items-center gap-2 rounded-md px-2 text-[13px] font-medium transition-colors duration-[var(--motion-control)] max-[380px]:gap-0 sm:px-3 md:w-full md:px-3 max-[380px]:[&>svg]:hidden",
+                "relative inline-flex h-9 items-center gap-2.5 rounded-[var(--radius-sm)] px-2.5 text-[13px] font-medium transition-[background-color,color,transform] duration-[var(--motion-feedback)] max-[380px]:gap-0 sm:px-3 md:w-full md:before:absolute md:before:left-0 md:before:top-1/2 md:before:h-[18px] md:before:w-[2px] md:before:-translate-y-1/2 md:before:rounded-full md:before:bg-[var(--accent)] md:before:content-[''] md:before:transition-[opacity] md:before:duration-[var(--motion-control)] max-[380px]:[&>svg]:hidden",
                 active
-                  ? "bg-[var(--brand-soft)] text-[var(--brand-soft-ink)]"
-                  : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                  ? "bg-[var(--surface-active)] text-foreground md:before:opacity-100"
+                  : "text-muted-foreground hover:bg-[var(--surface-hover)] hover:text-foreground md:before:opacity-0",
               )}
             >
               <NavigationIcon
                 aria-hidden="true"
-                className="size-4"
-                strokeWidth={active ? 2.4 : 2}
+                className="size-4 shrink-0"
+                strokeWidth={active ? 2.2 : 1.8}
               />
               {label}
             </Link>
@@ -110,10 +111,10 @@ function ConfigurationNavigation() {
         <button
           key={section}
           type="button"
-          className="text-muted-foreground hover:bg-muted/60 hover:text-foreground flex h-10 w-full items-center gap-2 rounded-md px-3 text-left text-[13px] font-medium transition-colors"
+          className="text-muted-foreground hover:bg-[var(--surface-hover)] hover:text-foreground flex h-9 w-full items-center gap-2.5 rounded-[var(--radius-sm)] px-2.5 text-left text-[13px] font-medium transition-[background-color,color] duration-[var(--motion-feedback)] sm:px-3"
           onClick={(event) => openSettings(section, event.currentTarget)}
         >
-          <Icon aria-hidden="true" className="size-4" />
+          <Icon aria-hidden="true" className="size-4 shrink-0" strokeWidth={1.8} />
           {label}
         </button>
       ))}
@@ -134,7 +135,7 @@ function ProductAvatarMenu() {
         <Button
           ref={accountMenuTriggerRef}
           variant="ghost"
-          className="h-10 gap-1.5 rounded-md px-1.5 sm:gap-2 sm:pr-2"
+          className="size-9 gap-1 rounded-full p-0 sm:gap-1.5 sm:pr-1.5 sm:pl-0.5"
           aria-label="Open account menu"
         >
           <Avatar className="size-7">
@@ -151,7 +152,7 @@ function ProductAvatarMenu() {
           </Avatar>
           <ChevronDown
             aria-hidden="true"
-            className="text-muted-foreground size-3.5 max-[380px]:hidden"
+            className="text-muted-foreground hidden size-3.5 sm:block"
           />
         </Button>
       </DropdownMenuTrigger>
@@ -201,9 +202,9 @@ function AccessNotice() {
   }
 
   return (
-    <div className="border-border bg-card border-b" role="status">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-1 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
-        <p className="text-foreground text-sm font-medium">
+    <div className="border-b border-[var(--line)] bg-[var(--surface-inset)]" role="status">
+      <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-1 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-10">
+        <p className="text-foreground text-[13px] font-medium">
           Preview mode — monitoring is not active.
         </p>
         <p className="text-muted-foreground text-xs leading-5 sm:text-right">
@@ -216,49 +217,81 @@ function AccessNotice() {
   )
 }
 
+function Breadcrumb() {
+  const pathname = usePathname()
+  const active = productNavigation.find(
+    (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
+  )
+  const label = active?.label ?? "Dashboard"
+
+  return (
+    <div className="text-muted-foreground flex min-w-0 items-center gap-2 text-[13px]">
+      <span className="hidden sm:inline">Astreex</span>
+      <span aria-hidden="true" className="hidden text-[var(--text-tertiary)] sm:inline">
+        /
+      </span>
+      <strong className="text-foreground font-medium">{label}</strong>
+    </div>
+  )
+}
+
 export function ProductShell({ children }: { children: ReactNode }) {
   const { workspace } = useProductContext()
 
   return (
     <ProductDialogsProvider>
-      <div className="bg-background min-h-dvh md:grid md:grid-cols-[232px_minmax(0,1fr)]">
+      <div className="bg-background text-foreground min-h-dvh">
         <a
           href="#product-main-content"
-          className="bg-background text-foreground focus-visible:ring-ring fixed top-3 left-3 z-50 -translate-y-20 rounded-md border px-3 py-2 text-sm font-medium shadow-sm transition-transform focus-visible:translate-y-0 focus-visible:ring-2 focus-visible:outline-none"
+          className="bg-background text-foreground focus-visible:ring-ring fixed top-3 left-3 z-50 -translate-y-20 rounded-[var(--radius-sm)] border px-3 py-2 text-sm font-medium shadow-[var(--shadow-sm)] transition-transform focus-visible:translate-y-0 focus-visible:ring-2 focus-visible:outline-none"
         >
           Skip to main content
         </a>
-        <aside className="border-sidebar-border bg-sidebar sticky top-0 hidden h-dvh flex-col border-r px-3 py-5 md:flex">
-          <Link
-            href="/app"
-            aria-label="Astreex dashboard home"
-            className="px-3"
-          >
-            <AstreexWordmark className="text-base" markClassName="size-6" />
-          </Link>
-          <div className="mt-8">
-            <p className="text-muted-foreground mb-1.5 px-3 text-[11px] font-semibold tracking-[0.08em] uppercase">
-              Listen
-            </p>
-            <ProductNavigation />
-          </div>
-          <div className="mt-6">
-            <p className="text-muted-foreground mb-1.5 px-3 text-[11px] font-semibold tracking-[0.08em] uppercase">
-              Configure
-            </p>
-            <ConfigurationNavigation />
-          </div>
-          <div className="mt-auto flex items-center gap-2 border-t pt-3">
-            <span className="text-muted-foreground min-w-0 flex-1 truncate pl-2 text-xs">
-              {workspace.workspace.name}
-            </span>
-            <ProductAvatarMenu />
-          </div>
-        </aside>
 
-        <div className="min-w-0">
-          <header className="border-border bg-sidebar sticky top-0 z-40 border-b md:hidden">
-            <div className="flex h-14 items-center gap-2 px-3 sm:px-4">
+        <div className="md:grid md:grid-cols-[var(--sidebar-w)_minmax(0,1fr)]">
+          <aside className="border-sidebar-border bg-sidebar sticky top-0 hidden h-dvh flex-col border-r md:flex">
+            <div className="border-sidebar-border flex h-[var(--topbar-h)] items-center border-b px-4">
+              <Link
+                href="/app"
+                aria-label="Astreex dashboard home"
+                className="inline-flex items-center"
+              >
+                <AstreexWordmark className="text-[17px]" markClassName="size-6" />
+              </Link>
+            </div>
+
+            <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-2.5 py-4">
+              <div>
+                <p className="text-muted-foreground mb-1.5 px-2.5 text-[10px] font-bold tracking-[0.09em] uppercase">
+                  Listen
+                </p>
+                <ProductNavigation />
+              </div>
+              <div>
+                <p className="text-muted-foreground mb-1.5 px-2.5 text-[10px] font-bold tracking-[0.09em] uppercase">
+                  Configure
+                </p>
+                <ConfigurationNavigation />
+              </div>
+            </div>
+
+            <div className="border-sidebar-border flex items-center gap-2 overflow-hidden border-t px-3 py-3">
+              <span className="text-muted-foreground min-w-0 flex-1 truncate pl-1 text-xs">
+                {workspace.workspace.name}
+              </span>
+              <ProductAvatarMenu />
+            </div>
+          </aside>
+
+          <div className="min-w-0">
+            <header className="border-b border-[var(--line)] bg-background/85 supports-[backdrop-filter]:bg-background/70 hidden h-[var(--topbar-h)] items-center gap-3 px-6 backdrop-blur-xl md:flex">
+              <Breadcrumb />
+              <div className="ml-auto flex items-center gap-2">
+                <ThemeToggle />
+              </div>
+            </header>
+
+            <header className="border-b border-[var(--line)] bg-sidebar sticky top-0 z-40 flex h-14 items-center gap-2 px-3 md:hidden">
               <Link
                 href="/app"
                 aria-label="Astreex dashboard home"
@@ -266,20 +299,20 @@ export function ProductShell({ children }: { children: ReactNode }) {
               >
                 <AstreexWordmark className="text-sm" markClassName="size-5" />
               </Link>
-              <div className="ml-auto min-w-0">
+              <div className="ml-auto flex min-w-0 items-center gap-1">
                 <ProductNavigation />
               </div>
-              <div>
-                <ProductAvatarMenu />
+              <ThemeToggle />
+              <ProductAvatarMenu />
+            </header>
+
+            <AccessNotice />
+            <main id="product-main-content" tabIndex={-1} className="min-h-dvh">
+              <div className="mx-auto w-full max-w-[1200px] px-4 py-7 sm:px-6 sm:py-9 lg:px-10">
+                {children}
               </div>
-            </div>
-          </header>
-          <AccessNotice />
-          <main id="product-main-content" tabIndex={-1} className="min-h-dvh">
-            <div className="mx-auto w-full max-w-[1200px] px-4 py-8 sm:px-8 sm:py-10 lg:px-10">
-              {children}
-            </div>
-          </main>
+            </main>
+          </div>
         </div>
       </div>
     </ProductDialogsProvider>

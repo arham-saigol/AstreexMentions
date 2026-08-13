@@ -3,8 +3,7 @@
  *
  * Next.js / webpack hoist @import content above inline CSS that follows it,
  * so the canonical @layer order lives in this dedicated file imported first.
- * Astryx reset (reset layer) and component styles (astryx-base) land below
- * Tailwind utilities; legacy shadcn/utilities stay in components/utilities so
- * they keep winning over framework defaults. See Astryx "Cascade Layer Safety".
+ * Theme tokens land in theme/base; semantic Tailwind mappings and component
+ * helper classes land in components; transition utilities win in utilities.
  */
-@layer reset, theme, base, astryx-base, astryx-theme, components, utilities;
+@layer reset, theme, base, components, utilities;
