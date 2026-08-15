@@ -20,85 +20,87 @@
 @source "../**/*.{ts,tsx}";
 
 /* ============================================================================
-   :root — dark (kit default, the polished surface).
+   :root — dark (Notion Obsidian / Near-Black default).
    ============================================================================ */
 :root {
   color-scheme: dark;
 
-  --font-sans: "Geist", var(--font-geist), Inter, ui-sans-serif, system-ui,
-    -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-mono: "Geist Mono", var(--font-geist-mono), "SFMono-Regular", Consolas,
+  --font-sans: "Geist", var(--font-geist), -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, "Inter", Helvetica, sans-serif;
+  --font-mono: "Geist Mono", var(--font-geist-mono), 'JetBrains Mono', "SFMono-Regular", Consolas,
     monospace;
 
-  /* Brand ramp */
-  --brand-50: #fff5ed;
-  --brand-100: #ffe4d1;
-  --brand-200: #ffcaa8;
-  --brand-300: #f5a97f;
-  --brand-400: #ed8a59;
-  --brand-500: #d96e3d;
-  --brand-600: #b8512c;
-  --brand-700: #913d25;
-  --brand-800: #713220;
-  --brand-900: #5d2c1f;
+  /* Brand ramp (Notion Blue & Obsidian Scale) */
+  --brand-50: #f0f7fd;
+  --brand-100: #dceefa;
+  --brand-200: #bde0f6;
+  --brand-300: #8ecbf0;
+  --brand-400: #529cca;
+  --brand-500: #2383e2;
+  --brand-600: #1868b7;
+  --brand-700: #145293;
+  --brand-800: #134579;
+  --brand-900: #143b64;
 
-  /* Neutral ramp */
+  /* Neutral ramp (Notion Near-Black / Charcoal scale) */
   --gray-0: #ffffff;
-  --gray-50: #f7f7f5;
-  --gray-100: #ececea;
-  --gray-200: #d8d9d6;
-  --gray-300: #b8bab6;
-  --gray-400: #939691;
-  --gray-500: #72756f;
-  --gray-600: #555853;
-  --gray-700: #3d403c;
-  --gray-800: #292c29;
-  --gray-850: #232523;
-  --gray-900: #1b1d1c;
-  --gray-950: #121413;
-  --black: #090a09;
+  --gray-50: #f7f6f3;
+  --gray-100: #ebebeb;
+  --gray-200: #d7d5cf;
+  --gray-300: #b4b3af;
+  --gray-400: #9b9b9b;
+  --gray-500: #787774;
+  --gray-600: #606060;
+  --gray-700: #3e3e3e;
+  --gray-800: #2e2e2e;
+  --gray-850: #252525;
+  --gray-900: #202020;
+  --gray-950: #191919;
+  --black: #121212;
 
-  /* Semantic pairs (foreground + background change together) */
-  --green: #6fd08c;
-  --green-bg: #1c3324;
-  --blue: #7ab8ff;
-  --blue-bg: #1b2c42;
-  --yellow: #e4be66;
-  --yellow-bg: #342c19;
-  --red: #ef8585;
-  --red-bg: #3b2022;
-  --purple: #b8a2f5;
-  --purple-bg: #2d2742;
+  /* Semantic pairs (Notion dark pastel tags) */
+  --green: #7fd496;
+  --green-bg: rgba(46, 170, 118, 0.24);
+  --blue: #78bde9;
+  --blue-bg: rgba(0, 120, 223, 0.24);
+  --yellow: #e8c75d;
+  --yellow-bg: rgba(223, 171, 1, 0.24);
+  --red: #f08993;
+  --red-bg: rgba(235, 87, 87, 0.24);
+  --purple: #d09ee8;
+  --purple-bg: rgba(155, 81, 224, 0.24);
+  --orange: #f0af75;
+  --orange-bg: rgba(242, 153, 74, 0.24);
 
-  /* Surfaces */
-  --canvas: #171918;
-  --canvas-raised: #1c1e1d;
-  --surface: #222523;
-  --surface-hover: #292c29;
-  --surface-active: #303330;
-  --surface-inset: #191b1a;
+  /* Surfaces (Notion near-black hierarchy) */
+  --canvas: #191919;
+  --canvas-raised: #202020;
+  --surface: #252525;
+  --surface-hover: rgba(255, 255, 255, 0.055);
+  --surface-active: rgba(255, 255, 255, 0.09);
+  --surface-inset: #191919;
 
-  /* Text */
-  --text: #f4f5f2;
-  --text-secondary: #b1b4ae;
-  --text-tertiary: #7e827c;
-  --text-disabled: #5b5e59;
+  /* Text (Notion near-white ink) */
+  --text: #ebebeb;
+  --text-secondary: #9b9b9b;
+  --text-tertiary: #606060;
+  --text-disabled: #4a4a4a;
 
   /* Lines */
-  --line: #333633;
-  --line-strong: #454945;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.14);
 
-  /* Accent (signal coral) */
-  --accent: var(--brand-300);
-  --accent-hover: #f7b78f;
-  --accent-pressed: #e9966a;
-  --on-accent: #21140d;
-  --on-red: #2b1012;
-  --accent-soft: color-mix(in srgb, var(--accent) 14%, var(--surface));
-  --accent-soft-ink: var(--accent);
-  --focus: #ffc69f;
+  /* Accent (Notion blue) */
+  --accent: #529cca;
+  --accent-hover: #71b3dc;
+  --accent-pressed: #3e87b7;
+  --on-accent: #ffffff;
+  --on-red: #ffffff;
+  --accent-soft: rgba(82, 156, 202, 0.16);
+  --accent-soft-ink: #78bde9;
+  --focus: #529cca;
   --accent-contrast: var(--on-accent);
-  --overlay: rgb(5 6 5 / 72%);
+  --overlay: rgba(0, 0, 0, 0.65);
 
   /* Spacing */
   --space-1: 4px;
@@ -114,111 +116,113 @@
   --space-20: 80px;
   --space-24: 96px;
 
-  /* Radius */
-  --radius-xs: 5px;
-  --radius-sm: 7px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
-  --radius-xl: 20px;
-  --radius-2xl: 24px;
+  /* Radius (Notion subtle 4px / 6px / 8px hierarchy) */
+  --radius-xs: 3px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
   --radius-round: 999px;
 
   /* Elevation */
-  --shadow-xs: 0 1px 0 rgb(0 0 0 / 22%);
-  --shadow-sm: 0 1px 2px rgb(0 0 0 / 30%), 0 2px 5px rgb(0 0 0 / 14%);
-  --shadow-md: 0 8px 24px rgb(0 0 0 / 30%), 0 2px 6px rgb(0 0 0 / 20%);
-  --shadow-lg: 0 24px 70px rgb(0 0 0 / 45%), 0 8px 20px rgb(0 0 0 / 22%);
-  --shadow-control: inset 0 0 0 1px rgb(255 255 255 / 4%),
-    0 1px 2px rgb(0 0 0 / 28%);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3), 0 2px 6px rgba(0, 0, 0, 0.15);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4), 0 2px 6px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.5), 0 4px 12px rgba(0, 0, 0, 0.25);
+  --shadow-control: inset 0 0 0 1px rgba(255, 255, 255, 0.05),
+    0 1px 2px rgba(0, 0, 0, 0.25);
 
   /* Motion */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-spring: cubic-bezier(0.2, 0.9, 0.25, 1.2);
-  --fast: 120ms;
-  --medium: 220ms;
-  --slow: 420ms;
+  --fast: 100ms;
+  --medium: 180ms;
+  --slow: 350ms;
 
   /* Layout */
   --sidebar-w: 254px;
-  --topbar-h: 64px;
-  --control-h: 38px;
-  --icon-h: 34px;
-  --section-gap: 72px;
+  --topbar-h: 56px;
+  --control-h: 36px;
+  --icon-h: 32px;
+  --section-gap: 64px;
 
   /* Transitions.dev tuned durations shared by overlay/anchored surfaces. */
-  --dropdown-open-dur: 250ms;
-  --dropdown-close-dur: 150ms;
-  --dropdown-pre-scale: 0.97;
+  --dropdown-open-dur: 200ms;
+  --dropdown-close-dur: 120ms;
+  --dropdown-pre-scale: 0.98;
   --dropdown-closing-scale: 0.99;
   --dropdown-ease: cubic-bezier(0.22, 1, 0.36, 1);
-  --modal-open-dur: 250ms;
-  --modal-close-dur: 150ms;
-  --modal-scale: 0.96;
-  --modal-scale-close: 0.97;
+  --modal-open-dur: 200ms;
+  --modal-close-dur: 120ms;
+  --modal-scale: 0.98;
+  --modal-scale-close: 0.99;
   --modal-ease: cubic-bezier(0.22, 1, 0.36, 1);
-  --check-box: 150ms;
-  --check-draw: 350ms;
+  --check-box: 120ms;
+  --check-draw: 280ms;
   --check-delay: 0ms;
-  --check-uncheck: 150ms;
+  --check-uncheck: 120ms;
   --check-ease: cubic-bezier(0.22, 1, 0.36, 1);
-  --icon-swap-dur: 250ms;
+  --icon-swap-dur: 200ms;
   --icon-swap-blur: 2px;
-  --icon-swap-start-scale: 0.25;
+  --icon-swap-start-scale: 0.3;
   --icon-swap-ease: ease-in-out;
 }
 
 /* ============================================================================
-   Light theme — kit secondary variant. Selected on <html data-theme="light">.
-   Semantic pairs swap foregrounds + backgrounds together for AA contrast.
+   Light theme — Notion Warm Paper & Near-White. Selected on <html data-theme="light">.
+   Semantic pairs swap foregrounds + backgrounds together for authentic Notion pastel tags.
    ============================================================================ */
 [data-theme="light"] {
   color-scheme: light;
 
-  --canvas: #f7f7f5;
-  --canvas-raised: #ffffff;
+  --canvas: #ffffff;
+  --canvas-raised: #f7f6f3;
   --surface: #ffffff;
-  --surface-hover: #f1f1ef;
-  --surface-active: #e8e9e6;
-  --surface-inset: #efefed;
+  --surface-hover: rgba(55, 53, 47, 0.06);
+  --surface-active: rgba(55, 53, 47, 0.1);
+  --surface-inset: #f7f6f3;
 
-  --text: #1b1d1c;
-  --text-secondary: #555853;
-  --text-tertiary: #777a75;
-  --text-disabled: #a9aba7;
+  --text: #37352f;
+  --text-secondary: #787774;
+  --text-tertiary: #9b9a97;
+  --text-disabled: #b4b3af;
 
-  --line: #dddeda;
-  --line-strong: #c7c9c4;
+  --line: rgba(55, 53, 47, 0.09);
+  --line-strong: rgba(55, 53, 47, 0.16);
 
-  --accent: #cf6738;
-  --accent-hover: #bd582e;
-  --accent-pressed: #a84a28;
+  --accent: #2383e2;
+  --accent-hover: #1868b7;
+  --accent-pressed: #0f5499;
   --on-accent: #ffffff;
   --on-red: #ffffff;
-  --accent-soft: color-mix(in srgb, var(--accent) 12%, var(--surface));
-  --accent-soft-ink: var(--accent);
-  --focus: #b8512c;
+  --accent-soft: rgba(35, 131, 226, 0.08);
+  --accent-soft-ink: #0c70b8;
+  --focus: #2383e2;
   --accent-contrast: var(--on-accent);
-  --overlay: rgb(25 26 24 / 56%);
+  --overlay: rgba(15, 15, 15, 0.45);
 
-  --green: #237a42;
-  --green-bg: #e7f5eb;
-  --blue: #2467a8;
-  --blue-bg: #e8f2fc;
-  --yellow: #775807;
-  --yellow-bg: #f8efd6;
-  --red: #b3383f;
-  --red-bg: #fbe9ea;
-  --purple: #6545a8;
-  --purple-bg: #f0ebfb;
+  --green: #218358;
+  --green-bg: rgba(46, 170, 118, 0.12);
+  --blue: #0c70b8;
+  --blue-bg: rgba(0, 120, 223, 0.12);
+  --yellow: #8f6b00;
+  --yellow-bg: rgba(223, 171, 1, 0.14);
+  --red: #c13838;
+  --red-bg: rgba(235, 87, 87, 0.12);
+  --purple: #8936cf;
+  --purple-bg: rgba(155, 81, 224, 0.12);
+  --orange: #cc6717;
+  --orange-bg: rgba(242, 153, 74, 0.12);
 
-  --shadow-xs: 0 1px 1px rgb(20 22 19 / 8%);
-  --shadow-sm: 0 1px 2px rgb(20 22 19 / 8%), 0 3px 8px rgb(20 22 19 / 5%);
-  --shadow-md: 0 12px 30px rgb(20 22 19 / 12%), 0 2px 7px rgb(20 22 19 / 6%);
-  --shadow-lg: 0 30px 80px rgb(20 22 19 / 18%), 0 8px 20px rgb(20 22 19 / 8%);
-  --shadow-control: inset 0 0 0 1px rgb(0 0 0 / 3%),
-    0 1px 2px rgb(20 22 19 / 8%);
+  --shadow-xs: 0 1px 2px rgba(15, 15, 15, 0.04);
+  --shadow-sm: 0 1px 3px rgba(15, 15, 15, 0.06), 0 2px 6px rgba(15, 15, 15, 0.03);
+  --shadow-md: 0 4px 16px rgba(15, 15, 15, 0.08), 0 1px 3px rgba(15, 15, 15, 0.04);
+  --shadow-lg: 0 8px 30px rgba(15, 15, 15, 0.12), 0 2px 8px rgba(15, 15, 15, 0.06);
+  --shadow-control: inset 0 0 0 1px rgba(55, 53, 47, 0.08),
+    0 1px 2px rgba(15, 15, 15, 0.04);
 
-  --accent-soft: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  --accent-soft: rgba(35, 131, 226, 0.08);
 }
 
 /* ----------------------------------------------------------------------------
@@ -289,8 +293,8 @@
   }
 
   ::selection {
-    background: var(--brand-300);
-    color: var(--black);
+    background: rgba(35, 131, 226, 0.28);
+    color: inherit;
   }
 
   button,
@@ -343,11 +347,9 @@
   --color-secondary: var(--surface-active);
   --color-secondary-foreground: var(--text);
 
-  /* shadcn "accent" slot = soft coral surface with coral text. Used by the
-     marketing site for coral highlights (popular card, FAQ open title, check
-     icons). Menu/item hovers are on neutral --surface-hover, not here. */
+  /* shadcn "accent" slot = soft Notion blue surface with blue text */
   --color-accent: var(--accent-soft);
-  --color-accent-foreground: var(--accent);
+  --color-accent-foreground: var(--accent-soft-ink);
   --color-accent-muted: var(--accent-soft);
 
   --color-muted: var(--surface-hover);
@@ -362,20 +364,19 @@
 
   --color-sidebar: var(--canvas-raised);
   --color-sidebar-foreground: var(--text-secondary);
-  --color-sidebar-accent: var(--surface-active);
+  --color-sidebar-accent: var(--surface-hover);
   --color-sidebar-accent-foreground: var(--text);
   --color-sidebar-border: var(--line);
 
-  /* Intent categories -> kit semantic pairs. Complaint/error share red,
-     warning/bug share yellow — conventional and contrast-safe in both themes. */
+  /* Intent categories -> Notion authentic pastel pairs */
   --color-question: var(--blue-bg);
   --color-question-foreground: var(--blue);
-  --color-complaint: var(--red-bg);
-  --color-complaint-foreground: var(--red);
+  --color-complaint: var(--orange-bg);
+  --color-complaint-foreground: var(--orange);
   --color-praise: var(--green-bg);
   --color-praise-foreground: var(--green);
-  --color-bug: var(--yellow-bg);
-  --color-bug-foreground: var(--yellow);
+  --color-bug: var(--red-bg);
+  --color-bug-foreground: var(--red);
   --color-feature: var(--purple-bg);
   --color-feature-foreground: var(--purple);
   --color-competitor: var(--surface-active);
