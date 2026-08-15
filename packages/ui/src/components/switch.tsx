@@ -5,8 +5,8 @@ import { useId, type ChangeEvent, type ReactNode } from "react"
 import { cn } from "../lib/utils"
 
 /**
- * Native switch styled to the kit. Kept compatible with the prior Astryx
- * API the callers use: a `value`/`onChange` pair, an optional internal
+ * Native switch styled to the kit. Its API supports a `value`/`onChange`
+ * pair, an optional internal
  * `label` (visually hidden when `isLabelHidden`), `id` forwarded to the native
  * control so an external <label htmlFor> keeps working, and a `ref`.
  */
@@ -65,7 +65,7 @@ function Switch({
         <label
           htmlFor={inputId}
           className={cn(
-            "cursor-pointer select-none text-[12px] font-medium text-[var(--ink-secondary)]",
+            "cursor-pointer text-[12px] font-medium text-[var(--ink-secondary)] select-none",
             isLabelHidden && "sr-only",
             isDisabled && "cursor-default opacity-50",
           )}

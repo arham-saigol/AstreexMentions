@@ -4,8 +4,7 @@ import { cn } from "../lib/utils"
 
 /**
  * Determinate progress bar styled to the kit: a 7px inset track with a coral
- * fill. Values are clamped to 0–100, matching the prior Astryx ProgressBar
- * contract (an off-screen label is unnecessary — callers pass `aria-label`).
+ * fill. Values are clamped to 0–100; callers provide an `aria-label`.
  */
 export type ProgressProps = {
   value?: number
