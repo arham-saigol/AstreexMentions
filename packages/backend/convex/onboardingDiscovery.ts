@@ -109,7 +109,7 @@ async function deepSeekJson(
           { content: system, role: "system" },
           { content: user, role: "user" },
         ],
-        model: "deepseek-v4-pro",
+        model: "deepseek-v4-flash",
         reasoning_effort: "high",
         response_format: { type: "json_object" },
         temperature: 0,
@@ -117,11 +117,19 @@ async function deepSeekJson(
       }),
       signal: controller.signal,
     })
-    if (!response.ok) throw new Error(`DeepSeek HTTP ${response.status}`)
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => "")
+      console.error(`DeepSeek API error ${response.status}: ${errorText}`)
+      throw new Error(`DeepSeek HTTP ${response.status}: ${errorText}`)
+    }
+    const rawText = await response.text()
     const envelope = deepSeekEnvelopeSchema.parse(
-      JSON.parse(await response.text()) as unknown,
+      JSON.parse(rawText) as unknown,
     )
-    return JSON.parse(envelope.choices[0]!.message.content) as unknown
+    const content = envelope.choices[0]!.message.content.trim()
+    const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/)
+    const targetJson = jsonMatch ? jsonMatch[1] : content
+    return JSON.parse(targetJson) as unknown
   } finally {
     clearTimeout(timeout)
   }

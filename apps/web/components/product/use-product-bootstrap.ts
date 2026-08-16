@@ -2,7 +2,7 @@
 
 import { api } from "@astreex/backend/api"
 import { useMutation, useQuery } from "convex/react"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import { useQueryClock } from "@/lib/use-query-clock"
 import {
@@ -44,6 +44,10 @@ export function useProductBootstrap(
     attempt: 0,
     state: "loading",
   })
+  const lastResolvedRef = useRef<{
+    billing: BillingOverviewResult
+    workspace: CurrentWorkspaceResult
+  } | null>(null)
 
   useEffect(() => {
     if (!convexAuthenticated || bootstrap.state !== "loading") {
@@ -91,6 +95,16 @@ export function useProductBootstrap(
     queryEnabled ? { now } : "skip",
   )
 
+  if (
+    currentWorkspaceValue !== undefined &&
+    billingOverviewValue !== undefined
+  ) {
+    lastResolvedRef.current = {
+      billing: billingOverviewValue,
+      workspace: currentWorkspaceValue,
+    }
+  }
+
   const retry = useCallback(() => {
     setBootstrap((current) => ({
       attempt: current.attempt + 1,
@@ -122,10 +136,12 @@ export function useProductBootstrap(
       }
     }
 
-    if (
-      currentWorkspaceValue === undefined ||
-      billingOverviewValue === undefined
-    ) {
+    const effectiveWorkspace =
+      currentWorkspaceValue ?? lastResolvedRef.current?.workspace
+    const effectiveBilling =
+      billingOverviewValue ?? lastResolvedRef.current?.billing
+
+    if (!effectiveWorkspace || !effectiveBilling) {
       return {
         message: "Loading account and subscription status…",
         state: "loading",
@@ -133,10 +149,10 @@ export function useProductBootstrap(
     }
 
     return {
-      access: decideProductAccess(currentWorkspaceValue, billingOverviewValue),
-      billing: billingOverviewValue,
+      access: decideProductAccess(effectiveWorkspace, effectiveBilling),
+      billing: effectiveBilling,
       state: "ready",
-      workspace: currentWorkspaceValue,
+      workspace: effectiveWorkspace,
     }
   }, [
     billingOverviewValue,

@@ -90,15 +90,15 @@
   --line: rgba(255, 255, 255, 0.08);
   --line-strong: rgba(255, 255, 255, 0.14);
 
-  /* Accent (Notion blue) */
-  --accent: #529cca;
-  --accent-hover: #71b3dc;
-  --accent-pressed: #3e87b7;
+  /* Accent (Primary Blue) */
+  --accent: #0075DE;
+  --accent-hover: #1f8df8;
+  --accent-pressed: #0062bd;
   --on-accent: #ffffff;
   --on-red: #ffffff;
-  --accent-soft: rgba(82, 156, 202, 0.16);
-  --accent-soft-ink: #78bde9;
-  --focus: #529cca;
+  --accent-soft: rgba(0, 117, 222, 0.16);
+  --accent-soft-ink: #52a9ff;
+  --focus: #0075DE;
   --accent-contrast: var(--on-accent);
   --overlay: rgba(0, 0, 0, 0.65);
 

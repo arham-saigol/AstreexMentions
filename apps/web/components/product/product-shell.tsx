@@ -235,8 +235,33 @@ function Breadcrumb() {
   )
 }
 
-export function ProductShell({ children }: { children: ReactNode }) {
+export function ProductShell({
+  children,
+  variant = "sidebar",
+}: {
+  children: ReactNode
+  variant?: "sidebar" | "fullscreen"
+}) {
   const { workspace } = useProductContext()
+
+  if (variant === "fullscreen") {
+    return (
+      <ProductDialogsProvider>
+        <div className="bg-background text-foreground flex min-h-dvh flex-col">
+          <a
+            href="#product-main-content"
+            className="bg-background text-foreground focus-visible:ring-ring fixed top-3 left-3 z-50 -translate-y-20 rounded-[var(--radius-sm)] border px-3 py-2 text-sm font-medium shadow-[var(--shadow-sm)] transition-transform focus-visible:translate-y-0 focus-visible:ring-2 focus-visible:outline-none"
+          >
+            Skip to main content
+          </a>
+
+          <main id="product-main-content" tabIndex={-1} className="flex flex-1 flex-col justify-center">
+            {children}
+          </main>
+        </div>
+      </ProductDialogsProvider>
+    )
+  }
 
   return (
     <ProductDialogsProvider>

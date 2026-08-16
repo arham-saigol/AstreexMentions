@@ -93,13 +93,14 @@ export function canonicalResearchUrl(value: string): string {
       },
     )
   }
+  const normalized = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
   let url: URL
   try {
-    url = new URL(trimmed)
+    url = new URL(normalized)
   } catch (cause) {
     throw new TinyFishIntegrationError(
       "INVALID_INPUT",
-      "Enter an absolute HTTP(S) company website URL",
+      "Enter a valid company website URL",
       {
         cause,
         retryable: false,

@@ -114,14 +114,16 @@ export function mergeResearchKeywordDrafts(
   existing: readonly OnboardingKeywordDraft[],
   suggestions: readonly OnboardingKeywordDraft[],
 ): OnboardingKeywordDraft[] {
-  const custom = existing.filter((keyword) => keyword.origin === "custom")
+  const custom = existing.filter(
+    (keyword) => keyword.origin === "custom" && keyword.phrase.trim(),
+  )
   const phrases = new Set(
     custom.map((keyword) => normalizeKeywordPhrase(keyword.phrase)),
   )
   const merged = [...custom]
   for (const suggestion of suggestions) {
     const phrase = normalizeKeywordPhrase(suggestion.phrase)
-    if (phrases.has(phrase) || merged.length >= MAX_DRAFT_KEYWORDS) continue
+    if (!phrase || phrases.has(phrase) || merged.length >= MAX_DRAFT_KEYWORDS) continue
     phrases.add(phrase)
     merged.push(suggestion)
   }
