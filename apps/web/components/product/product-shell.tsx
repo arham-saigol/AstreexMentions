@@ -26,7 +26,9 @@ import {
   Lightbulb,
   LogOut,
   Mail,
+  Moon,
   Settings,
+  Sun,
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -38,7 +40,7 @@ import {
 } from "@/components/product/product-dialogs"
 import { useProductContext } from "@/components/product/product-context"
 import type { SettingsSectionId } from "@/components/product/settings-dialog-shell"
-import { ThemeToggle } from "@/components/theme-toggle"
+import { useTheme } from "@astreex/ui/theme-provider"
 
 const productNavigation = [
   { href: "/app/mentions", label: "Mentions", icon: AtSign },
@@ -122,8 +124,13 @@ function ConfigurationNavigation() {
   )
 }
 
-function ProductAvatarMenu() {
+function ProductAvatarMenu({
+  variant = "sidebar",
+}: {
+  variant?: "sidebar" | "compact"
+}) {
   const { user } = useUser()
+  const { theme, toggle } = useTheme()
   const { openFeatureRequests, openSettings } = useProductDialogs()
   const accountMenuTriggerRef = useRef<HTMLButtonElement>(null)
   const primaryEmail = user?.primaryEmailAddress?.emailAddress
@@ -132,31 +139,66 @@ function ProductAvatarMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button
-          ref={accountMenuTriggerRef}
-          variant="ghost"
-          className="size-9 gap-1 rounded-full p-0 sm:gap-1.5 sm:pr-1.5 sm:pl-0.5"
-          aria-label="Open account menu"
-        >
-          <Avatar className="size-7">
-            {user?.imageUrl && (
-              <AvatarImage
-                src={user.imageUrl}
-                alt=""
-                referrerPolicy="no-referrer"
-              />
-            )}
-            <AvatarFallback>
-              {initials(displayName, primaryEmail)}
-            </AvatarFallback>
-          </Avatar>
-          <ChevronDown
-            aria-hidden="true"
-            className="text-muted-foreground hidden size-3.5 sm:block"
-          />
-        </Button>
+        {variant === "compact" ? (
+          <Button
+            ref={accountMenuTriggerRef}
+            variant="ghost"
+            className="size-9 gap-1 rounded-full p-0 sm:gap-1.5 sm:pr-1.5 sm:pl-0.5"
+            aria-label="Open account menu"
+          >
+            <Avatar className="size-7 rounded-full">
+              {user?.imageUrl && (
+                <AvatarImage
+                  src={user.imageUrl}
+                  alt=""
+                  referrerPolicy="no-referrer"
+                />
+              )}
+              <AvatarFallback className="rounded-full">
+                {initials(displayName, primaryEmail)}
+              </AvatarFallback>
+            </Avatar>
+            <ChevronDown
+              aria-hidden="true"
+              className="text-muted-foreground hidden size-3.5 sm:block"
+            />
+          </Button>
+        ) : (
+          <button
+            ref={accountMenuTriggerRef}
+            type="button"
+            className="hover:bg-[var(--surface-hover)] text-foreground flex h-9 w-full items-center gap-2.5 rounded-[var(--radius-sm)] px-2.5 text-left text-[13px] font-medium transition-[background-color,color] duration-[var(--motion-feedback)] outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label="Open account menu"
+          >
+            <Avatar className="size-6 shrink-0 rounded-[var(--radius-sm)]">
+              {user?.imageUrl && (
+                <AvatarImage
+                  src={user.imageUrl}
+                  alt=""
+                  className="rounded-[var(--radius-sm)]"
+                  referrerPolicy="no-referrer"
+                />
+              )}
+              <AvatarFallback className="rounded-[var(--radius-sm)] bg-[var(--surface-active)] text-foreground text-[11px] font-medium">
+                {initials(displayName, primaryEmail)}
+              </AvatarFallback>
+            </Avatar>
+            <span className="min-w-0 flex-1 truncate text-[13px] font-medium">
+              {displayName}
+            </span>
+            <ChevronDown
+              aria-hidden="true"
+              className="text-muted-foreground size-3.5 shrink-0"
+            />
+          </button>
+        )}
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-64">
+      <DropdownMenuContent
+        align={variant === "sidebar" ? "start" : "end"}
+        side={variant === "sidebar" ? "top" : "bottom"}
+        sideOffset={8}
+        className={variant === "sidebar" ? "w-[calc(var(--sidebar-w)-20px)]" : "w-60"}
+      >
         <DropdownMenuLabel className="font-normal">
           <span className="text-foreground block truncate text-sm font-medium">
             {displayName}
@@ -181,6 +223,19 @@ function ProductAvatarMenu() {
         >
           <Lightbulb aria-hidden="true" />
           Feature Requests
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={toggle}>
+          {theme === "dark" ? (
+            <>
+              <Sun aria-hidden="true" />
+              Light mode
+            </>
+          ) : (
+            <>
+              <Moon aria-hidden="true" />
+              Dark mode
+            </>
+          )}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <SignOutButton redirectUrl="/">
@@ -217,24 +272,6 @@ function AccessNotice() {
   )
 }
 
-function Breadcrumb() {
-  const pathname = usePathname()
-  const active = productNavigation.find(
-    (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
-  )
-  const label = active?.label ?? "Dashboard"
-
-  return (
-    <div className="text-muted-foreground flex min-w-0 items-center gap-2 text-[13px]">
-      <span className="hidden sm:inline">Astreex</span>
-      <span aria-hidden="true" className="hidden text-[var(--text-tertiary)] sm:inline">
-        /
-      </span>
-      <strong className="text-foreground font-medium">{label}</strong>
-    </div>
-  )
-}
-
 export function ProductShell({
   children,
   variant = "sidebar",
@@ -242,8 +279,6 @@ export function ProductShell({
   children: ReactNode
   variant?: "sidebar" | "fullscreen"
 }) {
-  const { workspace } = useProductContext()
-
   if (variant === "fullscreen") {
     return (
       <ProductDialogsProvider>
@@ -275,7 +310,7 @@ export function ProductShell({
 
         <div className="md:grid md:grid-cols-[var(--sidebar-w)_minmax(0,1fr)]">
           <aside className="border-sidebar-border bg-sidebar sticky top-0 hidden h-dvh flex-col border-r md:flex">
-            <div className="border-sidebar-border flex h-[var(--topbar-h)] items-center border-b px-4">
+            <div className="flex h-[var(--topbar-h)] items-center px-4">
               <Link
                 href="/app"
                 aria-label="Astreex dashboard home"
@@ -300,22 +335,12 @@ export function ProductShell({
               </div>
             </div>
 
-            <div className="border-sidebar-border flex items-center gap-2 overflow-hidden border-t px-3 py-3">
-              <span className="text-muted-foreground min-w-0 flex-1 truncate pl-1 text-xs">
-                {workspace.workspace.name}
-              </span>
+            <div className="p-2.5">
               <ProductAvatarMenu />
             </div>
           </aside>
 
           <div className="min-w-0">
-            <header className="border-b border-[var(--line)] bg-background/85 supports-[backdrop-filter]:bg-background/70 hidden h-[var(--topbar-h)] items-center gap-3 px-6 backdrop-blur-xl md:flex">
-              <Breadcrumb />
-              <div className="ml-auto flex items-center gap-2">
-                <ThemeToggle />
-              </div>
-            </header>
-
             <header className="border-b border-[var(--line)] bg-sidebar sticky top-0 z-40 flex h-14 items-center gap-2 px-3 md:hidden">
               <Link
                 href="/app"
@@ -327,8 +352,7 @@ export function ProductShell({
               <div className="ml-auto flex min-w-0 items-center gap-1">
                 <ProductNavigation />
               </div>
-              <ThemeToggle />
-              <ProductAvatarMenu />
+              <ProductAvatarMenu variant="compact" />
             </header>
 
             <AccessNotice />
