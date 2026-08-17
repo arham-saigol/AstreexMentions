@@ -92,7 +92,7 @@ function sourceState(source: DisplayTrackingSource, monitoringActive: boolean) {
     return {
       label: "Active",
       description: "Provider checks are scheduled.",
-      variant: "secondary" as const,
+      variant: "success" as const,
     }
   }
 
@@ -136,6 +136,32 @@ function sourceState(source: DisplayTrackingSource, monitoringActive: boolean) {
         variant: "muted" as const,
       }
   }
+}
+
+function formatSourceError(error: string): string {
+  const colonIndex = error.indexOf(":")
+  const rawCode = colonIndex !== -1 ? error.slice(0, colonIndex).trim() : ""
+  const rawMessage =
+    colonIndex !== -1 ? error.slice(colonIndex + 1).trim() : error
+
+  const lower = (rawCode + " " + rawMessage).toLowerCase()
+
+  if (
+    lower.includes("auth") ||
+    lower.includes("unconfigured") ||
+    lower.includes("server") ||
+    lower.includes("network") ||
+    lower.includes("quota")
+  ) {
+    return "Service temporarily unavailable. Retrying automatically."
+  }
+  if (lower.includes("rate_limit") || lower.includes("rate limit")) {
+    return "Rate limit reached. Retrying shortly."
+  }
+  if (lower.includes("timeout") || lower.includes("timed out")) {
+    return "Request timed out. Retrying shortly."
+  }
+  return rawMessage
 }
 
 function KeywordStatus({
@@ -187,7 +213,7 @@ function KeywordStatus({
   }
 
   return (
-    <Badge variant="secondary">
+    <Badge variant="success">
       <CheckCircleIcon aria-hidden="true" />
       Active
     </Badge>
@@ -324,21 +350,21 @@ export function KeywordRow({
                     </div>
                   </dl>
 
-                  <div
-                    className={cn(
-                      "text-xs leading-5",
-                      source.lastError
-                        ? "text-destructive"
-                        : "text-muted-foreground",
-                    )}
-                  >
-                    <p className="font-medium">
-                      {source.lastError ? "Latest error" : "Schedule detail"}
+                  <div className="text-xs leading-5 text-muted-foreground">
+                    <p className="font-medium text-foreground">
+                      {state.variant === "destructive"
+                        ? "Latest error"
+                        : "Schedule detail"}
                     </p>
-                    <p className="mt-1 break-words">
-                      {source.lastError ??
-                        cadence ??
-                        "Cadence not returned yet."}
+                    <p
+                      className={cn(
+                        "mt-1 break-words",
+                        state.variant === "destructive" && "text-destructive",
+                      )}
+                    >
+                      {state.variant === "destructive"
+                        ? formatSourceError(source.lastError ?? "")
+                        : (cadence ?? "10 min cadence")}
                     </p>
                   </div>
                 </div>

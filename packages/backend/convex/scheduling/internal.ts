@@ -315,15 +315,51 @@ async function dueSourcesForType(
   sourceType: TrackingSourceType,
   now: number,
 ): Promise<Doc<"trackingSources">[]> {
-  return await ctx.db
-    .query("trackingSources")
-    .withIndex("by_source_type_status_and_next_run_at", (q) =>
-      q
-        .eq("sourceType", sourceType)
-        .eq("status", "active")
-        .lte("nextRunAt", now),
-    )
-    .take(MAX_DUE_SCAN)
+  const [activeSources, erroredSources, pausedSources] = await Promise.all([
+    ctx.db
+      .query("trackingSources")
+      .withIndex("by_source_type_status_and_next_run_at", (q) =>
+        q
+          .eq("sourceType", sourceType)
+          .eq("status", "active")
+          .lte("nextRunAt", now),
+      )
+      .take(MAX_DUE_SCAN),
+    ctx.db
+      .query("trackingSources")
+      .withIndex("by_source_type_status_and_next_run_at", (q) =>
+        q
+          .eq("sourceType", sourceType)
+          .eq("status", "error")
+          .lte("nextRunAt", now),
+      )
+      .take(MAX_DUE_SCAN),
+    ctx.db
+      .query("trackingSources")
+      .withIndex("by_source_type_status_and_next_run_at", (q) =>
+        q
+          .eq("sourceType", sourceType)
+          .eq("status", "paused")
+          .lte("nextRunAt", now),
+      )
+      .take(MAX_DUE_SCAN),
+  ])
+
+  const recoverable = [
+    ...erroredSources,
+    ...pausedSources.filter((s) => s.pauseReason === "config"),
+  ]
+  for (const s of recoverable) {
+    await ctx.db.patch("trackingSources", s._id, {
+      pauseReason: undefined,
+      status: "active",
+      updatedAt: now,
+    })
+    s.status = "active"
+    delete s.pauseReason
+  }
+
+  return [...activeSources, ...recoverable]
 }
 
 async function claimProviderSources(
@@ -645,7 +681,7 @@ type ProviderPageIngestion = {
 async function ingestProviderPage(
   ctx: MutationCtx,
   input: {
-    emailFrom: string
+    emailFrom?: string | undefined
     emailReplyTo?: string | undefined
     items: ReturnType<typeof parseProviderSearchResultJson>["items"]
     keywordId: KeywordId
@@ -926,41 +962,20 @@ export const applyNextTrackingProviderPage = internalMutation({
     }
 
     const sender = readEmailSenderConfiguration(env)
-    if (sender.state === "provider_unconfigured") {
-      await ctx.db.patch("trackingSources", args.trackingSourceId, {
-        leaseExpiresAt: undefined,
-        leaseToken: undefined,
-        pauseReason: "config",
-        status: "paused",
-        updatedAt: now,
-      })
-      await finishTrackingProviderRun(
-        ctx,
-        {
-          durationMs: pendingPage.durationMs as number,
-          errorCode: "resend_provider_unconfigured",
-          errorMessage: "Resend email sender is not configured",
-          outputCount: providerOutputCount,
-          run,
-          status: "failed",
-        },
-        now,
-      )
-      return sender
-    }
+    const emailFrom = sender.state === "configured" ? sender.from : undefined
+    const emailReplyTo =
+      sender.state === "configured" ? sender.replyTo : undefined
 
     const ingestion = await ingestProviderPage(
       ctx,
       {
-        emailFrom: sender.from,
+        ...(emailFrom !== undefined ? { emailFrom } : {}),
+        ...(emailReplyTo !== undefined ? { emailReplyTo } : {}),
         items: result.items,
         keywordId: eligibility.keywordId,
         startPosition,
         trackingSourceId: args.trackingSourceId,
         workspaceId: eligibility.workspaceId,
-        ...(sender.replyTo === undefined
-          ? {}
-          : { emailReplyTo: sender.replyTo }),
       },
       now,
     )
@@ -1119,12 +1134,8 @@ export const failTrackingProviderRun = internalMutation({
       leaseExpiresAt: undefined,
       leaseToken: undefined,
       nextRunAt: now + delayMs,
-      pauseReason:
-        !args.retryable &&
-        (args.errorCode === "auth" || args.errorCode === "invalid_query")
-          ? "config"
-          : undefined,
-      status: args.retryable ? "active" : "error",
+      pauseReason: undefined,
+      status: "active",
       totalFailures: (source.totalFailures as number) + 1,
       updatedAt: now,
     })
@@ -1142,7 +1153,7 @@ export const failTrackingProviderRun = internalMutation({
     )
     return {
       nextRunAt: now + delayMs,
-      state: args.retryable ? ("retry_scheduled" as const) : ("error" as const),
+      state: "retry_scheduled" as const,
     }
   },
 })

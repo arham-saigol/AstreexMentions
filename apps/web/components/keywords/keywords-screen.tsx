@@ -10,7 +10,7 @@ import { Badge } from "@astreex/ui/components/badge"
 import { Button } from "@astreex/ui/components/button"
 import { Progress } from "@astreex/ui/components/progress"
 import { useMutation, useQuery } from "convex/react"
-import { useState } from "react"
+import { useRef, useState } from "react"
 
 import {
   KeywordConfirmationDialog,
@@ -103,15 +103,29 @@ export function KeywordsScreen() {
   const listValue = useQuery(api.keywords.listKeywords, {})
   const summaryValue = useQuery(api.keywords.getKeywordSummary, { now })
 
+  const lastResolvedRef = useRef<{
+    keywords: KeywordItem[]
+    summary: NonNullable<typeof summaryValue>
+  } | null>(null)
+
+  if (listValue !== undefined && summaryValue !== undefined) {
+    lastResolvedRef.current = {
+      keywords: listValue,
+      summary: summaryValue,
+    }
+  }
+
   const createKeyword = useMutation(api.keywords.createKeyword)
   const updateKeyword = useMutation(api.keywords.updateKeyword)
   const pauseKeyword = useMutation(api.keywords.pauseKeyword)
   const resumeKeyword = useMutation(api.keywords.resumeKeyword)
   const deleteKeyword = useMutation(api.keywords.deleteKeyword)
 
-  const loading = listValue === undefined || summaryValue === undefined
-  const keywords = listValue ?? []
-  const summary = summaryValue ?? null
+  const loading =
+    lastResolvedRef.current === null &&
+    (listValue === undefined || summaryValue === undefined)
+  const keywords = listValue ?? lastResolvedRef.current?.keywords ?? []
+  const summary = summaryValue ?? lastResolvedRef.current?.summary ?? null
   const limit =
     summary?.limit ??
     billing.usage?.keywordLimit ??

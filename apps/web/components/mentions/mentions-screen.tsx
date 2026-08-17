@@ -25,6 +25,7 @@ import {
   useDeferredValue,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react"
@@ -312,6 +313,11 @@ export function MentionsScreen() {
     [cursor, deferredSearch, filters, selectedViewId, sort],
   )
 
+  const queryArgsKey = useMemo(
+    () => JSON.stringify(queryArguments),
+    [queryArguments],
+  )
+
   const categoriesValue = useQuery(
     api.categories.listCategories,
     preview ? "skip" : {},
@@ -325,12 +331,45 @@ export function MentionsScreen() {
     preview ? "skip" : { ...queryArguments, now },
   )
 
+  const lastResolvedRef = useRef<{
+    categories: typeof categoriesValue
+    keywords: typeof keywordsValue
+    mentions: typeof mentionsValue
+    queryArgsKey: string
+  } | null>(null)
+
+  if (
+    categoriesValue !== undefined &&
+    keywordsValue !== undefined &&
+    mentionsValue !== undefined
+  ) {
+    lastResolvedRef.current = {
+      categories: categoriesValue,
+      keywords: keywordsValue,
+      mentions: mentionsValue,
+      queryArgsKey,
+    }
+  }
+
+  const effectiveCategoriesValue =
+    categoriesValue ?? lastResolvedRef.current?.categories
+  const effectiveKeywordsValue =
+    keywordsValue ?? lastResolvedRef.current?.keywords
+  const effectiveMentionsValue =
+    mentionsValue ??
+    (lastResolvedRef.current?.queryArgsKey === queryArgsKey
+      ? lastResolvedRef.current.mentions
+      : undefined)
+
   const updateMentionStatus = useMutation(api.mentions.updateMentionStatus)
   const restoreFilteredMention = useMutation(
     api.mentions.restoreFilteredMention,
   )
 
-  const mentions = useMemo(() => mentionsValue?.items ?? [], [mentionsValue])
+  const mentions = useMemo(
+    () => effectiveMentionsValue?.items ?? [],
+    [effectiveMentionsValue],
+  )
 
   useEffect(() => {
     const serverStatuses = new Map<string, MentionStatus>(
@@ -468,7 +507,7 @@ export function MentionsScreen() {
 
   const usage = billing.usage ?? billing.evaluation
   const usageLimited =
-    mentionsValue?.monitoringState === "usage_limited" ||
+    effectiveMentionsValue?.monitoringState === "usage_limited" ||
     Boolean(
       usage &&
       usage.mentionLimit > 0 &&
@@ -477,16 +516,16 @@ export function MentionsScreen() {
 
   const loading =
     !preview &&
-    (categoriesValue === undefined ||
-      keywordsValue === undefined ||
-      mentionsValue === undefined)
+    (effectiveCategoriesValue === undefined ||
+      effectiveKeywordsValue === undefined ||
+      effectiveMentionsValue === undefined)
 
-  const categories = categoriesValue ?? []
-  const keywords = keywordsValue ?? []
+  const categories = effectiveCategoriesValue ?? []
+  const keywords = effectiveKeywordsValue ?? []
   const allKeywordsPaused =
     keywords.length > 0 &&
     keywords.every((keyword) => keyword.status === "paused")
-  const monitoringState = mentionsValue?.monitoringState ?? "active"
+  const monitoringState = effectiveMentionsValue?.monitoringState ?? "active"
   const setupRequired =
     monitoringState === "setup_required" || keywords.length === 0
   const paused = monitoringState === "paused" || allKeywordsPaused
@@ -496,15 +535,15 @@ export function MentionsScreen() {
   const filtered = hasSearchOrFilters || selectedViewId !== null
   const paginationAvailable =
     cursorHistory.length > 0 ||
-    (mentionsValue !== undefined &&
-      !mentionsValue.isDone &&
-      Boolean(mentionsValue.nextCursor))
+    (effectiveMentionsValue !== undefined &&
+      !effectiveMentionsValue.isDone &&
+      Boolean(effectiveMentionsValue.nextCursor))
   const sparsePageCursor =
-    mentionsValue !== undefined
+    effectiveMentionsValue !== undefined
       ? nextSparseMentionCursor({
           filtered,
-          itemCount: mentionsValue.items.length,
-          nextCursor: mentionsValue.nextCursor,
+          itemCount: effectiveMentionsValue.items.length,
+          nextCursor: effectiveMentionsValue.nextCursor,
         })
       : undefined
 

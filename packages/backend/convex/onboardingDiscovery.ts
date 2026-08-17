@@ -128,7 +128,7 @@ async function deepSeekJson(
     )
     const content = envelope.choices[0]!.message.content.trim()
     const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/)
-    const targetJson = jsonMatch ? jsonMatch[1] : content
+    const targetJson = jsonMatch?.[1] ?? content
     return JSON.parse(targetJson) as unknown
   } finally {
     clearTimeout(timeout)

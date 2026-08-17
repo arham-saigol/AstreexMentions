@@ -5,32 +5,37 @@ import type * as React from "react"
 import { cn } from "../lib/utils"
 
 const badgeVariants = cva(
-  "inline-flex min-h-[22px] w-fit shrink-0 items-center gap-1.5 overflow-hidden rounded-full border px-2 py-0.5 text-[11px] font-medium whitespace-nowrap transition-[background-color,border-color,color] duration-[var(--motion-feedback)] before:size-[5px] before:shrink-0 before:rounded-full before:bg-current before:content-[''] [&>svg]:pointer-events-none [&>svg]:size-3",
+  "inline-flex min-h-[22px] w-fit shrink-0 items-center gap-1.5 overflow-hidden rounded-full border px-2 py-0.5 text-[11px] font-medium whitespace-nowrap transition-[background-color,border-color,color] duration-[var(--motion-feedback)] [&>svg]:pointer-events-none [&>svg]:size-3",
   {
     variants: {
       variant: {
-        default: "border-transparent bg-primary text-primary-foreground before:hidden",
+        default:
+          "border-transparent bg-primary text-primary-foreground",
         secondary:
-          "border-[var(--line)] bg-[var(--brand-soft)] text-[var(--brand-soft-ink)]",
+          "border-transparent bg-[var(--surface-active)] text-[var(--text)]",
         destructive:
-          "border-transparent bg-destructive text-destructive-foreground before:hidden",
+          "border-transparent bg-[var(--red-bg)] text-[var(--red)]",
+        success:
+          "border-transparent bg-[var(--green-bg)] text-[var(--green)]",
+        warning:
+          "border-transparent bg-[var(--yellow-bg)] text-[var(--yellow)]",
         outline:
-          "border-[var(--line)] bg-[var(--surface-inset)] text-[var(--ink-secondary)]",
+          "border-[var(--line)] bg-[var(--surface-inset)] text-[var(--text-secondary)]",
         muted:
-          "border-transparent bg-[var(--surface-hover)] text-[var(--ink-secondary)] before:hidden",
+          "border-transparent bg-[var(--surface-hover)] text-[var(--text-secondary)]",
         question:
-          "border-transparent bg-question text-question-foreground before:block",
+          "border-transparent bg-question text-question-foreground before:size-[5px] before:shrink-0 before:rounded-full before:bg-current before:content-['']",
         complaint:
-          "border-transparent bg-complaint text-complaint-foreground before:block",
+          "border-transparent bg-complaint text-complaint-foreground before:size-[5px] before:shrink-0 before:rounded-full before:bg-current before:content-['']",
         praise:
-          "border-transparent bg-praise text-praise-foreground before:block",
-        bug: "border-transparent bg-bug text-bug-foreground before:block",
+          "border-transparent bg-praise text-praise-foreground before:size-[5px] before:shrink-0 before:rounded-full before:bg-current before:content-['']",
+        bug: "border-transparent bg-bug text-bug-foreground before:size-[5px] before:shrink-0 before:rounded-full before:bg-current before:content-['']",
         feature:
-          "border-transparent bg-feature text-feature-foreground before:block",
+          "border-transparent bg-feature text-feature-foreground before:size-[5px] before:shrink-0 before:rounded-full before:bg-current before:content-['']",
         competitor:
-          "border-transparent bg-competitor text-competitor-foreground before:block",
+          "border-transparent bg-competitor text-competitor-foreground before:size-[5px] before:shrink-0 before:rounded-full before:bg-current before:content-['']",
         other:
-          "border-transparent bg-other text-other-foreground before:hidden",
+          "border-transparent bg-other text-other-foreground",
       },
     },
     defaultVariants: {

@@ -82,7 +82,7 @@ export type IngestionChunkResult = {
 }
 
 export type IngestionServiceOptions = {
-  emailFrom: string
+  emailFrom?: string | undefined
   emailReplyTo?: string | undefined
   now: number
 }
@@ -330,7 +330,7 @@ async function incrementIngestedMentionMetric(
 async function ensureUsageWarningEmail(
   ctx: MutationCtx,
   input: {
-    emailFrom: string
+    emailFrom?: string | undefined
     emailReplyTo?: string | undefined
     mentionLimit: number
     mentionsUsed: number
@@ -342,6 +342,9 @@ async function ensureUsageWarningEmail(
   },
   now: number,
 ): Promise<boolean> {
+  if (!input.emailFrom || input.emailFrom.trim().length === 0) {
+    return false
+  }
   const recipientEmail = input.owner.email
   if (
     typeof recipientEmail !== "string" ||
@@ -463,9 +466,6 @@ export async function applyIngestionChunkAtomically(
 ): Promise<IngestionChunkResult> {
   if (!Number.isSafeInteger(options.now) || options.now < 0) {
     throw new RangeError("now must be a non-negative safe integer")
-  }
-  if (options.emailFrom.trim().length === 0) {
-    throw new TypeError("emailFrom must be a non-empty string")
   }
 
   const workspaceId = requireId(ctx, "workspaces", input.workspaceId)
@@ -637,7 +637,7 @@ export async function applyIngestionChunkAtomically(
         contentType: candidate.contentType,
         engagementScore: candidate.engagementScore,
         fallbackKey,
-        feedState: "pending",
+        feedState: "visible",
         firstSeenAt: options.now,
         language: candidate.language,
         lastMatchedAt: options.now,
