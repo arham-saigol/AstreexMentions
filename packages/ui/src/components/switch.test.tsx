@@ -27,4 +27,18 @@ describe("Switch", () => {
     fireEvent.click(screen.getByText("Daily digest"))
     expect(onChange).toHaveBeenCalledWith(true, expect.any(Object))
   })
+
+  it("toggles when the visual switch track is clicked directly", () => {
+    const onChange = vi.fn()
+    const { container } = render(
+      <Switch id="toggle" value={false} onChange={onChange} />,
+    )
+
+    const label = container.querySelector("label[for='toggle']")
+    expect(label).not.toBeNull()
+    if (label) {
+      fireEvent.click(label)
+      expect(onChange).toHaveBeenCalledWith(true, expect.any(Object))
+    }
+  })
 })

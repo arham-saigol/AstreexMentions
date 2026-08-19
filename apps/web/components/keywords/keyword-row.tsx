@@ -146,20 +146,23 @@ function formatSourceError(error: string): string {
 
   const lower = (rawCode + " " + rawMessage).toLowerCase()
 
-  if (
-    lower.includes("auth") ||
-    lower.includes("unconfigured") ||
-    lower.includes("server") ||
-    lower.includes("network") ||
-    lower.includes("quota")
-  ) {
-    return "Service temporarily unavailable. Retrying automatically."
+  if (lower.includes("auth")) {
+    return "Authentication failed. Check provider credentials."
+  }
+  if (lower.includes("quota")) {
+    return "Provider quota exceeded. Check account limits."
+  }
+  if (lower.includes("unconfigured")) {
+    return "Provider unconfigured. Setup required."
   }
   if (lower.includes("rate_limit") || lower.includes("rate limit")) {
     return "Rate limit reached. Retrying shortly."
   }
   if (lower.includes("timeout") || lower.includes("timed out")) {
     return "Request timed out. Retrying shortly."
+  }
+  if (lower.includes("server") || lower.includes("network")) {
+    return "Service temporarily unavailable. Retrying automatically."
   }
   return rawMessage
 }

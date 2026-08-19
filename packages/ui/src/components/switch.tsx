@@ -36,7 +36,13 @@ function Switch({
 
   return (
     <span className={cn("inline-flex items-center gap-2.5", className)}>
-      <span className="relative inline-flex shrink-0">
+      <label
+        htmlFor={inputId}
+        className={cn(
+          "relative inline-flex shrink-0",
+          isDisabled ? "cursor-default" : "cursor-pointer",
+        )}
+      >
         <input
           id={inputId}
           ref={ref}
@@ -60,7 +66,7 @@ function Switch({
           aria-hidden="true"
           className="pointer-events-none absolute top-[3px] left-[3px] h-[13px] w-[13px] rounded-full bg-[var(--text-tertiary)] shadow-[var(--shadow-sm)] transition-[transform,background-color] duration-[var(--medium)] ease-[var(--ease-spring)] peer-checked:translate-x-[15px] peer-checked:bg-[var(--on-accent)]"
         />
-      </span>
+      </label>
       {label != null && (
         <label
           htmlFor={inputId}

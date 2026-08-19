@@ -21,7 +21,7 @@ import { Textarea } from "@astreex/ui/components/textarea"
 import { cn } from "@astreex/ui/lib/utils"
 import { useAction, useMutation } from "convex/react"
 import { useRouter } from "next/navigation"
-import { useEffect, useState, type FormEvent } from "react"
+import { useEffect, useRef, useState, type FormEvent } from "react"
 
 import { useProductContext } from "@/components/product/product-context"
 import {
@@ -226,6 +226,7 @@ function KeywordRow({
             value={keyword.phrase}
             onChange={(e) => onChange({ ...keyword, phrase: e.target.value })}
             placeholder="e.g. Acme, Acme Cloud, or @acmedev"
+            aria-label={`Keyword ${index + 1} phrase`}
             className="text-foreground placeholder:text-muted-foreground/40 h-8 w-full border-0 bg-transparent px-0 text-sm font-medium shadow-none outline-none focus:ring-0 focus:outline-none"
             autoFocus={index === total - 1 && !keyword.phrase}
           />
@@ -242,6 +243,7 @@ function KeywordRow({
                   type="button"
                   role="switch"
                   aria-checked={active}
+                  aria-label={`Monitor on ${label}`}
                   title={`${label}: ${active ? "Monitoring enabled" : "Monitoring disabled"}`}
                   onClick={() => {
                     const next = active
@@ -293,12 +295,19 @@ export function OnboardingFlow() {
   const [error, setError] = useState<string | null>(null)
   const [manualDescriptionOpen, setManualDescriptionOpen] = useState(false)
   const [guidelinesOpen, setGuidelinesOpen] = useState(false)
+  const activeResearchIdRef = useRef(0)
 
   const researchCompany = useAction(api.onboardingDiscovery.researchCompany)
   const saveConfiguration = useMutation(
     api.onboarding.saveOnboardingConfiguration,
   )
   const createCheckout = useAction(api.billing.customer.createCheckout)
+
+  useEffect(() => {
+    return () => {
+      activeResearchIdRef.current += 1
+    }
+  }, [])
 
   useEffect(() => {
     const hydrateTimer = window.setTimeout(() => {
@@ -359,6 +368,8 @@ export function OnboardingFlow() {
       return
     }
 
+    const researchId = ++activeResearchIdRef.current
+
     setError(null)
     setResearchError(null)
     setIsResearching(true)
@@ -390,6 +401,8 @@ export function OnboardingFlow() {
             : {}),
           ...(fullWebsiteUrl ? { websiteUrl: fullWebsiteUrl } : {}),
         })
+
+        if (activeResearchIdRef.current !== researchId) return
 
         if (result.state === "completed") {
           setDraft((current) => {
@@ -441,20 +454,25 @@ export function OnboardingFlow() {
           )
         }
       } catch (researchErr) {
+        if (activeResearchIdRef.current !== researchId) return
         setResearchError(
           researchErr instanceof Error
             ? researchErr.message
             : "Could not complete automatic research. You can configure keywords manually below.",
         )
       } finally {
-        setIsResearching(false)
+        if (activeResearchIdRef.current === researchId) {
+          setIsResearching(false)
+        }
       }
     })()
   }
 
   const skipToManualKeywords = () => {
+    activeResearchIdRef.current += 1
     setError(null)
     setIsResearching(false)
+    setResearchError(null)
     setDraft((current) => {
       const validKeywords = current.keywords.filter(
         (k) =>
@@ -704,6 +722,8 @@ export function OnboardingFlow() {
                   onClick={() =>
                     setManualDescriptionOpen((current) => !current)
                   }
+                  aria-expanded={manualDescriptionOpen}
+                  aria-controls="manual-description-panel"
                   className="text-muted-foreground hover:text-foreground group inline-flex items-center gap-2 text-xs font-medium transition-colors"
                 >
                   <CaretDownIcon
@@ -726,7 +746,11 @@ export function OnboardingFlow() {
                     gridTemplateRows: manualDescriptionOpen ? "1fr" : "0fr",
                   }}
                 >
-                  <div className="overflow-hidden">
+                  <div
+                    id="manual-description-panel"
+                    className="overflow-hidden"
+                    inert={!manualDescriptionOpen ? true : undefined}
+                  >
                     <div className="mt-4 space-y-2 pt-1">
                       <div className="flex items-center justify-between">
                         <Label
@@ -908,6 +932,7 @@ export function OnboardingFlow() {
               onClick={() => setGuidelinesOpen((current) => !current)}
               className="group flex w-full items-center justify-between text-left"
               aria-expanded={guidelinesOpen}
+              aria-controls="ai-guidelines-panel"
             >
               <div className="flex items-center gap-2">
                 <span className="text-foreground text-xs font-medium">
@@ -931,7 +956,11 @@ export function OnboardingFlow() {
                 gridTemplateRows: guidelinesOpen ? "1fr" : "0fr",
               }}
             >
-              <div className="overflow-hidden">
+              <div
+                id="ai-guidelines-panel"
+                className="overflow-hidden"
+                inert={!guidelinesOpen ? true : undefined}
+              >
                 <div className="mt-3.5 space-y-3.5 border-t border-[var(--line)] pt-3.5">
                   <div>
                     <div className="flex items-center justify-between">

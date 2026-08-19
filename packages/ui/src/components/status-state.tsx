@@ -4,18 +4,18 @@ import type * as React from "react"
 
 import { cn } from "../lib/utils"
 
-const statusStateRing = (hue: string) =>
-  `border-[color-mix(in_srgb,var(--${hue})_28%,transparent)] bg-[var(--${hue}-bg)] text-[var(--${hue})]`
-
 const statusStateVariants = cva(
   "flex items-start gap-3 rounded-[var(--radius-md)] border p-3.5 text-[13px] [&_[data-slot=status-state-icon]>svg]:size-4",
   {
     variants: {
       variant: {
-        info: statusStateRing("blue"),
-        success: statusStateRing("green"),
-        warning: statusStateRing("yellow"),
-        error: statusStateRing("red"),
+        info: "border-[color-mix(in_srgb,var(--blue)_28%,transparent)] bg-[var(--blue-bg)] text-[var(--blue)]",
+        success:
+          "border-[color-mix(in_srgb,var(--green)_28%,transparent)] bg-[var(--green-bg)] text-[var(--green)]",
+        warning:
+          "border-[color-mix(in_srgb,var(--yellow)_28%,transparent)] bg-[var(--yellow-bg)] text-[var(--yellow)]",
+        error:
+          "border-[color-mix(in_srgb,var(--red)_28%,transparent)] bg-[var(--red-bg)] text-[var(--red)]",
         loading:
           "border-[var(--line)] bg-[var(--surface-inset)] text-foreground",
       },

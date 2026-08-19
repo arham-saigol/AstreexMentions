@@ -172,7 +172,6 @@ function ProductAvatarMenu({
             ref={accountMenuTriggerRef}
             type="button"
             className="text-foreground focus-visible:ring-ring flex h-9 w-full items-center gap-2.5 rounded-[var(--radius-sm)] px-2.5 text-left text-[13px] font-medium transition-[background-color,color] duration-[var(--motion-feedback)] outline-none hover:bg-[var(--surface-hover)] focus-visible:ring-2"
-            aria-label="Open account menu"
           >
             <Avatar className="size-6 shrink-0 rounded-[var(--radius-sm)]">
               {user?.imageUrl && (
