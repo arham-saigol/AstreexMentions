@@ -25,7 +25,6 @@ import {
   useDeferredValue,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type ReactNode,
 } from "react"
@@ -330,17 +329,21 @@ export function MentionsScreen() {
     api.mentions.listMentions,
     preview ? "skip" : { ...queryArguments, now },
   )
-  const lastMentionsRef = useRef<{
+  const [lastMentions, setLastMentions] = useState<{
     queryArgsKey: string
     value: NonNullable<typeof mentionsValue>
-  }>(undefined)
-  if (mentionsValue !== undefined) {
-    lastMentionsRef.current = { queryArgsKey, value: mentionsValue }
+  }>()
+  if (
+    mentionsValue !== undefined &&
+    (lastMentions?.queryArgsKey !== queryArgsKey ||
+      lastMentions.value !== mentionsValue)
+  ) {
+    setLastMentions({ queryArgsKey, value: mentionsValue })
   }
   const effectiveMentionsValue =
     mentionsValue ??
-    (lastMentionsRef.current?.queryArgsKey === queryArgsKey
-      ? lastMentionsRef.current.value
+    (lastMentions?.queryArgsKey === queryArgsKey
+      ? lastMentions.value
       : undefined)
 
   const updateMentionStatus = useMutation(api.mentions.updateMentionStatus)

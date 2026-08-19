@@ -85,12 +85,7 @@ function buildFullWebsiteUrl(input: string): string {
 }
 
 function cleanDraftInitial(draft: OnboardingDraft): OnboardingDraft {
-  const cleanedKeywords = draft.keywords.filter(
-    (k) =>
-      k.phrase.trim() &&
-      k.phrase.trim() !== "Personal workspace" &&
-      k.phrase.trim() !== draft.workspaceName,
-  )
+  const cleanedKeywords = draft.keywords.filter((k) => k.phrase.trim())
 
   const cleanedFilteringContext =
     draft.filteringContext.trim() === "Personal workspace" ||
@@ -377,12 +372,7 @@ export function OnboardingFlow() {
 
     // Immediately advance to Step 2 so the user can start editing keywords seamlessly
     setDraft((current) => {
-      const validKeywords = current.keywords.filter(
-        (k) =>
-          k.phrase.trim() &&
-          k.phrase.trim() !== "Personal workspace" &&
-          k.phrase.trim() !== current.workspaceName,
-      )
+      const validKeywords = current.keywords.filter((k) => k.phrase.trim())
       return {
         ...current,
         step: 2,
@@ -475,12 +465,7 @@ export function OnboardingFlow() {
     setResearchComplete(false)
     setResearchError(null)
     setDraft((current) => {
-      const validKeywords = current.keywords.filter(
-        (k) =>
-          k.phrase.trim() &&
-          k.phrase.trim() !== "Personal workspace" &&
-          k.phrase.trim() !== current.workspaceName,
-      )
+      const validKeywords = current.keywords.filter((k) => k.phrase.trim())
       return {
         ...current,
         step: 2,
@@ -518,6 +503,8 @@ export function OnboardingFlow() {
       setError(`“${duplicate}” is entered more than once.`)
       return
     }
+    activeResearchIdRef.current += 1
+    setIsResearching(false)
     setError(null)
     const validCount = validKeywords.length
     const fitPlan =
