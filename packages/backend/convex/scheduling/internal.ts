@@ -315,51 +315,15 @@ async function dueSourcesForType(
   sourceType: TrackingSourceType,
   now: number,
 ): Promise<Doc<"trackingSources">[]> {
-  const [activeSources, erroredSources, pausedSources] = await Promise.all([
-    ctx.db
-      .query("trackingSources")
-      .withIndex("by_source_type_status_and_next_run_at", (q) =>
-        q
-          .eq("sourceType", sourceType)
-          .eq("status", "active")
-          .lte("nextRunAt", now),
-      )
-      .take(MAX_DUE_SCAN),
-    ctx.db
-      .query("trackingSources")
-      .withIndex("by_source_type_status_and_next_run_at", (q) =>
-        q
-          .eq("sourceType", sourceType)
-          .eq("status", "error")
-          .lte("nextRunAt", now),
-      )
-      .take(MAX_DUE_SCAN),
-    ctx.db
-      .query("trackingSources")
-      .withIndex("by_source_type_status_and_next_run_at", (q) =>
-        q
-          .eq("sourceType", sourceType)
-          .eq("status", "paused")
-          .lte("nextRunAt", now),
-      )
-      .take(MAX_DUE_SCAN),
-  ])
-
-  const recoverable = [
-    ...erroredSources,
-    ...pausedSources.filter((s) => s.pauseReason === "config"),
-  ]
-  for (const s of recoverable) {
-    await ctx.db.patch("trackingSources", s._id, {
-      pauseReason: undefined,
-      status: "active",
-      updatedAt: now,
-    })
-    s.status = "active"
-    delete s.pauseReason
-  }
-
-  return [...activeSources, ...recoverable]
+  return await ctx.db
+    .query("trackingSources")
+    .withIndex("by_source_type_status_and_next_run_at", (q) =>
+      q
+        .eq("sourceType", sourceType)
+        .eq("status", "active")
+        .lte("nextRunAt", now),
+    )
+    .take(MAX_DUE_SCAN)
 }
 
 async function claimProviderSources(
@@ -1134,8 +1098,12 @@ export const failTrackingProviderRun = internalMutation({
       leaseExpiresAt: undefined,
       leaseToken: undefined,
       nextRunAt: now + delayMs,
-      pauseReason: undefined,
-      status: "active",
+      pauseReason:
+        !args.retryable &&
+        (args.errorCode === "auth" || args.errorCode === "invalid_query")
+          ? "config"
+          : undefined,
+      status: args.retryable ? "active" : "error",
       totalFailures: (source.totalFailures as number) + 1,
       updatedAt: now,
     })
@@ -1153,7 +1121,7 @@ export const failTrackingProviderRun = internalMutation({
     )
     return {
       nextRunAt: now + delayMs,
-      state: "retry_scheduled" as const,
+      state: args.retryable ? ("retry_scheduled" as const) : ("error" as const),
     }
   },
 })

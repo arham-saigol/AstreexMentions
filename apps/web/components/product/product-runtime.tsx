@@ -95,7 +95,9 @@ function AuthenticatedProductSession({ children }: { children: ReactNode }) {
         workspace: product.workspace,
       }}
     >
-      <ProductShell variant={pathname === "/onboarding" ? "fullscreen" : "sidebar"}>
+      <ProductShell
+        variant={pathname === "/onboarding" ? "fullscreen" : "sidebar"}
+      >
         {children}
       </ProductShell>
     </ProductContextProvider>

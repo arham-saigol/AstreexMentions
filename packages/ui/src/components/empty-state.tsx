@@ -7,7 +7,7 @@ function EmptyState({ className, ...props }: React.ComponentProps<"section">) {
     <section
       data-slot="empty-state"
       className={cn(
-        "border-[var(--line)] bg-card flex min-h-[256px] w-full flex-col items-center justify-center rounded-[var(--radius-lg)] border px-6 py-10 text-center",
+        "bg-card flex min-h-[256px] w-full flex-col items-center justify-center rounded-[var(--radius-lg)] border border-[var(--line)] px-6 py-10 text-center",
         className,
       )}
       {...props}

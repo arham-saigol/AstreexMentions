@@ -273,7 +273,7 @@ export default function HomePage() {
                   key={plan.id}
                   className={`bg-card flex flex-col rounded-[var(--radius-lg)] border p-7 transition-[border-color,box-shadow,transform] duration-[var(--motion-control)] ease-[var(--ease-out)] hover:-translate-y-1 hover:shadow-[var(--shadow-md)] ${
                     popular
-                      ? "border-[color-mix(in_srgb,var(--accent)_55%,var(--line))] ring-1 ring-[color-mix(in_srgb,var(--accent)_32%,transparent)] shadow-[var(--shadow-md)]"
+                      ? "border-[color-mix(in_srgb,var(--accent)_55%,var(--line))] shadow-[var(--shadow-md)] ring-1 ring-[color-mix(in_srgb,var(--accent)_32%,transparent)]"
                       : "border-border hover:border-[var(--line-strong)]"
                   }`}
                 >

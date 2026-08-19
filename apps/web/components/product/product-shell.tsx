@@ -74,10 +74,10 @@ function ProductNavigation() {
               href={href}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "relative inline-flex h-9 items-center gap-2.5 rounded-[var(--radius-sm)] px-2.5 text-[13px] font-medium transition-[background-color,color,transform] duration-[var(--motion-feedback)] max-[380px]:gap-0 sm:px-3 md:w-full md:before:absolute md:before:left-0 md:before:top-1/2 md:before:h-[18px] md:before:w-[2px] md:before:-translate-y-1/2 md:before:rounded-full md:before:bg-[var(--accent)] md:before:content-[''] md:before:transition-[opacity] md:before:duration-[var(--motion-control)] max-[380px]:[&>svg]:hidden",
+                "relative inline-flex h-9 items-center gap-2.5 rounded-[var(--radius-sm)] px-2.5 text-[13px] font-medium transition-[background-color,color,transform] duration-[var(--motion-feedback)] max-[380px]:gap-0 sm:px-3 md:w-full md:before:absolute md:before:top-1/2 md:before:left-0 md:before:h-[18px] md:before:w-[2px] md:before:-translate-y-1/2 md:before:rounded-full md:before:bg-[var(--accent)] md:before:transition-[opacity] md:before:duration-[var(--motion-control)] md:before:content-[''] max-[380px]:[&>svg]:hidden",
                 active
-                  ? "bg-[var(--surface-active)] text-foreground md:before:opacity-100"
-                  : "text-muted-foreground hover:bg-[var(--surface-hover)] hover:text-foreground md:before:opacity-0",
+                  ? "text-foreground bg-[var(--surface-active)] md:before:opacity-100"
+                  : "text-muted-foreground hover:text-foreground hover:bg-[var(--surface-hover)] md:before:opacity-0",
               )}
             >
               <NavigationIcon
@@ -113,10 +113,14 @@ function ConfigurationNavigation() {
         <button
           key={section}
           type="button"
-          className="text-muted-foreground hover:bg-[var(--surface-hover)] hover:text-foreground flex h-9 w-full items-center gap-2.5 rounded-[var(--radius-sm)] px-2.5 text-left text-[13px] font-medium transition-[background-color,color] duration-[var(--motion-feedback)] sm:px-3"
+          className="text-muted-foreground hover:text-foreground flex h-9 w-full items-center gap-2.5 rounded-[var(--radius-sm)] px-2.5 text-left text-[13px] font-medium transition-[background-color,color] duration-[var(--motion-feedback)] hover:bg-[var(--surface-hover)] sm:px-3"
           onClick={(event) => openSettings(section, event.currentTarget)}
         >
-          <Icon aria-hidden="true" className="size-4 shrink-0" strokeWidth={1.8} />
+          <Icon
+            aria-hidden="true"
+            className="size-4 shrink-0"
+            strokeWidth={1.8}
+          />
           {label}
         </button>
       ))}
@@ -167,7 +171,7 @@ function ProductAvatarMenu({
           <button
             ref={accountMenuTriggerRef}
             type="button"
-            className="hover:bg-[var(--surface-hover)] text-foreground flex h-9 w-full items-center gap-2.5 rounded-[var(--radius-sm)] px-2.5 text-left text-[13px] font-medium transition-[background-color,color] duration-[var(--motion-feedback)] outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="text-foreground focus-visible:ring-ring flex h-9 w-full items-center gap-2.5 rounded-[var(--radius-sm)] px-2.5 text-left text-[13px] font-medium transition-[background-color,color] duration-[var(--motion-feedback)] outline-none hover:bg-[var(--surface-hover)] focus-visible:ring-2"
             aria-label="Open account menu"
           >
             <Avatar className="size-6 shrink-0 rounded-[var(--radius-sm)]">
@@ -179,7 +183,7 @@ function ProductAvatarMenu({
                   referrerPolicy="no-referrer"
                 />
               )}
-              <AvatarFallback className="rounded-[var(--radius-sm)] bg-[var(--surface-active)] text-foreground text-[11px] font-medium">
+              <AvatarFallback className="text-foreground rounded-[var(--radius-sm)] bg-[var(--surface-active)] text-[11px] font-medium">
                 {initials(displayName, primaryEmail)}
               </AvatarFallback>
             </Avatar>
@@ -197,7 +201,9 @@ function ProductAvatarMenu({
         align={variant === "sidebar" ? "start" : "end"}
         side={variant === "sidebar" ? "top" : "bottom"}
         sideOffset={8}
-        className={variant === "sidebar" ? "w-[calc(var(--sidebar-w)-20px)]" : "w-60"}
+        className={
+          variant === "sidebar" ? "w-[calc(var(--sidebar-w)-20px)]" : "w-60"
+        }
       >
         <DropdownMenuLabel className="font-normal">
           <span className="text-foreground block truncate text-sm font-medium">
@@ -257,7 +263,10 @@ function AccessNotice() {
   }
 
   return (
-    <div className="border-b border-[var(--line)] bg-[var(--surface-inset)]" role="status">
+    <div
+      className="border-b border-[var(--line)] bg-[var(--surface-inset)]"
+      role="status"
+    >
       <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-1 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-10">
         <p className="text-foreground text-[13px] font-medium">
           Preview mode — monitoring is not active.
@@ -290,7 +299,11 @@ export function ProductShell({
             Skip to main content
           </a>
 
-          <main id="product-main-content" tabIndex={-1} className="flex flex-1 flex-col justify-center">
+          <main
+            id="product-main-content"
+            tabIndex={-1}
+            className="flex flex-1 flex-col justify-center"
+          >
             {children}
           </main>
         </div>
@@ -316,7 +329,10 @@ export function ProductShell({
                 aria-label="Astreex dashboard home"
                 className="inline-flex items-center"
               >
-                <AstreexWordmark className="text-[17px]" markClassName="size-6" />
+                <AstreexWordmark
+                  className="text-[17px]"
+                  markClassName="size-6"
+                />
               </Link>
             </div>
 
@@ -341,7 +357,7 @@ export function ProductShell({
           </aside>
 
           <div className="min-w-0">
-            <header className="border-b border-[var(--line)] bg-sidebar sticky top-0 z-40 flex h-14 items-center gap-2 px-3 md:hidden">
+            <header className="bg-sidebar sticky top-0 z-40 flex h-14 items-center gap-2 border-b border-[var(--line)] px-3 md:hidden">
               <Link
                 href="/app"
                 aria-label="Astreex dashboard home"

@@ -93,7 +93,9 @@ export function canonicalResearchUrl(value: string): string {
       },
     )
   }
-  const normalized = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
+  const normalized = /^https?:\/\//i.test(trimmed)
+    ? trimmed
+    : `https://${trimmed}`
   let url: URL
   try {
     url = new URL(normalized)

@@ -2,14 +2,13 @@ import type { UserIdentity } from "convex/server"
 import { ConvexError, v } from "convex/values"
 
 import type { Doc, Id } from "./_generated/dataModel"
-import { env, type MutationCtx, type QueryCtx } from "./_generated/server"
+import { type MutationCtx, type QueryCtx } from "./_generated/server"
 import { authenticatedMutation, authenticatedQuery } from "./lib/authorization"
 import { syncUsagePausedWorkspaceMetric } from "./lib/operationalMetrics"
 import {
   resolveWorkspaceAllowance,
   type WorkspaceAllowance,
 } from "./lib/workspaceAccess"
-import { readProviderRuntimeConfiguration } from "./scheduling/config"
 import {
   createInitialTrackingSchedule,
   type TrackingSourceType,
@@ -316,6 +315,11 @@ async function syncKeywordSources(
     const reactivating =
       source.status === "deleted" || source.deletedAt !== undefined
     const queryChanged = source.providerQuery !== keyword.phrase
+    const preserveError =
+      !reactivating &&
+      !queryChanged &&
+      state.status === "active" &&
+      source.status === "error"
     if (queryChanged || reactivating || state.status === "paused") {
       await finalizeInvalidatedTrackingProviderRun(ctx, {
         errorCode:
@@ -336,9 +340,6 @@ async function syncKeywordSources(
           sourceType,
         })
       : {}
-    const isHealing =
-      state.status === "active" &&
-      (source.status === "error" || source.pauseReason === "config")
     await ctx.db.patch("trackingSources", source._id, {
       ...schedule,
       deletedAt: undefined,
@@ -351,9 +352,9 @@ async function syncKeywordSources(
           }
         : {}),
       providerQuery: keyword.phrase,
-      status: state.status,
-      pauseReason: state.pauseReason,
-      ...(queryChanged || isHealing
+      status: preserveError ? "error" : state.status,
+      pauseReason: preserveError ? source.pauseReason : state.pauseReason,
+      ...(queryChanged
         ? {
             backoffMs: 0,
             backoffUntil: undefined,
@@ -365,7 +366,7 @@ async function syncKeywordSources(
             lastError: undefined,
             leaseExpiresAt: undefined,
             leaseToken: undefined,
-            ...(queryChanged ? { leaseVersion: source.leaseVersion + 1 } : {}),
+            leaseVersion: source.leaseVersion + 1,
             nextRunAt: now,
           }
         : state.status === "active" && !reactivating
@@ -680,38 +681,17 @@ async function formatKeyword(
       (left, right) =>
         sourceOrder(left.sourceType) - sourceOrder(right.sourceType),
     )
-    .map((source) => {
-      let status = source.status
-      let pauseReason =
-        (source.pauseReason as TrackingPauseReason | undefined) ?? null
-      let lastError = source.lastError ?? null
-
-      if (keyword.status === "active") {
-        if (pauseReason === "config") {
-          const config = readProviderRuntimeConfiguration(
-            env,
-            source.sourceType as TrackingSourceType,
-          )
-          if (config.state === "configured") {
-            pauseReason = null
-            if (status === "paused") {
-              status = "active"
-            }
-          }
-        }
-      }
-
-      return {
-        id: source._id,
-        intervalMs: source.intervalMs,
-        lastCheckedAt: source.lastRunAt ?? source.lastSuccessAt ?? null,
-        lastError,
-        nextExpectedAt: source.nextRunAt ?? null,
-        pauseReason,
-        sourceType: source.sourceType,
-        status,
-      }
-    })
+    .map((source) => ({
+      id: source._id,
+      intervalMs: source.intervalMs,
+      lastCheckedAt: source.lastRunAt ?? source.lastSuccessAt ?? null,
+      lastError: source.lastError ?? null,
+      nextExpectedAt: source.nextRunAt ?? null,
+      pauseReason:
+        (source.pauseReason as TrackingPauseReason | undefined) ?? null,
+      sourceType: source.sourceType,
+      status: source.status,
+    }))
   return {
     createdAt: keyword.createdAt,
     description: keyword.description ?? null,

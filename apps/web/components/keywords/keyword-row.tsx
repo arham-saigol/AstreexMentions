@@ -350,8 +350,8 @@ export function KeywordRow({
                     </div>
                   </dl>
 
-                  <div className="text-xs leading-5 text-muted-foreground">
-                    <p className="font-medium text-foreground">
+                  <div className="text-muted-foreground text-xs leading-5">
+                    <p className="text-foreground font-medium">
                       {state.variant === "destructive"
                         ? "Latest error"
                         : "Schedule detail"}

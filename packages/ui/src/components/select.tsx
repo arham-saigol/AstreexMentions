@@ -23,7 +23,7 @@ function SelectTrigger({
       data-slot="select-trigger"
       data-size={size}
       className={cn(
-        "border-input bg-[var(--surface-inset)] text-foreground data-[placeholder]:text-[var(--text-tertiary)] flex w-fit items-center justify-between gap-2 rounded-[var(--radius-sm)] border px-3 text-[13px] whitespace-nowrap shadow-[var(--shadow-control)] transition-[border-color,box-shadow] duration-[var(--motion-control)] outline-none hover:border-[var(--line-strong)] disabled:cursor-not-allowed disabled:opacity-50",
+        "border-input text-foreground flex w-fit items-center justify-between gap-2 rounded-[var(--radius-sm)] border bg-[var(--surface-inset)] px-3 text-[13px] whitespace-nowrap shadow-[var(--shadow-control)] transition-[border-color,box-shadow] duration-[var(--motion-control)] outline-none hover:border-[var(--line-strong)] disabled:cursor-not-allowed disabled:opacity-50 data-[placeholder]:text-[var(--text-tertiary)]",
         "focus-visible:border-[var(--focus)] focus-visible:shadow-[0_0_0_3px_color-mix(in_srgb,var(--focus)_16%,transparent)]",
         "aria-invalid:border-[var(--red)] aria-invalid:shadow-[0_0_0_3px_color-mix(in_srgb,var(--red)_16%,transparent)]",
         "data-[size=default]:h-[var(--control-h)] data-[size=sm]:h-[calc(var(--control-h)-6px)] [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
@@ -33,7 +33,7 @@ function SelectTrigger({
     >
       {children}
       <SelectPrimitive.Icon asChild>
-        <ChevronDown className="text-[var(--text-tertiary)] size-4" />
+        <ChevronDown className="size-4 text-[var(--text-tertiary)]" />
       </SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>
   )
@@ -84,7 +84,7 @@ function SelectLabel({
     <SelectPrimitive.Label
       data-slot="select-label"
       className={cn(
-        "text-[var(--text-tertiary)] px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em]",
+        "px-2.5 py-1.5 text-[11px] font-semibold tracking-[0.08em] text-[var(--text-tertiary)] uppercase",
         className,
       )}
       {...props}
@@ -101,7 +101,7 @@ function SelectItem({
     <SelectPrimitive.Item
       data-slot="select-item"
       className={cn(
-        "focus:bg-[var(--surface-hover)] focus:text-foreground relative flex w-full cursor-default items-center gap-2 rounded-[var(--radius-sm)] py-2 pr-8 pl-2.5 text-[13px] outline-none select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+        "focus:text-foreground relative flex w-full cursor-default items-center gap-2 rounded-[var(--radius-sm)] py-2 pr-8 pl-2.5 text-[13px] outline-none select-none focus:bg-[var(--surface-hover)] data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
         "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className,
       )}

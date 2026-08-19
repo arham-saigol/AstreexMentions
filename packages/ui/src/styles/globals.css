@@ -25,10 +25,12 @@
 :root {
   color-scheme: dark;
 
-  --font-sans: "Geist", var(--font-geist), -apple-system, BlinkMacSystemFont, "Segoe UI",
+  --font-sans:
+    "Geist", var(--font-geist), -apple-system, BlinkMacSystemFont, "Segoe UI",
     Roboto, "Inter", Helvetica, sans-serif;
-  --font-mono: "Geist Mono", var(--font-geist-mono), 'JetBrains Mono', "SFMono-Regular", Consolas,
-    monospace;
+  --font-mono:
+    "Geist Mono", var(--font-geist-mono), "JetBrains Mono", "SFMono-Regular",
+    Consolas, monospace;
 
   /* Brand ramp (Notion Blue & Obsidian Scale) */
   --brand-50: #f0f7fd;
@@ -91,14 +93,14 @@
   --line-strong: rgba(255, 255, 255, 0.14);
 
   /* Accent (Primary Blue) */
-  --accent: #0075DE;
+  --accent: #0075de;
   --accent-hover: #1f8df8;
   --accent-pressed: #0062bd;
   --on-accent: #ffffff;
   --on-red: #ffffff;
   --accent-soft: rgba(0, 117, 222, 0.16);
   --accent-soft-ink: #52a9ff;
-  --focus: #0075DE;
+  --focus: #0075de;
   --accent-contrast: var(--on-accent);
   --overlay: rgba(0, 0, 0, 0.65);
 
@@ -130,8 +132,8 @@
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3), 0 2px 6px rgba(0, 0, 0, 0.15);
   --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4), 0 2px 6px rgba(0, 0, 0, 0.2);
   --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.5), 0 4px 12px rgba(0, 0, 0, 0.25);
-  --shadow-control: inset 0 0 0 1px rgba(255, 255, 255, 0.05),
-    0 1px 2px rgba(0, 0, 0, 0.25);
+  --shadow-control:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05), 0 1px 2px rgba(0, 0, 0, 0.25);
 
   /* Motion */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
@@ -216,11 +218,14 @@
   --orange-bg: rgba(242, 153, 74, 0.12);
 
   --shadow-xs: 0 1px 2px rgba(15, 15, 15, 0.04);
-  --shadow-sm: 0 1px 3px rgba(15, 15, 15, 0.06), 0 2px 6px rgba(15, 15, 15, 0.03);
-  --shadow-md: 0 4px 16px rgba(15, 15, 15, 0.08), 0 1px 3px rgba(15, 15, 15, 0.04);
-  --shadow-lg: 0 8px 30px rgba(15, 15, 15, 0.12), 0 2px 8px rgba(15, 15, 15, 0.06);
-  --shadow-control: inset 0 0 0 1px rgba(55, 53, 47, 0.08),
-    0 1px 2px rgba(15, 15, 15, 0.04);
+  --shadow-sm:
+    0 1px 3px rgba(15, 15, 15, 0.06), 0 2px 6px rgba(15, 15, 15, 0.03);
+  --shadow-md:
+    0 4px 16px rgba(15, 15, 15, 0.08), 0 1px 3px rgba(15, 15, 15, 0.04);
+  --shadow-lg:
+    0 8px 30px rgba(15, 15, 15, 0.12), 0 2px 8px rgba(15, 15, 15, 0.06);
+  --shadow-control:
+    inset 0 0 0 1px rgba(55, 53, 47, 0.08), 0 1px 2px rgba(15, 15, 15, 0.04);
 
   --accent-soft: rgba(35, 131, 226, 0.08);
 }

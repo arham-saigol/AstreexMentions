@@ -123,7 +123,8 @@ export function mergeResearchKeywordDrafts(
   const merged = [...custom]
   for (const suggestion of suggestions) {
     const phrase = normalizeKeywordPhrase(suggestion.phrase)
-    if (!phrase || phrases.has(phrase) || merged.length >= MAX_DRAFT_KEYWORDS) continue
+    if (!phrase || phrases.has(phrase) || merged.length >= MAX_DRAFT_KEYWORDS)
+      continue
     phrases.add(phrase)
     merged.push(suggestion)
   }

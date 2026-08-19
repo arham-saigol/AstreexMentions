@@ -38,7 +38,7 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "t-modal border-[var(--line-strong)] bg-[var(--canvas-raised)] text-foreground fixed top-1/2 left-1/2 z-50 grid w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-[var(--radius-lg)] border p-6 shadow-[var(--shadow-lg)] outline-none",
+          "t-modal text-foreground fixed top-1/2 left-1/2 z-50 grid w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-[var(--radius-lg)] border border-[var(--line-strong)] bg-[var(--canvas-raised)] p-6 shadow-[var(--shadow-lg)] outline-none",
           className,
         )}
         {...props}
@@ -47,7 +47,7 @@ function DialogContent({
         {showCloseButton && (
           <DialogPrimitive.Close
             data-slot="dialog-close"
-            className="text-muted-foreground hover:bg-[var(--surface-hover)] hover:text-foreground focus-visible:ring-ring absolute top-4 right-4 rounded-[var(--radius-sm)] p-1 opacity-70 transition-opacity outline-none hover:opacity-100 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--canvas-raised)] disabled:pointer-events-none"
+            className="text-muted-foreground hover:text-foreground focus-visible:ring-ring absolute top-4 right-4 rounded-[var(--radius-sm)] p-1 opacity-70 transition-opacity outline-none hover:bg-[var(--surface-hover)] hover:opacity-100 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--canvas-raised)] disabled:pointer-events-none"
           >
             <X aria-hidden="true" className="size-4" />
             <span className="sr-only">Close</span>
@@ -89,7 +89,7 @@ function DialogTitle({
     <DialogPrimitive.Title
       data-slot="dialog-title"
       className={cn(
-        "text-[20px] leading-tight font-semibold tracking-[-0.02em] text-foreground",
+        "text-foreground text-[20px] leading-tight font-semibold tracking-[-0.02em]",
         className,
       )}
       {...props}

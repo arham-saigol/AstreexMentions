@@ -24,7 +24,7 @@ function DropdownMenuContent({
         data-slot="dropdown-menu-content"
         sideOffset={sideOffset}
         className={cn(
-          "t-dropdown border-[var(--line-strong)] bg-popover text-popover-foreground z-50 max-h-(--radix-dropdown-menu-content-available-height) min-w-40 origin-(--radix-dropdown-menu-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-[var(--radius-md)] border p-1.5 shadow-[var(--shadow-md)] outline-none",
+          "t-dropdown bg-popover text-popover-foreground z-50 max-h-(--radix-dropdown-menu-content-available-height) min-w-40 origin-(--radix-dropdown-menu-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-[var(--radius-md)] border border-[var(--line-strong)] p-1.5 shadow-[var(--shadow-md)] outline-none",
           className,
         )}
         {...props}
@@ -48,8 +48,8 @@ function DropdownMenuItem({
       data-inset={inset || undefined}
       data-variant={variant}
       className={cn(
-        "relative flex min-h-[34px] cursor-default items-center gap-2 rounded-[var(--radius-sm)] px-2.5 py-1.5 text-left text-[13px] text-[var(--ink-secondary)] outline-none select-none transition-[background-color,color] duration-[var(--motion-feedback)] data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset=true]:pl-8",
-        "focus:bg-[var(--surface-hover)] focus:text-foreground data-[variant=destructive]:text-[var(--red)] data-[variant=destructive]:focus:bg-[color-mix(in_srgb,var(--red)_12%,transparent)] data-[variant=destructive]:focus:text-[var(--red)]",
+        "relative flex min-h-[34px] cursor-default items-center gap-2 rounded-[var(--radius-sm)] px-2.5 py-1.5 text-left text-[13px] text-[var(--ink-secondary)] transition-[background-color,color] duration-[var(--motion-feedback)] outline-none select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset=true]:pl-8",
+        "focus:text-foreground focus:bg-[var(--surface-hover)] data-[variant=destructive]:text-[var(--red)] data-[variant=destructive]:focus:bg-[color-mix(in_srgb,var(--red)_12%,transparent)] data-[variant=destructive]:focus:text-[var(--red)]",
         "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className,
       )}
@@ -67,7 +67,7 @@ function DropdownMenuCheckboxItem({
     <DropdownMenuPrimitive.CheckboxItem
       data-slot="dropdown-menu-checkbox-item"
       className={cn(
-        "focus:bg-[var(--surface-hover)] focus:text-foreground relative flex min-h-[34px] cursor-default items-center gap-2 rounded-[var(--radius-sm)] py-1.5 pr-2 pl-8 text-[13px] outline-none select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+        "focus:text-foreground relative flex min-h-[34px] cursor-default items-center gap-2 rounded-[var(--radius-sm)] py-1.5 pr-2 pl-8 text-[13px] outline-none select-none focus:bg-[var(--surface-hover)] data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
         className,
       )}
       {...props}
@@ -91,7 +91,7 @@ function DropdownMenuRadioItem({
     <DropdownMenuPrimitive.RadioItem
       data-slot="dropdown-menu-radio-item"
       className={cn(
-        "focus:bg-[var(--surface-hover)] focus:text-foreground relative flex min-h-[34px] cursor-default items-center gap-2 rounded-[var(--radius-sm)] py-1.5 pr-2 pl-8 text-[13px] outline-none select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+        "focus:text-foreground relative flex min-h-[34px] cursor-default items-center gap-2 rounded-[var(--radius-sm)] py-1.5 pr-2 pl-8 text-[13px] outline-none select-none focus:bg-[var(--surface-hover)] data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
         className,
       )}
       {...props}
@@ -118,7 +118,7 @@ function DropdownMenuLabel({
       data-slot="dropdown-menu-label"
       data-inset={inset || undefined}
       className={cn(
-        "rounded-[var(--radius-sm)] px-2.5 py-1.5 text-[11px] font-semibold tracking-[0.08em] uppercase text-[var(--text-tertiary)] data-[inset=true]:pl-8",
+        "rounded-[var(--radius-sm)] px-2.5 py-1.5 text-[11px] font-semibold tracking-[0.08em] text-[var(--text-tertiary)] uppercase data-[inset=true]:pl-8",
         className,
       )}
       {...props}
@@ -147,7 +147,7 @@ function DropdownMenuShortcut({
     <span
       data-slot="dropdown-menu-shortcut"
       className={cn(
-        "ml-auto text-[11px] font-mono tracking-wide text-[var(--text-tertiary)]",
+        "ml-auto font-mono text-[11px] tracking-wide text-[var(--text-tertiary)]",
         className,
       )}
       {...props}
@@ -168,7 +168,7 @@ function DropdownMenuSubTrigger({
       data-slot="dropdown-menu-sub-trigger"
       data-inset={inset || undefined}
       className={cn(
-        "focus:bg-[var(--surface-hover)] focus:text-foreground data-[state=open]:bg-[var(--surface-hover)] data-[state=open]:text-foreground flex min-h-[34px] cursor-default items-center gap-2 rounded-[var(--radius-sm)] px-2.5 py-1.5 text-[13px] outline-none select-none data-[inset=true]:pl-8",
+        "focus:text-foreground data-[state=open]:text-foreground flex min-h-[34px] cursor-default items-center gap-2 rounded-[var(--radius-sm)] px-2.5 py-1.5 text-[13px] outline-none select-none focus:bg-[var(--surface-hover)] data-[inset=true]:pl-8 data-[state=open]:bg-[var(--surface-hover)]",
         className,
       )}
       {...props}
@@ -187,7 +187,7 @@ function DropdownMenuSubContent({
     <DropdownMenuPrimitive.SubContent
       data-slot="dropdown-menu-sub-content"
       className={cn(
-        "t-dropdown border-[var(--line-strong)] bg-popover text-popover-foreground z-50 min-w-40 origin-(--radix-dropdown-menu-content-transform-origin) overflow-hidden rounded-[var(--radius-md)] border p-1.5 shadow-[var(--shadow-md)] outline-none",
+        "t-dropdown bg-popover text-popover-foreground z-50 min-w-40 origin-(--radix-dropdown-menu-content-transform-origin) overflow-hidden rounded-[var(--radius-md)] border border-[var(--line-strong)] p-1.5 shadow-[var(--shadow-md)] outline-none",
         className,
       )}
       {...props}

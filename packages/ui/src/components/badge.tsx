@@ -9,14 +9,11 @@ const badgeVariants = cva(
   {
     variants: {
       variant: {
-        default:
-          "border-transparent bg-primary text-primary-foreground",
+        default: "border-transparent bg-primary text-primary-foreground",
         secondary:
           "border-transparent bg-[var(--surface-active)] text-[var(--text)]",
-        destructive:
-          "border-transparent bg-[var(--red-bg)] text-[var(--red)]",
-        success:
-          "border-transparent bg-[var(--green-bg)] text-[var(--green)]",
+        destructive: "border-transparent bg-[var(--red-bg)] text-[var(--red)]",
+        success: "border-transparent bg-[var(--green-bg)] text-[var(--green)]",
         warning:
           "border-transparent bg-[var(--yellow-bg)] text-[var(--yellow)]",
         outline:
@@ -34,8 +31,7 @@ const badgeVariants = cva(
           "border-transparent bg-feature text-feature-foreground before:size-[5px] before:shrink-0 before:rounded-full before:bg-current before:content-['']",
         competitor:
           "border-transparent bg-competitor text-competitor-foreground before:size-[5px] before:shrink-0 before:rounded-full before:bg-current before:content-['']",
-        other:
-          "border-transparent bg-other text-other-foreground",
+        other: "border-transparent bg-other text-other-foreground",
       },
     },
     defaultVariants: {

@@ -264,7 +264,11 @@ function HackerNewsPlatformIcon({ className }: { className?: string }) {
 const platforms = [
   { label: "X", value: "x" as const, icon: XPlatformIcon },
   { label: "Reddit", value: "reddit" as const, icon: RedditPlatformIcon },
-  { label: "Hacker News", value: "hacker_news" as const, icon: HackerNewsPlatformIcon },
+  {
+    label: "Hacker News",
+    value: "hacker_news" as const,
+    icon: HackerNewsPlatformIcon,
+  },
 ] as const
 
 const STEPS = [
@@ -358,7 +362,7 @@ function StepIndicator({ currentStep }: { currentStep: number }) {
           return (
             <div
               key={step}
-              className="bg-[var(--line)] h-1 w-full overflow-hidden rounded-full transition-colors sm:h-1.5"
+              className="h-1 w-full overflow-hidden rounded-full bg-[var(--line)] transition-colors sm:h-1.5"
             >
               <div
                 className={cn(
@@ -385,7 +389,7 @@ function StepIndicator({ currentStep }: { currentStep: number }) {
               <div className="flex items-center gap-1.5">
                 {isComplete ? (
                   <CheckIcon
-                    className="text-[var(--accent)] size-3.5 shrink-0"
+                    className="size-3.5 shrink-0 text-[var(--accent)]"
                     weight="bold"
                   />
                 ) : (
@@ -438,24 +442,22 @@ function KeywordRow({
   onRemove: () => void
 }) {
   return (
-    <div className="group border-[var(--line)] border-b last:border-b-0 p-3 sm:px-4 transition-colors hover:bg-[var(--surface-hover)]/30">
+    <div className="group border-b border-[var(--line)] p-3 transition-colors last:border-b-0 hover:bg-[var(--surface-hover)]/30 sm:px-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
         {/* Keyword phrase input */}
         <div className="min-w-0 flex-1">
           <input
             type="text"
             value={keyword.phrase}
-            onChange={(e) =>
-              onChange({ ...keyword, phrase: e.target.value })
-            }
+            onChange={(e) => onChange({ ...keyword, phrase: e.target.value })}
             placeholder="e.g. Acme, Acme Cloud, or @acmedev"
-            className="w-full border-0 bg-transparent px-0 text-sm font-medium text-foreground placeholder:text-muted-foreground/40 outline-none focus:outline-none focus:ring-0 shadow-none h-8"
+            className="text-foreground placeholder:text-muted-foreground/40 h-8 w-full border-0 bg-transparent px-0 text-sm font-medium shadow-none outline-none focus:ring-0 focus:outline-none"
             autoFocus={index === total - 1 && !keyword.phrase}
           />
         </div>
 
         {/* Platform icon toggles & Actions */}
-        <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0">
+        <div className="flex shrink-0 items-center justify-between gap-2 sm:justify-end">
           <div className="flex items-center gap-1.5">
             {platforms.map(({ label, value, icon: IconComponent }) => {
               const active = keyword.platforms.includes(value)
@@ -475,8 +477,8 @@ function KeywordRow({
                   className={cn(
                     "relative flex size-7 items-center justify-center rounded-md border transition-all duration-150",
                     active
-                      ? "border-[var(--line-strong)] bg-[var(--surface-active)] opacity-100 shadow-[var(--shadow-xs)] hover:border-foreground/30"
-                      : "border-transparent bg-transparent opacity-25 grayscale hover:opacity-60 hover:grayscale-0 hover:bg-[var(--surface-hover)]",
+                      ? "hover:border-foreground/30 border-[var(--line-strong)] bg-[var(--surface-active)] opacity-100 shadow-[var(--shadow-xs)]"
+                      : "border-transparent bg-transparent opacity-25 grayscale hover:bg-[var(--surface-hover)] hover:opacity-60 hover:grayscale-0",
                   )}
                 >
                   <IconComponent className="size-3.5 shrink-0" />
@@ -489,7 +491,7 @@ function KeywordRow({
             <button
               type="button"
               onClick={onRemove}
-              className="text-muted-foreground/40 hover:text-destructive p-1 rounded transition-colors"
+              className="text-muted-foreground/40 hover:text-destructive rounded p-1 transition-colors"
               aria-label="Remove keyword"
             >
               <TrashIcon className="size-3.5" />
@@ -610,7 +612,8 @@ export function OnboardingFlow() {
       return {
         ...current,
         step: 2,
-        filteringContext: current.manualDescription.trim() || current.filteringContext,
+        filteringContext:
+          current.manualDescription.trim() || current.filteringContext,
         keywords:
           validKeywords.length > 0
             ? validKeywords
@@ -640,7 +643,9 @@ export function OnboardingFlow() {
 
         if (result.state === "completed") {
           setDraft((current) => {
-            const hasCustomFilteringContext = Boolean(current.filteringContext.trim())
+            const hasCustomFilteringContext = Boolean(
+              current.filteringContext.trim(),
+            )
             const hasCustomFilteringGuidelines = Boolean(
               current.filteringGuidelines.trim(),
             )
@@ -820,10 +825,7 @@ export function OnboardingFlow() {
             null)
       const completionCounts = paidPlan
         ? {
-            activeCount: Math.min(
-              validKeywords.length,
-              paidPlan.keywordLimit,
-            ),
+            activeCount: Math.min(validKeywords.length, paidPlan.keywordLimit),
             pausedCount: Math.max(
               0,
               validKeywords.length - paidPlan.keywordLimit,
@@ -908,14 +910,16 @@ export function OnboardingFlow() {
               Tell us about your company
             </h1>
             <p className="text-muted-foreground mt-2 text-sm leading-relaxed">
-              Astreex reads your public website and market data to discover high-value keywords and teach the AI how to accurately filter out noise, competitor spam, and irrelevant mentions.
+              Astreex reads your public website and market data to discover
+              high-value keywords and teach the AI how to accurately filter out
+              noise, competitor spam, and irrelevant mentions.
             </p>
           </div>
 
           <form
             onSubmit={startResearch}
             noValidate
-            className="border-[var(--line)] bg-[var(--surface)] rounded-2xl border p-6 shadow-[var(--shadow-sm)] sm:p-8"
+            className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-6 shadow-[var(--shadow-sm)] sm:p-8"
           >
             <div className="space-y-5">
               <div>
@@ -925,12 +929,12 @@ export function OnboardingFlow() {
                 >
                   Company website
                 </Label>
-                <div className="border-[var(--line)] bg-[var(--surface-inset)] focus-within:border-[var(--line-strong)] mt-2 flex h-10 w-full items-center rounded-lg border px-3 transition-colors">
+                <div className="mt-2 flex h-10 w-full items-center rounded-lg border border-[var(--line)] bg-[var(--surface-inset)] px-3 transition-colors focus-within:border-[var(--line-strong)]">
                   <GlobeIcon
                     className="text-muted-foreground mr-2 size-4 shrink-0"
                     aria-hidden="true"
                   />
-                  <span className="text-muted-foreground/60 select-none font-mono text-[13px] tracking-tight">
+                  <span className="text-muted-foreground/60 font-mono text-[13px] tracking-tight select-none">
                     https://
                   </span>
                   <input
@@ -960,14 +964,14 @@ export function OnboardingFlow() {
                       setError(null)
                     }}
                     placeholder="example.com"
-                    className="min-w-0 flex-1 border-0 bg-transparent py-2 pl-0.5 pr-0 font-mono text-[13px] text-foreground placeholder:text-muted-foreground/30 focus:outline-none"
+                    className="text-foreground placeholder:text-muted-foreground/30 min-w-0 flex-1 border-0 bg-transparent py-2 pr-0 pl-0.5 font-mono text-[13px] focus:outline-none"
                     autoFocus
                   />
                 </div>
               </div>
 
               {/* Collapsible Manual Description with smooth height transition */}
-              <div className="border-[var(--line)] border-t pt-3">
+              <div className="border-t border-[var(--line)] pt-3">
                 <button
                   type="button"
                   onClick={() =>
@@ -1025,7 +1029,9 @@ export function OnboardingFlow() {
                         placeholder="Describe what your company does, key products, and target audience. Mention any common names or terms to ignore so AI can filter out false positives."
                       />
                       <p className="text-muted-foreground text-[11px]">
-                        Astreex AI uses this description to understand your market, discover relevant keywords, and filter out noise.
+                        Astreex AI uses this description to understand your
+                        market, discover relevant keywords, and filter out
+                        noise.
                       </p>
                     </div>
                   </div>
@@ -1043,10 +1049,7 @@ export function OnboardingFlow() {
             )}
 
             <div className="mt-8 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <Button
-                type="submit"
-                className="h-10 px-6 text-sm font-medium"
-              >
+              <Button type="submit" className="h-10 px-6 text-sm font-medium">
                 Research company
               </Button>
 
@@ -1071,17 +1074,22 @@ export function OnboardingFlow() {
               Choose what to monitor
             </h1>
             <p className="text-muted-foreground text-sm">
-              Add the keywords you want Astreex to monitor across Reddit, X, and Hacker News.
+              Add the keywords you want Astreex to monitor across Reddit, X, and
+              Hacker News.
             </p>
           </div>
 
           {/* Inline Live AI Research Status */}
           {isResearching && (
-            <div className="border-[var(--accent)]/30 bg-[var(--accent-soft)] text-[var(--accent-soft-ink)] flex items-center justify-between gap-3 rounded-lg border px-4 py-2.5 text-xs animate-in fade-in-50 duration-200">
+            <div className="animate-in fade-in-50 flex items-center justify-between gap-3 rounded-lg border border-[var(--accent)]/30 bg-[var(--accent-soft)] px-4 py-2.5 text-xs text-[var(--accent-soft-ink)] duration-200">
               <div className="flex items-center gap-2.5">
-                <CircleNotchIcon className="text-[var(--accent)] size-3.5 shrink-0 animate-spin" />
+                <CircleNotchIcon className="size-3.5 shrink-0 animate-spin text-[var(--accent)]" />
                 <span className="font-medium">
-                  Astreex AI is analyzing {draft.websiteUrl ? `https://${draft.websiteUrl}` : "your company"} to discover keywords & noise filters…
+                  Astreex AI is analyzing{" "}
+                  {draft.websiteUrl
+                    ? `https://${draft.websiteUrl}`
+                    : "your company"}{" "}
+                  to discover keywords & noise filters…
                 </span>
               </div>
               <span className="text-muted-foreground hidden text-[11px] sm:inline">
@@ -1091,24 +1099,33 @@ export function OnboardingFlow() {
           )}
 
           {researchComplete && !isResearching && (
-            <div className="border-[var(--line)] bg-[var(--surface-inset)] flex items-center gap-2.5 rounded-lg border px-4 py-2.5 text-xs text-muted-foreground animate-in fade-in-50 duration-200">
-              <SparkleIcon className="text-[var(--accent)] size-4 shrink-0" weight="fill" />
+            <div className="text-muted-foreground animate-in fade-in-50 flex items-center gap-2.5 rounded-lg border border-[var(--line)] bg-[var(--surface-inset)] px-4 py-2.5 text-xs duration-200">
+              <SparkleIcon
+                className="size-4 shrink-0 text-[var(--accent)]"
+                weight="fill"
+              />
               <span>
-                Discovered keywords and configured noise filtering rules from {draft.websiteUrl ? `https://${draft.websiteUrl}` : "your company"}.
+                Discovered keywords and configured noise filtering rules from{" "}
+                {draft.websiteUrl
+                  ? `https://${draft.websiteUrl}`
+                  : "your company"}
+                .
               </span>
             </div>
           )}
 
           {researchError && !isResearching && (
-            <div className="border-[var(--line)] bg-[var(--surface-inset)] flex items-center justify-between gap-3 rounded-lg border px-4 py-2.5 text-xs text-muted-foreground animate-in fade-in-50 duration-200">
+            <div className="text-muted-foreground animate-in fade-in-50 flex items-center justify-between gap-3 rounded-lg border border-[var(--line)] bg-[var(--surface-inset)] px-4 py-2.5 text-xs duration-200">
               <div className="flex items-center gap-2">
-                <span className="text-[var(--accent)] font-semibold shrink-0">Note:</span>
+                <span className="shrink-0 font-semibold text-[var(--accent)]">
+                  Note:
+                </span>
                 <span>{researchError}</span>
               </div>
               <button
                 type="button"
                 onClick={() => setResearchError(null)}
-                className="text-muted-foreground/60 hover:text-foreground text-xs shrink-0 underline"
+                className="text-muted-foreground/60 hover:text-foreground shrink-0 text-xs underline"
               >
                 Dismiss
               </button>
@@ -1118,12 +1135,13 @@ export function OnboardingFlow() {
           {/* Keywords List (Clean Notion table) */}
           <div className="space-y-2">
             <div className="flex items-center justify-between px-1">
-              <h2 className="text-foreground text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Monitored terms ({draft.keywords.filter((k) => k.phrase.trim()).length})
+              <h2 className="text-foreground text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+                Monitored terms (
+                {draft.keywords.filter((k) => k.phrase.trim()).length})
               </h2>
             </div>
 
-            <div className="border-[var(--line)] bg-[var(--surface)] divide-[var(--line)] divide-y rounded-xl border overflow-hidden shadow-[var(--shadow-sm)]">
+            <div className="divide-y divide-[var(--line)] overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow-sm)]">
               {draft.keywords.map((keyword, index) => (
                 <KeywordRow
                   key={keyword.clientId}
@@ -1147,7 +1165,7 @@ export function OnboardingFlow() {
                 <button
                   type="button"
                   onClick={addKeywordRow}
-                  className="text-muted-foreground hover:text-foreground hover:bg-[var(--surface-hover)] flex w-full items-center gap-2 px-4 py-2.5 text-left text-xs font-medium transition-colors"
+                  className="text-muted-foreground hover:text-foreground flex w-full items-center gap-2 px-4 py-2.5 text-left text-xs font-medium transition-colors hover:bg-[var(--surface-hover)]"
                 >
                   <PlusIcon className="size-3.5" />
                   <span>Add keyword</span>
@@ -1157,11 +1175,11 @@ export function OnboardingFlow() {
           </div>
 
           {/* Collapsible AI Filtering Rules with smooth height transition */}
-          <div className="border-[var(--line)] bg-[var(--surface)] rounded-xl border p-4 shadow-[var(--shadow-sm)]">
+          <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] p-4 shadow-[var(--shadow-sm)]">
             <button
               type="button"
               onClick={() => setGuidelinesOpen((current) => !current)}
-              className="flex w-full items-center justify-between text-left group"
+              className="group flex w-full items-center justify-between text-left"
               aria-expanded={guidelinesOpen}
             >
               <div className="flex items-center gap-2">
@@ -1187,7 +1205,7 @@ export function OnboardingFlow() {
               }}
             >
               <div className="overflow-hidden">
-                <div className="border-[var(--line)] mt-3.5 space-y-3.5 border-t pt-3.5">
+                <div className="mt-3.5 space-y-3.5 border-t border-[var(--line)] pt-3.5">
                   <div>
                     <div className="flex items-center justify-between">
                       <Label htmlFor="company-context" className="text-xs">
@@ -1276,28 +1294,29 @@ export function OnboardingFlow() {
               Choose your access plan
             </h1>
             <p className="text-muted-foreground text-sm">
-              All plans include X, Reddit, and Hacker News monitoring, AI categorization, custom categories, and email digests.
+              All plans include X, Reddit, and Hacker News monitoring, AI
+              categorization, custom categories, and email digests.
             </p>
           </div>
 
           {/* Unified Notion-style List Selector */}
-          <div className="border-[var(--line)] bg-[var(--surface)] divide-[var(--line)] divide-y rounded-xl border overflow-hidden shadow-[var(--shadow-sm)]">
+          <div className="divide-y divide-[var(--line)] overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow-sm)]">
             {/* Free Evaluation Row */}
             <div
               onClick={() =>
                 setDraft((current) => ({ ...current, selectedPlan: "free" }))
               }
               className={cn(
-                "flex items-center justify-between p-4 sm:px-5 transition-colors cursor-pointer",
+                "flex cursor-pointer items-center justify-between p-4 transition-colors sm:px-5",
                 activePlan === "free"
                   ? "bg-[var(--surface-active)]"
                   : "hover:bg-[var(--surface-hover)]/40",
               )}
             >
-              <div className="flex items-center gap-3.5 min-w-0">
+              <div className="flex min-w-0 items-center gap-3.5">
                 <div
                   className={cn(
-                    "size-4.5 rounded-full border flex items-center justify-center shrink-0 transition-colors",
+                    "flex size-4.5 shrink-0 items-center justify-center rounded-full border transition-colors",
                     activePlan === "free"
                       ? "border-[var(--accent)] bg-[var(--accent)] text-white"
                       : "border-[var(--line-strong)] bg-transparent",
@@ -1308,22 +1327,22 @@ export function OnboardingFlow() {
                   )}
                 </div>
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-semibold text-foreground">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-foreground text-sm font-semibold">
                       Free evaluation
                     </span>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-muted-foreground text-xs">
                       · 1 active keyword, first 100 mentions
                     </span>
                   </div>
-                  <p className="text-xs text-muted-foreground/70 mt-0.5">
+                  <p className="text-muted-foreground/70 mt-0.5 text-xs">
                     No credit card required
                   </p>
                 </div>
               </div>
-              <div className="text-right shrink-0 pl-4">
-                <span className="text-base font-bold text-foreground">$0</span>
-                <span className="text-xs text-muted-foreground"> / free</span>
+              <div className="shrink-0 pl-4 text-right">
+                <span className="text-foreground text-base font-bold">$0</span>
+                <span className="text-muted-foreground text-xs"> / free</span>
               </div>
             </div>
 
@@ -1345,16 +1364,16 @@ export function OnboardingFlow() {
                     }))
                   }
                   className={cn(
-                    "flex items-center justify-between p-4 sm:px-5 transition-colors cursor-pointer",
+                    "flex cursor-pointer items-center justify-between p-4 transition-colors sm:px-5",
                     isSelected
                       ? "bg-[var(--surface-active)]"
                       : "hover:bg-[var(--surface-hover)]/40",
                   )}
                 >
-                  <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="flex min-w-0 items-center gap-3.5">
                     <div
                       className={cn(
-                        "size-4.5 rounded-full border flex items-center justify-center shrink-0 transition-colors",
+                        "flex size-4.5 shrink-0 items-center justify-center rounded-full border transition-colors",
                         isSelected
                           ? "border-[var(--accent)] bg-[var(--accent)] text-white"
                           : "border-[var(--line-strong)] bg-transparent",
@@ -1365,30 +1384,30 @@ export function OnboardingFlow() {
                       )}
                     </div>
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-semibold text-foreground">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-foreground text-sm font-semibold">
                           {plan.name}
                         </span>
-                        <span className="text-xs text-muted-foreground">
-                          · {plan.keywordLimit} active keywords, {plan.monthlyMentionLimit.toLocaleString()} mentions/mo
+                        <span className="text-muted-foreground text-xs">
+                          · {plan.keywordLimit} active keywords,{" "}
+                          {plan.monthlyMentionLimit.toLocaleString()}{" "}
+                          mentions/mo
                         </span>
                       </div>
-                      <p className="text-xs text-muted-foreground/70 mt-0.5">
-                        {validKeywordCount} keyword{validKeywordCount === 1 ? "" : "s"}
+                      <p className="text-muted-foreground/70 mt-0.5 text-xs">
+                        {validKeywordCount} keyword
+                        {validKeywordCount === 1 ? "" : "s"}
                         {pausedCount > 0
                           ? ` (${pausedCount} would start paused)`
                           : " (all active)"}
                       </p>
                     </div>
                   </div>
-                  <div className="text-right shrink-0 pl-4">
-                    <span className="text-base font-bold text-foreground">
+                  <div className="shrink-0 pl-4 text-right">
+                    <span className="text-foreground text-base font-bold">
                       ${plan.priceUsd}
                     </span>
-                    <span className="text-xs text-muted-foreground">
-                      {" "}
-                      / mo
-                    </span>
+                    <span className="text-muted-foreground text-xs"> / mo</span>
                   </div>
                 </div>
               )

@@ -22,7 +22,7 @@ function PopoverContent({
         align={align}
         sideOffset={sideOffset}
         className={cn(
-          "t-dropdown border-[var(--line-strong)] bg-popover text-popover-foreground z-50 w-72 rounded-[var(--radius-md)] border p-4 shadow-[var(--shadow-md)] outline-none",
+          "t-dropdown bg-popover text-popover-foreground z-50 w-72 rounded-[var(--radius-md)] border border-[var(--line-strong)] p-4 shadow-[var(--shadow-md)] outline-none",
           className,
         )}
         {...props}

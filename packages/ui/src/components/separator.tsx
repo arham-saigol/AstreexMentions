@@ -26,9 +26,7 @@ function Separator({
       aria-hidden={decorative ? "true" : undefined}
       className={cn(
         "bg-[var(--line)]",
-        orientation === "vertical"
-          ? "h-full w-px self-stretch"
-          : "h-px w-full",
+        orientation === "vertical" ? "h-full w-px self-stretch" : "h-px w-full",
         className,
       )}
       {...props}
