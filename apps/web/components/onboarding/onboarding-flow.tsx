@@ -472,6 +472,7 @@ export function OnboardingFlow() {
     activeResearchIdRef.current += 1
     setError(null)
     setIsResearching(false)
+    setResearchComplete(false)
     setResearchError(null)
     setDraft((current) => {
       const validKeywords = current.keywords.filter(
@@ -492,6 +493,15 @@ export function OnboardingFlow() {
         keywords: validKeywords.length > 0 ? validKeywords : [blankKeyword()],
       }
     })
+  }
+
+  const returnToCompanyStep = () => {
+    activeResearchIdRef.current += 1
+    setError(null)
+    setIsResearching(false)
+    setResearchComplete(false)
+    setResearchError(null)
+    setDraft((current) => ({ ...current, step: 1 }))
   }
 
   const continueToPlans = () => {
@@ -1027,7 +1037,7 @@ export function OnboardingFlow() {
             <Button
               type="button"
               variant="ghost"
-              onClick={() => setDraft((current) => ({ ...current, step: 1 }))}
+              onClick={returnToCompanyStep}
               className="text-muted-foreground hover:text-foreground text-xs font-medium"
             >
               Back
