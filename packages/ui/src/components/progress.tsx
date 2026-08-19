@@ -1,10 +1,8 @@
-import type * as React from "react"
-
 import { cn } from "../lib/utils"
 
 /**
- * Determinate progress bar styled to the kit: a 7px inset track with a coral
- * fill. Values are clamped to 0–100; callers provide an `aria-label`.
+ * Determinate progress bar with a 7px inset track and accent fill.
+ * Values are clamped to 0–100; callers provide an `aria-label`.
  */
 export type ProgressProps = {
   value?: number

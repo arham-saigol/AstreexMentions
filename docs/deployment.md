@@ -318,11 +318,11 @@ The Hacker News adapter calls the public Algolia endpoint `https://hn.algolia.co
 
 - Variable: `DEEPSEEK_API_KEY`
 - Endpoint: `https://api.deepseek.com/chat/completions`
-- Implemented model: `deepseek-v4-pro`
+- Implemented model: `deepseek-v4-flash`
 - Request behavior: JSON response format, temperature `0`, high reasoning effort, thinking enabled
 - Optional timeout: `DEEPSEEK_TIMEOUT_MS`, default `120000`
 
-The model name is fixed in code. No environment variable selects a different model. A one-minute Convex cron dispatches same-workspace batches of up to 20 jobs. The worker uses four-minute leases, full-result validation, and atomic application. Missing or invalid DeepSeek configuration returns jobs to pending without a consumed attempt or provider telemetry. The retry delay is five minutes. Local validation does not prove that the account can use `deepseek-v4-pro`.
+The model name is fixed in code. No environment variable selects a different model. A one-minute Convex cron dispatches same-workspace batches of up to 20 jobs. The worker uses four-minute leases, full-result validation, and atomic application. Missing or invalid DeepSeek configuration returns jobs to pending without a consumed attempt or provider telemetry. The retry delay is five minutes. Local validation does not prove that the account can use `deepseek-v4-flash`.
 
 ## 8. Deploy the controlled Convex production backend
 
@@ -531,7 +531,7 @@ These are manual or separately automated release checks. They require real accou
 
 ### DeepSeek
 
-- Confirm the account can call `deepseek-v4-pro` with the implemented request fields.
+- Confirm the account can call `deepseek-v4-flash` with the implemented request fields.
 - Ingest approved test mentions, then verify the one-minute dispatcher claims same-workspace batches, assigns exactly one enabled category per mention, and records the expected `deepseek` provider run/metrics.
 - Exercise a controlled retryable failure and a rejected invalid result; confirm lease fencing, whole-batch retry, and no partial category writes. Do not claim these credential-backed behaviors unless the deployed worker was actually exercised.
 

@@ -233,7 +233,7 @@ The example currently contains 36 unique variable names. `ADMIN_CLERK_USER_ID` a
 | `RESEND_REPLY_TO_EMAIL`             | Convex; optional reply-to address. Blank means no separate reply-to.                                                                                                            |
 | `FETCHLAYER_API_KEY`                | Convex; Reddit post and comment search through FetchLayer.                                                                                                                      |
 | `XQUIK_API_KEY`                     | Convex; X search through Xquik.                                                                                                                                                 |
-| `DEEPSEEK_API_KEY`                  | Convex; credential used by the one-minute mention analysis worker with fixed model `deepseek-v4-pro`.                                                                           |
+| `DEEPSEEK_API_KEY`                  | Convex; credential used by the one-minute mention analysis worker with fixed model `deepseek-v4-flash`.                                                                         |
 | `DEEPSEEK_TIMEOUT_MS`               | Convex; optional positive timeout, default `120000`.                                                                                                                            |
 | `TINYFISH_API_KEY`                  | Convex; onboarding company research web fetch and search through TinyFish.                                                                                                      |
 | `TINYFISH_TIMEOUT_MS`               | Convex; optional positive timeout, default `45000`.                                                                                                                             |
@@ -264,7 +264,7 @@ configured identity-fence duration in the target environment.
 - Reddit: FetchLayer, `https://fetchlayer.dev/api/reddit`
 - Hacker News: public Algolia Hacker News API
 - Onboarding research: TinyFish Markdown Fetch (`https://api.fetch.tinyfish.ai`) and Search (`https://api.search.tinyfish.ai`)
-- Mention analysis: DeepSeek chat completions with `deepseek-v4-pro`, dispatched from the durable Convex mention analysis queue
+- Mention analysis: DeepSeek chat completions with `deepseek-v4-flash`, dispatched from the durable Convex mention analysis queue
 - Billing: Creem test or production API selected by `CREEM_MODE`
 - Email: Resend API and signed webhook delivery events
 

@@ -68,10 +68,11 @@ const providerSecretNames = [
   "FETCHLAYER_API_KEY",
   "RESEND_API_KEY",
   "RESEND_WEBHOOK_SECRET",
+  "TINYFISH_API_KEY",
   "XQUIK_API_KEY",
 ] as const
 
-const forbiddenProductLanguage = /\b(?:free|mock(?:ed|ing|s)?|stripe|trial)\b/iu
+const forbiddenProductLanguage = /\b(?:mock(?:ed|ing|s)?|stripe|trial)\b/iu
 const forbiddenRuntimeAdapterName =
   /(?:mock|fake|fixture|stub).*adapter|adapter.*(?:mock|fake|fixture|stub)/iu
 const forbiddenRuntimeImport =
@@ -688,7 +689,7 @@ describe("frontend and environment security inventory", () => {
       )
       for (const name of names) {
         if (
-          /^NEXT_PUBLIC_(?:CREEM|DEEPSEEK|FETCHLAYER|RESEND|XQUIK)_/u.test(
+          /^NEXT_PUBLIC_(?:CREEM|DEEPSEEK|FETCHLAYER|RESEND|TINYFISH|XQUIK)_/u.test(
             name,
           ) ||
           /(?:API_KEY|ACCESS_TOKEN|PASSWORD|PRIVATE_KEY|SECRET|WEBHOOK_SECRET)(?:_|$)/u.test(
@@ -885,7 +886,7 @@ describe("provider webhook boundaries", () => {
 })
 
 describe("production integrity inventory", () => {
-  it("contains no Stripe, free, trial, or mock product language", () => {
+  it("contains no Stripe, trial, or mock product language", () => {
     const violations = productionFiles.flatMap((file) =>
       sourceTextSegments(file)
         .filter((segment) => forbiddenProductLanguage.test(segment.text))

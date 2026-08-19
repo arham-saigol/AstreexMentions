@@ -637,7 +637,7 @@ export async function applyIngestionChunkAtomically(
         contentType: candidate.contentType,
         engagementScore: candidate.engagementScore,
         fallbackKey,
-        feedState: "visible",
+        feedState: "pending",
         firstSeenAt: options.now,
         language: candidate.language,
         lastMatchedAt: options.now,

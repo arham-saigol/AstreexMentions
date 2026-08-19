@@ -118,18 +118,12 @@ async function deepSeekJson(
       signal: controller.signal,
     })
     if (!response.ok) {
-      const errorText = await response.text().catch(() => "")
-      console.error(`DeepSeek API error ${response.status}: ${errorText}`)
-      throw new Error(`DeepSeek HTTP ${response.status}: ${errorText}`)
+      throw new Error(`DeepSeek HTTP ${response.status}`)
     }
-    const rawText = await response.text()
     const envelope = deepSeekEnvelopeSchema.parse(
-      JSON.parse(rawText) as unknown,
+      JSON.parse(await response.text()) as unknown,
     )
-    const content = envelope.choices[0]!.message.content.trim()
-    const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/)
-    const targetJson = jsonMatch?.[1] ?? content
-    return JSON.parse(targetJson) as unknown
+    return JSON.parse(envelope.choices[0]!.message.content) as unknown
   } finally {
     clearTimeout(timeout)
   }

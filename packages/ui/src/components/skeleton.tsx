@@ -1,5 +1,3 @@
-import type * as React from "react"
-
 import { cn } from "../lib/utils"
 
 /**
@@ -10,13 +8,12 @@ export type SkeletonProps = {
   className?: string
 }
 
-function Skeleton({ className, ...props }: SkeletonProps) {
+function Skeleton({ className }: SkeletonProps) {
   return (
     <div
       data-slot="skeleton"
       className={cn("astro-skeleton rounded-[5px]", className)}
       aria-hidden="true"
-      {...props}
     />
   )
 }

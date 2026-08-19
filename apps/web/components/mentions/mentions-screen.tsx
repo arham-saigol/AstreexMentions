@@ -25,7 +25,6 @@ import {
   useDeferredValue,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type ReactNode,
 } from "react"
@@ -330,35 +329,21 @@ export function MentionsScreen() {
     api.mentions.listMentions,
     preview ? "skip" : { ...queryArguments, now },
   )
-
-  const lastResolvedRef = useRef<{
-    categories: typeof categoriesValue
-    keywords: typeof keywordsValue
-    mentions: typeof mentionsValue
+  const [lastMentions, setLastMentions] = useState<{
     queryArgsKey: string
-  } | null>(null)
-
+    value: NonNullable<typeof mentionsValue>
+  }>()
   if (
-    categoriesValue !== undefined &&
-    keywordsValue !== undefined &&
-    mentionsValue !== undefined
+    mentionsValue !== undefined &&
+    (lastMentions?.queryArgsKey !== queryArgsKey ||
+      lastMentions.value !== mentionsValue)
   ) {
-    lastResolvedRef.current = {
-      categories: categoriesValue,
-      keywords: keywordsValue,
-      mentions: mentionsValue,
-      queryArgsKey,
-    }
+    setLastMentions({ queryArgsKey, value: mentionsValue })
   }
-
-  const effectiveCategoriesValue =
-    categoriesValue ?? lastResolvedRef.current?.categories
-  const effectiveKeywordsValue =
-    keywordsValue ?? lastResolvedRef.current?.keywords
   const effectiveMentionsValue =
     mentionsValue ??
-    (lastResolvedRef.current?.queryArgsKey === queryArgsKey
-      ? lastResolvedRef.current.mentions
+    (lastMentions?.queryArgsKey === queryArgsKey
+      ? lastMentions.value
       : undefined)
 
   const updateMentionStatus = useMutation(api.mentions.updateMentionStatus)
@@ -516,12 +501,12 @@ export function MentionsScreen() {
 
   const loading =
     !preview &&
-    (effectiveCategoriesValue === undefined ||
-      effectiveKeywordsValue === undefined ||
+    (categoriesValue === undefined ||
+      keywordsValue === undefined ||
       effectiveMentionsValue === undefined)
 
-  const categories = effectiveCategoriesValue ?? []
-  const keywords = effectiveKeywordsValue ?? []
+  const categories = categoriesValue ?? []
+  const keywords = keywordsValue ?? []
   const allKeywordsPaused =
     keywords.length > 0 &&
     keywords.every((keyword) => keyword.status === "paused")

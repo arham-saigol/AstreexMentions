@@ -24,7 +24,6 @@ import { THEME_STORAGE_KEY, type Theme } from "./theme-config"
 
 interface ThemeContextValue {
   theme: Theme
-  setTheme: (theme: Theme) => void
   toggle: () => void
 }
 
@@ -47,26 +46,15 @@ function applyTheme(theme: Theme) {
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(readAttribute)
 
-  const persist = useCallback((value: Theme) => {
+  const toggle = useCallback(() => {
+    const value = theme === "dark" ? "light" : "dark"
+    setThemeState(value)
     try {
       window.localStorage.setItem(THEME_STORAGE_KEY, value)
     } catch {
       /* localStorage may be blocked; the attribute still updates in-memory. */
     }
-  }, [])
-
-  const setTheme = useCallback(
-    (value: Theme) => {
-      setThemeState(value)
-      persist(value)
-    },
-    [persist],
-  )
-
-  const toggle = useCallback(
-    () => setTheme(theme === "dark" ? "light" : "dark"),
-    [theme, setTheme],
-  )
+  }, [theme])
 
   // Keep <html data-theme> in sync with React state (covers the first mount
   // after SSR, where the no-flash script has already chosen a value).
@@ -98,7 +86,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <ThemeContext.Provider value={{ theme, setTheme, toggle }}>
+    <ThemeContext.Provider value={{ theme, toggle }}>
       {children}
     </ThemeContext.Provider>
   )

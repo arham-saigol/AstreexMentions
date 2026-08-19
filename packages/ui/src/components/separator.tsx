@@ -1,5 +1,3 @@
-import type * as React from "react"
-
 import { cn } from "../lib/utils"
 
 export type SeparatorProps = {
@@ -17,7 +15,6 @@ function Separator({
   decorative = true,
   orientation = "horizontal",
   className,
-  ...props
 }: SeparatorProps) {
   return (
     <div
@@ -29,7 +26,6 @@ function Separator({
         orientation === "vertical" ? "h-full w-px self-stretch" : "h-px w-full",
         className,
       )}
-      {...props}
     />
   )
 }

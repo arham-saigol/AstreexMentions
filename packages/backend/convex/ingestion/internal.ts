@@ -8,17 +8,9 @@ import {
   type IngestionChunkResult,
 } from "./service"
 
-export type ApplyIngestionChunkResult =
-  | IngestionChunkResult
-  | {
-      missing: readonly string[]
-      provider: "resend"
-      state: "provider_unconfigured"
-    }
-
 export const applyIngestionChunk = internalMutation({
   args: { inputJson: v.string() },
-  handler: async (ctx, args): Promise<ApplyIngestionChunkResult> => {
+  handler: async (ctx, args): Promise<IngestionChunkResult> => {
     const input = parseIngestionChunkJson(args.inputJson)
     const sender = readEmailSenderConfiguration(env)
 

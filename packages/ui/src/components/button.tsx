@@ -9,10 +9,8 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        // Primary — signal coral fill with near-black text (kit btn-primary).
         default:
           "bg-primary text-primary-foreground border-transparent shadow-[var(--shadow-control)] hover:bg-[var(--brand-hover)] active:bg-[var(--brand-pressed)]",
-        // Secondary — quiet surface button (kit default .btn).
         outline:
           "border-[var(--line-strong)] bg-card text-foreground shadow-[var(--shadow-control)] hover:border-[var(--line-strong)] hover:bg-[var(--surface-hover)] hover:shadow-[var(--shadow-sm)] hover:-translate-y-px",
         secondary:
@@ -20,9 +18,6 @@ const buttonVariants = cva(
         ghost:
           "border-transparent bg-transparent text-[var(--ink-secondary)] shadow-none hover:bg-[var(--surface-hover)] hover:text-foreground",
         link: "border-transparent bg-transparent text-foreground underline-offset-4 shadow-none hover:underline",
-        // Destructive — soft red tint with red text (kit btn-danger). Solid
-        // red (`bg-destructive`) and error text (`text-destructive`) both read
-        // as the red hue via the destructive token.
         destructive:
           "border-transparent bg-[var(--red-bg)] text-[var(--red)] shadow-[var(--shadow-control)] hover:bg-[color-mix(in_srgb,var(--red)_12%,transparent)] hover:text-[var(--red)] active:bg-[color-mix(in_srgb,var(--red)_18%,transparent)]",
       },

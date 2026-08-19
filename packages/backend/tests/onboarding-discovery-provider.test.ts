@@ -11,6 +11,7 @@ describe("TinyFish onboarding provider boundary", () => {
   it("rejects credentials, localhost, private IPs, and non-HTTP input", () => {
     for (const value of [
       "javascript:alert(1)",
+      "ftp://example.com",
       "https://user:secret@example.com",
       "http://localhost:3000",
       "http://127.0.0.1",
@@ -24,6 +25,9 @@ describe("TinyFish onboarding provider boundary", () => {
       )
     }
     expect(canonicalResearchUrl(" https://example.com/about#team ")).toBe(
+      "https://example.com/about",
+    )
+    expect(canonicalResearchUrl("example.com/about")).toBe(
       "https://example.com/about",
     )
   })

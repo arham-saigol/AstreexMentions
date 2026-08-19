@@ -12,9 +12,9 @@ export const onboardingKeywordDraftSchema = z
     brandCandidate: z.boolean(),
     clientId: z.string().trim().min(1),
     description: z.string().trim().max(160),
-    phrase: z.string().trim().min(1).max(160),
+    phrase: z.string().trim().max(160),
     origin: z.enum(["custom", "suggestion"]),
-    platforms: z.array(onboardingPlatformSchema).min(1),
+    platforms: z.array(onboardingPlatformSchema),
     selected: z.boolean(),
   })
   .strict()
@@ -53,7 +53,7 @@ export const onboardingDraftSchema = z
   .superRefine((draft, context) => {
     const selectedPhrases = new Set<string>()
     for (const [index, keyword] of draft.keywords.entries()) {
-      if (!keyword.selected) continue
+      if (!keyword.selected || !keyword.phrase) continue
       const normalized = normalizeKeywordPhrase(keyword.phrase)
       if (selectedPhrases.has(normalized)) {
         context.addIssue({

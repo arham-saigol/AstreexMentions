@@ -46,14 +46,14 @@ describe("onboarding draft", () => {
     expect(parsed.keywords[0]).not.toHaveProperty("kind")
   })
 
-  it("requires selected keywords to have a phrase, description within 160 characters, and a platform", () => {
+  it("preserves incomplete editor rows while bounding persisted fields", () => {
     const draft = createOnboardingDraft("Astreex")
     expect(
       onboardingDraftSchema.safeParse({
         ...draft,
-        keywords: [{ ...keyword(0), platforms: [] }],
+        keywords: [{ ...keyword(0), phrase: "", platforms: [] }],
       }).success,
-    ).toBe(false)
+    ).toBe(true)
     expect(
       onboardingDraftSchema.safeParse({
         ...draft,

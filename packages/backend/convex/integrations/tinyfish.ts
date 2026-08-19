@@ -93,9 +93,11 @@ export function canonicalResearchUrl(value: string): string {
       },
     )
   }
-  const normalized = /^https?:\/\//i.test(trimmed)
+  const normalized = /^[a-z][a-z\d+.-]*:/i.test(trimmed)
     ? trimmed
-    : `https://${trimmed}`
+    : trimmed.startsWith("//")
+      ? `https:${trimmed}`
+      : `https://${trimmed}`
   let url: URL
   try {
     url = new URL(normalized)

@@ -14,5 +14,4 @@
 - Use Lucide for new general-purpose icons. Keep a brand-specific icon only
   when Lucide has no appropriate equivalent.
 
-The visual reference is `ui-ux-kit.html`; `packages/ui/src/styles/globals.css`
-is the implementation source of truth.
+`packages/ui/src/styles/globals.css` is the implementation source of truth.

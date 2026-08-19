@@ -1,8 +1,7 @@
 /* ----------------------------------------------------------------------------
- * Astreex design system — the ui-ux-kit, ported to Tailwind v4.
+ * Astreex design system — owned Tailwind v4 tokens and primitives.
  *
  * One dark-first token system for the marketing site and the product app.
- * The kit lives at repo-root /ui-ux-kit.html; this file is its token source.
  * Theme (dark/light) is set on <html data-theme> by an inline no-flash script
  * (OS preference by default; an explicit choice persists in the app). The
  * @theme inline bridge below repoints every semantic Tailwind utility and the
@@ -226,8 +225,6 @@
     0 8px 30px rgba(15, 15, 15, 0.12), 0 2px 8px rgba(15, 15, 15, 0.06);
   --shadow-control:
     inset 0 0 0 1px rgba(55, 53, 47, 0.08), 0 1px 2px rgba(15, 15, 15, 0.04);
-
-  --accent-soft: rgba(35, 131, 226, 0.08);
 }
 
 /* ----------------------------------------------------------------------------
@@ -237,7 +234,7 @@
    --------------------------------------------------------------------------- */
 @layer base {
   :root {
-    /* Brand accent (signal coral) for legacy `var(--brand*)` callers. */
+    /* Brand accent aliases for legacy `var(--brand*)` callers. */
     --brand: var(--accent);
     --brand-hover: var(--accent-hover);
     --brand-pressed: var(--accent-pressed);
@@ -553,16 +550,6 @@
     opacity: 0;
     filter: blur(var(--icon-swap-blur));
     transform: scale(var(--icon-swap-start-scale));
-  }
-
-  /* Because the whole token system changes on theme switch, soften it. */
-  .theme-aware,
-  .theme-aware *::before,
-  .theme-aware *::after {
-    transition:
-      background-color var(--medium) ease,
-      border-color var(--medium) ease,
-      color var(--medium) ease;
   }
 
   /* Kit skeleton shimmer — a soft sweep using the line-strong token, so it

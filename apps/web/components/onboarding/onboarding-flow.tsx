@@ -3,19 +3,13 @@
 import { api } from "@astreex/backend/api"
 import { PLAN_DEFINITIONS } from "@astreex/domain"
 import {
-  ArrowLeftIcon,
   ArrowRightIcon,
   CaretDownIcon,
-  CheckCircleIcon,
   CheckIcon,
   CircleNotchIcon,
   GlobeIcon,
-  LightningIcon,
-  LockKeyIcon,
   PlusIcon,
-  ShieldCheckIcon,
   SparkleIcon,
-  StarIcon,
   TrashIcon,
 } from "@phosphor-icons/react"
 import { Button } from "@astreex/ui/components/button"
@@ -24,7 +18,7 @@ import { Textarea } from "@astreex/ui/components/textarea"
 import { cn } from "@astreex/ui/lib/utils"
 import { useAction, useMutation } from "convex/react"
 import { useRouter } from "next/navigation"
-import { useEffect, useRef, useState, type FormEvent } from "react"
+import { useEffect, useState, type FormEvent } from "react"
 
 import { useProductContext } from "@/components/product/product-context"
 import {
@@ -287,6 +281,18 @@ function checkoutKey(workspaceId: string, plan: string): string {
   return `web:${workspaceId}:${plan}:${clientId()}`.slice(0, 200)
 }
 
+function blankKeyword(brandCandidate = true): OnboardingKeywordDraft {
+  return {
+    brandCandidate,
+    clientId: clientId(),
+    description: "",
+    origin: "custom",
+    phrase: "",
+    platforms: ["x", "reddit", "hacker_news"],
+    selected: true,
+  }
+}
+
 function sanitizeWebsiteInput(value: string): string {
   return value.trim().replace(/^(https?:\/\/|\/\/)/i, "")
 }
@@ -314,20 +320,7 @@ function cleanDraftInitial(draft: OnboardingDraft): OnboardingDraft {
     ...draft,
     filteringContext: cleanedFilteringContext,
     websiteUrl: sanitizeWebsiteInput(draft.websiteUrl || ""),
-    keywords:
-      cleanedKeywords.length > 0
-        ? cleanedKeywords
-        : [
-            {
-              brandCandidate: true,
-              clientId: clientId(),
-              description: "",
-              origin: "custom",
-              phrase: "",
-              platforms: ["x", "reddit", "hacker_news"],
-              selected: true,
-            },
-          ],
+    keywords: cleanedKeywords.length > 0 ? cleanedKeywords : [blankKeyword()],
   }
 }
 
@@ -519,10 +512,6 @@ export function OnboardingFlow() {
   const [manualDescriptionOpen, setManualDescriptionOpen] = useState(false)
   const [guidelinesOpen, setGuidelinesOpen] = useState(false)
 
-  const researchPromiseRef = useRef<Promise<void> | null>(null)
-  const draftRef = useRef(draft)
-  draftRef.current = draft
-
   const researchCompany = useAction(api.onboardingDiscovery.researchCompany)
   const saveConfiguration = useMutation(
     api.onboarding.saveOnboardingConfiguration,
@@ -573,15 +562,7 @@ export function OnboardingFlow() {
       ...current,
       keywords: [
         ...current.keywords,
-        {
-          brandCandidate: current.keywords.length === 0,
-          clientId: clientId(),
-          description: "",
-          phrase: "",
-          origin: "custom",
-          platforms: ["x", "reddit", "hacker_news"],
-          selected: true,
-        },
+        blankKeyword(current.keywords.length === 0),
       ],
     }))
   }
@@ -614,29 +595,16 @@ export function OnboardingFlow() {
         step: 2,
         filteringContext:
           current.manualDescription.trim() || current.filteringContext,
-        keywords:
-          validKeywords.length > 0
-            ? validKeywords
-            : [
-                {
-                  brandCandidate: true,
-                  clientId: clientId(),
-                  description: "",
-                  origin: "custom",
-                  phrase: "",
-                  platforms: ["x", "reddit", "hacker_news"],
-                  selected: true,
-                },
-              ],
+        keywords: validKeywords.length > 0 ? validKeywords : [blankKeyword()],
       }
     })
 
     // Perform research in the background (non-blocking)
-    const researchPromise = (async () => {
+    void (async () => {
       try {
         const result = await researchCompany({
-          ...(draftRef.current.manualDescription.trim()
-            ? { manualDescription: draftRef.current.manualDescription }
+          ...(draft.manualDescription.trim()
+            ? { manualDescription: draft.manualDescription }
             : {}),
           ...(fullWebsiteUrl ? { websiteUrl: fullWebsiteUrl } : {}),
         })
@@ -671,6 +639,10 @@ export function OnboardingFlow() {
           })
           setResearchComplete(true)
           setResearchError(null)
+        } else if (result.state === "in_progress") {
+          setResearchError(
+            "Company research is already running. Retry shortly or configure keywords manually below.",
+          )
         } else if (result.state === "rate_limited") {
           setResearchError(
             "AI research rate limit reached. You can configure keywords manually below.",
@@ -696,8 +668,6 @@ export function OnboardingFlow() {
         setIsResearching(false)
       }
     })()
-
-    researchPromiseRef.current = researchPromise
   }
 
   const skipToManualKeywords = () => {
@@ -719,20 +689,7 @@ export function OnboardingFlow() {
           current.filteringContext !== current.workspaceName
             ? current.filteringContext
             : ""),
-        keywords:
-          validKeywords.length > 0
-            ? validKeywords
-            : [
-                {
-                  brandCandidate: true,
-                  clientId: clientId(),
-                  description: "",
-                  origin: "custom",
-                  phrase: "",
-                  platforms: ["x", "reddit", "hacker_news"],
-                  selected: true,
-                },
-              ],
+        keywords: validKeywords.length > 0 ? validKeywords : [blankKeyword()],
       }
     })
   }
@@ -787,20 +744,8 @@ export function OnboardingFlow() {
     setPending(true)
     setError(null)
 
-    // If research is finishing in the background, wait briefly up to 2.5s to capture AI noise filters & suggestions
-    if (isResearching && researchPromiseRef.current) {
-      try {
-        await Promise.race([
-          researchPromiseRef.current,
-          new Promise((resolve) => setTimeout(resolve, 2500)),
-        ])
-      } catch {
-        // Non-blocking
-      }
-    }
-
     try {
-      const currentDraft = draftRef.current
+      const currentDraft = draft
       const validKeywords = currentDraft.keywords.filter((k) => k.phrase.trim())
       const result = await saveConfiguration({
         accessPath: plan,
@@ -1302,12 +1247,14 @@ export function OnboardingFlow() {
           {/* Unified Notion-style List Selector */}
           <div className="divide-y divide-[var(--line)] overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow-sm)]">
             {/* Free Evaluation Row */}
-            <div
+            <button
+              type="button"
+              aria-pressed={activePlan === "free"}
               onClick={() =>
                 setDraft((current) => ({ ...current, selectedPlan: "free" }))
               }
               className={cn(
-                "flex cursor-pointer items-center justify-between p-4 transition-colors sm:px-5",
+                "flex w-full cursor-pointer items-center justify-between p-4 text-left transition-colors sm:px-5",
                 activePlan === "free"
                   ? "bg-[var(--surface-active)]"
                   : "hover:bg-[var(--surface-hover)]/40",
@@ -1344,7 +1291,7 @@ export function OnboardingFlow() {
                 <span className="text-foreground text-base font-bold">$0</span>
                 <span className="text-muted-foreground text-xs"> / free</span>
               </div>
-            </div>
+            </button>
 
             {/* Paid Plans Rows */}
             {PLAN_DEFINITIONS.map((plan) => {
@@ -1355,8 +1302,10 @@ export function OnboardingFlow() {
               )
 
               return (
-                <div
+                <button
                   key={plan.id}
+                  type="button"
+                  aria-pressed={isSelected}
                   onClick={() =>
                     setDraft((current) => ({
                       ...current,
@@ -1364,7 +1313,7 @@ export function OnboardingFlow() {
                     }))
                   }
                   className={cn(
-                    "flex cursor-pointer items-center justify-between p-4 transition-colors sm:px-5",
+                    "flex w-full cursor-pointer items-center justify-between p-4 text-left transition-colors sm:px-5",
                     isSelected
                       ? "bg-[var(--surface-active)]"
                       : "hover:bg-[var(--surface-hover)]/40",
@@ -1409,7 +1358,7 @@ export function OnboardingFlow() {
                     </span>
                     <span className="text-muted-foreground text-xs"> / mo</span>
                   </div>
-                </div>
+                </button>
               )
             })}
           </div>
