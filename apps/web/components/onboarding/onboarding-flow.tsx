@@ -25,6 +25,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react"
 
 import { useProductContext } from "@/components/product/product-context"
 import {
+  buildFullWebsiteUrl,
   canReuseOnboardingCheckout,
   clearOnboardingDraftStorage,
   createOnboardingDraft,
@@ -75,15 +76,6 @@ function blankKeyword(brandCandidate = true): OnboardingKeywordDraft {
   }
 }
 
-function sanitizeWebsiteInput(value: string): string {
-  return value.trim().replace(/^(https?:\/\/|\/\/)/i, "")
-}
-
-function buildFullWebsiteUrl(input: string): string {
-  const sanitized = sanitizeWebsiteInput(input)
-  return sanitized ? `https://${sanitized}` : ""
-}
-
 function cleanDraftInitial(draft: OnboardingDraft): OnboardingDraft {
   const cleanedKeywords = draft.keywords.filter((k) => k.phrase.trim())
 
@@ -96,7 +88,7 @@ function cleanDraftInitial(draft: OnboardingDraft): OnboardingDraft {
   return {
     ...draft,
     filteringContext: cleanedFilteringContext,
-    websiteUrl: sanitizeWebsiteInput(draft.websiteUrl || ""),
+    websiteUrl: (draft.websiteUrl || "").trim(),
     keywords: cleanedKeywords.length > 0 ? cleanedKeywords : [blankKeyword()],
   }
 }
@@ -676,9 +668,6 @@ export function OnboardingFlow() {
                     className="text-muted-foreground mr-2 size-4 shrink-0"
                     aria-hidden="true"
                   />
-                  <span className="text-muted-foreground/60 font-mono text-[13px] tracking-tight select-none">
-                    https://
-                  </span>
                   <input
                     id="company-website"
                     type="text"
@@ -688,24 +677,13 @@ export function OnboardingFlow() {
                     spellCheck={false}
                     value={draft.websiteUrl}
                     onChange={(event) => {
-                      const clean = sanitizeWebsiteInput(event.target.value)
                       setDraft((current) => ({
                         ...current,
-                        websiteUrl: clean,
+                        websiteUrl: event.target.value,
                       }))
                       setError(null)
                     }}
-                    onPaste={(event) => {
-                      event.preventDefault()
-                      const pasted = event.clipboardData.getData("text")
-                      const clean = sanitizeWebsiteInput(pasted)
-                      setDraft((current) => ({
-                        ...current,
-                        websiteUrl: clean,
-                      }))
-                      setError(null)
-                    }}
-                    placeholder="example.com"
+                    placeholder="https://example.com"
                     className="text-foreground placeholder:text-muted-foreground/30 min-w-0 flex-1 border-0 bg-transparent py-2 pr-0 pl-0.5 font-mono text-[13px] focus:outline-none"
                     autoFocus
                   />
@@ -835,7 +813,7 @@ export function OnboardingFlow() {
                 <span className="font-medium">
                   Astreex AI is analyzing{" "}
                   {draft.websiteUrl
-                    ? `https://${draft.websiteUrl}`
+                    ? buildFullWebsiteUrl(draft.websiteUrl)
                     : "your company"}{" "}
                   to discover keywords & noise filters…
                 </span>
@@ -855,7 +833,7 @@ export function OnboardingFlow() {
               <span>
                 Discovered keywords and configured noise filtering rules from{" "}
                 {draft.websiteUrl
-                  ? `https://${draft.websiteUrl}`
+                  ? buildFullWebsiteUrl(draft.websiteUrl)
                   : "your company"}
                 .
               </span>

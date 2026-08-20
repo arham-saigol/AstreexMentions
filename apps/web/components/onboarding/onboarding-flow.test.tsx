@@ -187,4 +187,29 @@ describe("OnboardingFlow", () => {
 
     expect(await screen.findByDisplayValue("Acme Corp")).toBeDefined()
   })
+
+  it("preserves explicitly entered HTTP website URLs when starting company research", async () => {
+    researchCompany.mockResolvedValue({
+      filteringContext: "",
+      filteringGuidelines: "",
+      state: "completed",
+      suggestions: [],
+    })
+
+    render(<OnboardingFlow />)
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+
+    const websiteInput = screen.getByLabelText("Company website")
+    fireEvent.change(websiteInput, {
+      target: { value: "http://insecure.example.com" },
+    })
+    fireEvent.click(screen.getByRole("button", { name: "Research company" }))
+
+    expect(researchCompany).toHaveBeenCalledWith({
+      websiteUrl: "http://insecure.example.com",
+    })
+  })
 })

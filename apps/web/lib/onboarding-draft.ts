@@ -110,6 +110,18 @@ export function normalizeKeywordPhrase(value: string): string {
   return value.trim().replace(/\s+/g, " ").toLocaleLowerCase("en")
 }
 
+export function buildFullWebsiteUrl(input: string): string {
+  const trimmed = input.trim()
+  if (!trimmed) return ""
+  if (/^[a-z][a-z\d+.-]*:\/\//i.test(trimmed)) {
+    return trimmed
+  }
+  if (trimmed.startsWith("//")) {
+    return `https:${trimmed}`
+  }
+  return `https://${trimmed}`
+}
+
 export function mergeResearchKeywordDrafts(
   existing: readonly OnboardingKeywordDraft[],
   suggestions: readonly OnboardingKeywordDraft[],
