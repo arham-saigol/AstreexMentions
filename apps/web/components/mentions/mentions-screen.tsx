@@ -722,8 +722,8 @@ export function MentionsScreen() {
               <>
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <p className="text-muted-foreground text-xs">
-                    {mentionsValue?.totalCount !== undefined
-                      ? `${mentionsValue.totalCount} mentions`
+                    {effectiveMentionsValue?.totalCount !== undefined
+                      ? `${effectiveMentionsValue.totalCount} mentions`
                       : `${visibleMentions.length} mentions on this page`}
                   </p>
                 </div>
@@ -771,19 +771,19 @@ export function MentionsScreen() {
                   variant="outline"
                   size="sm"
                   disabled={
-                    mentionsValue === undefined ||
-                    mentionsValue.isDone ||
-                    !mentionsValue.nextCursor
+                    effectiveMentionsValue === undefined ||
+                    effectiveMentionsValue.isDone ||
+                    !effectiveMentionsValue.nextCursor
                   }
                   onClick={() => {
                     if (
-                      mentionsValue === undefined ||
-                      !mentionsValue.nextCursor
+                      effectiveMentionsValue === undefined ||
+                      !effectiveMentionsValue.nextCursor
                     ) {
                       return
                     }
                     setCursorHistory((current) => [...current, cursor])
-                    setCursor(mentionsValue.nextCursor ?? undefined)
+                    setCursor(effectiveMentionsValue.nextCursor ?? undefined)
                   }}
                 >
                   Next

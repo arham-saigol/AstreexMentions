@@ -9,14 +9,6 @@ html {
 }
 
 @layer utilities {
-  .marketing-section {
-    @apply border-border mx-auto w-full max-w-[1180px] border-b px-5 py-20 sm:px-8 sm:py-24 lg:px-16 lg:py-28;
-  }
-
-  .page-title {
-    @apply font-serif text-[28px] leading-tight font-medium tracking-[-0.02em];
-  }
-
   .reveal {
     opacity: 1;
     transform: none;
