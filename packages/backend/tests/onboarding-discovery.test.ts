@@ -221,6 +221,91 @@ describe("onboarding company discovery", () => {
     })
   })
 
+  it("resets provider attribution to tinyfish when retrying after a Gemini failure and succeeding", async () => {
+    configureProviders()
+    ;(globalThis as { geminiTestResponses?: unknown[] }).geminiTestResponses = [
+      Object.assign(new Error("private Vertex failure"), { statusCode: 503 }),
+    ]
+    const { client, t } = await customer()
+
+    await expect(
+      client.action(researchCompany, {
+        manualDescription: "Astreex monitors customer conversations.",
+      }),
+    ).resolves.toMatchObject({ retryable: true, state: "failed" })
+
+    const failedRun = await t.run(
+      async (ctx) => await ctx.db.query("providerRuns").unique(),
+    )
+    expect(failedRun).toMatchObject({
+      provider: "gemini",
+      status: "failed",
+    })
+
+    ;(globalThis as { geminiTestResponses?: unknown[] }).geminiTestResponses = [
+      { queries: ["Astreex social listening"] },
+      {
+        filteringContext: "Astreex helps teams monitor customer conversations.",
+        filteringGuidelines:
+          "Include product discussions. Exclude astronomy uses of Astreex.",
+        suggestions: [
+          {
+            brandCandidate: true,
+            description: "The primary product name.",
+            phrase: "Astreex",
+            platforms: ["x", "reddit"],
+          },
+        ],
+      },
+    ]
+    const search = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          query: "Astreex social listening",
+          results: [
+            {
+              position: 0,
+              snippet: "Astreex is a social listening product.",
+              title: "Astreex",
+              url: "https://example.com/astreex",
+            },
+          ],
+        }),
+        { status: 200 },
+      ),
+    )
+    vi.stubGlobal("fetch", search)
+
+    await expect(
+      client.action(researchCompany, {
+        manualDescription: "Astreex monitors customer conversations.",
+      }),
+    ).resolves.toMatchObject({ state: "completed" })
+
+    const succeededRun = await t.run(
+      async (ctx) => await ctx.db.query("providerRuns").unique(),
+    )
+    expect(succeededRun).toMatchObject({
+      attempt: 2,
+      provider: "tinyfish",
+      status: "succeeded",
+    })
+    const tinyfishBucket = await t.run(
+      async (ctx) =>
+        await ctx.db
+          .query("providerMetricBuckets")
+          .withIndex("by_provider_operation_granularity_and_bucket", (q) =>
+            q.eq("provider", "tinyfish").eq("operation", "onboarding.research"),
+          )
+          .first(),
+    )
+    expect(tinyfishBucket).toMatchObject({
+      provider: "tinyfish",
+      retryCount: 1,
+      successCount: 1,
+    })
+  })
+
   it("requires both TinyFish and Vertex configuration before research starts", async () => {
     const { client, t } = await customer()
 

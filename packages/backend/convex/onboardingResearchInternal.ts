@@ -162,6 +162,7 @@ export const beginResearch = internalMutation({
         errorMessage: undefined,
         finishedAt: undefined,
         outputCount: 0,
+        provider: "tinyfish",
         startedAt: now,
         status: "running",
         updatedAt: now,
@@ -241,6 +242,7 @@ export const completeResearch = internalMutation({
         durationMs: args.durationMs,
         finishedAt: now,
         outputCount: 1,
+        provider: "tinyfish",
         status: "succeeded",
         updatedAt: now,
       })
