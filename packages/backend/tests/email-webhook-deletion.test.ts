@@ -320,10 +320,12 @@ describe("Resend webhook deletion fencing", () => {
     delete process.env.RESEND_API_KEY
     const t = convexTest({ modules, schema })
 
+    const timersBeforeDispatch = vi.getTimerCount()
     const result = await t.mutation(dispatchEmails, { now })
     expect(result).toMatchObject({
       state: "blocked_config",
     })
+    expect(vi.getTimerCount()).toBe(timersBeforeDispatch)
 
     await vi.advanceTimersByTimeAsync(5 * 60_000 + 1)
     await expect(t.finishInProgressScheduledFunctions()).resolves.toBeUndefined()

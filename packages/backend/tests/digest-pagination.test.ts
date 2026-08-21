@@ -135,7 +135,16 @@ describe("daily digest pagination", () => {
     const runs = await t.run(
       async (ctx) => await ctx.db.query("digestRuns").collect(),
     )
-    expect(runs.length).toBeGreaterThanOrEqual(3)
+    expect(
+      runs
+        .map((run) => run.scheduledFor as number)
+        .sort((left, right) => left - right),
+    ).toEqual([
+      Date.parse("2026-07-25T09:00:00.000Z"),
+      Date.parse("2026-07-26T09:00:00.000Z"),
+      Date.parse("2026-07-27T09:00:00.000Z"),
+      Date.parse("2026-07-28T09:00:00.000Z"),
+    ])
 
     const preference = await t.run(
       async (ctx) => await ctx.db.query("digestPreferences").unique(),

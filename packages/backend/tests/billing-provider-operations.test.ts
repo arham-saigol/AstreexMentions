@@ -584,11 +584,13 @@ describe("Creem provider operation retries", () => {
       }
     })
 
+    const timersBeforeDispatch = vi.getTimerCount()
     const result = await t.mutation(dispatchBilling, { now })
     expect(result).toMatchObject({
       outcomes: { provider_unconfigured: 5 },
       state: "dispatched",
     })
+    expect(vi.getTimerCount()).toBe(timersBeforeDispatch + 1)
 
     await vi.advanceTimersByTimeAsync(30_000 + 1)
     await t.finishInProgressScheduledFunctions()
