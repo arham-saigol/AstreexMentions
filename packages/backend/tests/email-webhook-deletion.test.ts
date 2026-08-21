@@ -312,4 +312,20 @@ describe("Resend webhook deletion fencing", () => {
     expect(outbox[0].status).toBe("sent")
     expect(outbox[0].providerMessageId).toBe("resend-msg-123")
   })
+
+  it("does not schedule a blocked-config retry when the email outbox has no due work", async () => {
+    const now = Date.parse("2026-07-27T12:00:00.000Z")
+    vi.useFakeTimers()
+    vi.setSystemTime(now)
+    delete process.env.RESEND_API_KEY
+    const t = convexTest({ modules, schema })
+
+    const result = await t.mutation(dispatchEmails, { now })
+    expect(result).toMatchObject({
+      state: "blocked_config",
+    })
+
+    await vi.advanceTimersByTimeAsync(5 * 60_000 + 1)
+    await expect(t.finishInProgressScheduledFunctions()).resolves.toBeUndefined()
+  })
 })

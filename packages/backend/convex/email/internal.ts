@@ -236,7 +236,23 @@ export const dispatchPendingEmails = internalMutation({
     const now = args.now ?? Date.now()
     const configuration = readResendDeliveryConfiguration(env)
     if (configuration.state === "provider_unconfigured") {
-      await scheduleEmailDispatchAt(ctx, now + BLOCKED_CONFIG_RETRY_MS)
+      const [pending, expired] = await Promise.all([
+        ctx.db
+          .query("emailOutbox")
+          .withIndex("by_status_and_next_attempt_at", (q) =>
+            q.eq("status", "pending").lte("nextAttemptAt", now),
+          )
+          .first(),
+        ctx.db
+          .query("emailOutbox")
+          .withIndex("by_status_and_lease_expires_at", (q) =>
+            q.eq("status", "leased").lte("leaseExpiresAt", now),
+          )
+          .first(),
+      ])
+      if (pending !== null || expired !== null) {
+        await scheduleEmailDispatchAt(ctx, now + BLOCKED_CONFIG_RETRY_MS)
+      }
       return {
         missing: configuration.missing,
         state: "blocked_config" as const,

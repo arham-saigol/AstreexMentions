@@ -85,6 +85,64 @@ describe("daily digest pagination", () => {
     ).toBe(true)
   }, 10_000)
 
+  it("continues immediately while a single digest preference remains overdue across multiple days", async () => {
+    const now = Date.parse("2026-07-28T09:00:00.000Z")
+    const threeDaysAgo = Date.parse("2026-07-25T09:00:00.000Z")
+    vi.useFakeTimers()
+    vi.setSystemTime(now)
+    vi.stubEnv("APP_URL", "https://app.astreex.test")
+    vi.stubEnv("RESEND_FROM_EMAIL", "Astreex <digest@example.test>")
+    const t = convexTest({ modules, schema })
+
+    await t.run(async (ctx) => {
+      const userId = await ctx.db.insert("users", {
+        clerkUserId: "digest-overdue-user",
+        createdAt: threeDaysAgo,
+        email: "overdue@example.test",
+        tokenIdentifier: "issuer|digest-overdue-user",
+        updatedAt: threeDaysAgo,
+      })
+      const workspaceId = await ctx.db.insert("workspaces", {
+        createdAt: threeDaysAgo,
+        kind: "personal",
+        name: "Overdue digest workspace",
+        normalizedName: "overdue digest workspace",
+        ownerUserId: userId,
+        updatedAt: threeDaysAgo,
+      })
+      await ctx.db.insert("digestPreferences", {
+        createdAt: threeDaysAgo,
+        enabled: true,
+        mentionLimit: 5,
+        nextRunAt: threeDaysAgo,
+        timeZone: "UTC",
+        updatedAt: threeDaysAgo,
+        userId,
+        workspaceId,
+      })
+    })
+
+    await t.mutation(dispatchDueDailyDigests, { now })
+    await vi.advanceTimersByTimeAsync(1)
+    await t.finishInProgressScheduledFunctions()
+    await vi.advanceTimersByTimeAsync(1)
+    await t.finishInProgressScheduledFunctions()
+    await vi.advanceTimersByTimeAsync(1)
+    await t.finishInProgressScheduledFunctions()
+    await vi.advanceTimersByTimeAsync(1)
+    await t.finishInProgressScheduledFunctions()
+
+    const runs = await t.run(
+      async (ctx) => await ctx.db.query("digestRuns").collect(),
+    )
+    expect(runs.length).toBeGreaterThanOrEqual(3)
+
+    const preference = await t.run(
+      async (ctx) => await ctx.db.query("digestPreferences").unique(),
+    )
+    expect(preference!.nextRunAt).toBeGreaterThan(now)
+  })
+
   it("ranks and counts the complete window across bounded pages", async () => {
     const t = convexTest({ modules, schema })
     const seeded = await t.run(async (ctx) => {
