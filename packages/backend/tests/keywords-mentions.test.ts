@@ -326,6 +326,27 @@ function mentionPage(value: unknown) {
 }
 
 describe("keyword Convex functions", () => {
+  it("rejects keyword phrases containing double quotes", async () => {
+    const t = createBackendTest()
+    const customer = await seedCustomer(t, { paid: true, suffix: "quotes" })
+
+    // Quotes become exact-phrase query syntax at provider search APIs, so a
+    // quoted phrase would be searched as different text and let phrases that
+    // differ only by quotes sanitize to the same outbound query.
+    await expect(
+      customer.client.mutation(createKeywordReference, {
+        phrase: 'Stalk"r',
+        platforms: ["hacker_news"],
+      }),
+    ).rejects.toMatchObject({ data: { code: "INVALID_KEYWORD" } })
+    await expect(
+      customer.client.mutation(createKeywordReference, {
+        phrase: '"  "',
+        platforms: ["hacker_news"],
+      }),
+    ).rejects.toMatchObject({ data: { code: "INVALID_KEYWORD" } })
+  })
+
   it("creates one free-evaluation keyword with independent scheduled Reddit sources", async () => {
     const t = createBackendTest()
     const customer = await seedCustomer(t, {

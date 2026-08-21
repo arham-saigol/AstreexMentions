@@ -105,7 +105,10 @@ function createSchedulingHarness() {
           .unique(),
       }))
     },
-    async seedLeasedHackerNewsSource(access: "free" | "paid" = "paid") {
+    async seedLeasedHackerNewsSource(
+      access: "free" | "paid" = "paid",
+      providerQuery = "Astreex",
+    ) {
       return await t.run(async (ctx) => {
         const userId = await ctx.db.insert("users", {
           clerkUserId: "user_scheduling_worker",
@@ -188,7 +191,7 @@ function createSchedulingHarness() {
           leaseToken: LEASE_TOKEN,
           leaseVersion: 1,
           nextRunAt: NOW,
-          providerQuery: "Astreex",
+          providerQuery,
           sourceType: "hacker_news",
           status: "active",
           totalFailures: 0,
@@ -359,6 +362,30 @@ describe("durable tracking action", () => {
       ),
     ).toBe(true)
     expect(persisted.source).toMatchObject({ status: "active" })
+  })
+
+  it("sends the keyword as a sanitized exact-phrase query to the provider", async () => {
+    const { readPersistedState, seedLeasedHackerNewsSource, t } =
+      createSchedulingHarness()
+    const seeded = await seedLeasedHackerNewsSource("paid", 'Stalk"r OR free')
+    const fetchMock = vi.fn(async () =>
+      Response.json(JSON.parse(providerResponse) as unknown),
+    )
+    vi.stubGlobal("fetch", fetchMock)
+
+    await expect(
+      t.action(executeTrackingSource, actionArguments(seeded)),
+    ).resolves.toMatchObject({ state: "applied" })
+
+    // Bare phrases match fuzzy variants (Algolia typo tolerance matched
+    // "stalkr" against "stalker"), so the phrase must arrive quoted with any
+    // embedded quotes neutralized.
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const requestedUrl = new URL(String(fetchMock.mock.calls[0]?.[0]))
+    expect(requestedUrl.searchParams.get("query")).toBe('"Stalk r OR free"')
+    expect(await readPersistedState(seeded)).toMatchObject({
+      source: { providerQuery: 'Stalk"r OR free' },
+    })
   })
 
   it("resumes committed provider pages without fetching or duplicating work", async () => {

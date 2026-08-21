@@ -48,6 +48,17 @@ function safeFailure(error: unknown): {
   }
 }
 
+/**
+ * Provider search APIs apply fuzzy matching to bare keyword queries: Algolia
+ * typo tolerance and prefix matching (Hacker News), any-word post search
+ * (Reddit), and token splitting across the text (X). Double quotes force
+ * exact-phrase matching on all three providers. Embedded double quotes from
+ * user input are neutralized so they cannot inject query operators.
+ */
+function exactPhraseQuery(phrase: string): string {
+  return `"${phrase.replace(/"/gu, " ").replace(/\s+/gu, " ").trim()}"`
+}
+
 async function searchProvider(
   context: Extract<TrackingExecutionContext, { state: "ready" }>,
   configuration: Extract<
@@ -67,7 +78,7 @@ async function searchProvider(
       const result = await adapter.search({
         cursor: context.cursor,
         limit: MAX_INGESTION_CHUNK_SIZE,
-        q: context.providerQuery,
+        q: exactPhraseQuery(context.providerQuery),
         queryType: "Latest",
       })
       return boundCursorResultToWindow(result, {
@@ -87,7 +98,7 @@ async function searchProvider(
       const input = {
         limit: MAX_INGESTION_CHUNK_SIZE,
         pages: Math.min(context.page ?? 1, MAX_FETCHLAYER_CUMULATIVE_PAGES),
-        query: context.providerQuery,
+        query: exactPhraseQuery(context.providerQuery),
         sort: "new" as const,
       }
       const result =
@@ -109,7 +120,7 @@ async function searchProvider(
         hitsPerPage: MAX_INGESTION_CHUNK_SIZE,
         numericFilters: `created_at_i>=${startSeconds},created_at_i<=${endSeconds}`,
         page: context.page ?? 0,
-        query: context.providerQuery,
+        query: exactPhraseQuery(context.providerQuery),
         tags: "(story,comment)",
       })
     }
