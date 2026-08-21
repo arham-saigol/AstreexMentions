@@ -1092,6 +1092,7 @@ async function ingestCreemWebhookBody(
     rawBody: string
     receivedAt: number
     scheduleIncompleteReconciliation?: boolean
+    scheduleRetry?: boolean
   },
 ) {
   let event = parseCreemWebhookEvent(args.rawBody)
@@ -1178,6 +1179,7 @@ async function ingestCreemWebhookBody(
       },
       outcome: "success",
       requestId: event.id,
+      targetId: String(billingEventId),
       targetType: "billing_event",
     })
     return { kind: "ignored" as const }
@@ -1196,7 +1198,9 @@ async function ingestCreemWebhookBody(
       status: "pending",
       updatedAt: args.receivedAt,
     })
-    await schedulePendingCreemBillingEvents(ctx, nextAttemptAt)
+    if (args.scheduleRetry !== false) {
+      await schedulePendingCreemBillingEvents(ctx, nextAttemptAt)
+    }
     return {
       kind: "provider_unconfigured" as const,
       missing: allowlist.missing,
@@ -1222,7 +1226,9 @@ async function ingestCreemWebhookBody(
       status: "pending",
       updatedAt: args.receivedAt,
     })
-    await schedulePendingCreemBillingEvents(ctx, nextAttemptAt)
+    if (args.scheduleRetry !== false) {
+      await schedulePendingCreemBillingEvents(ctx, nextAttemptAt)
+    }
     await recordProviderRunAndMetric(ctx, {
       durationMs,
       errorCode: "TARGET_NOT_READY",
@@ -1243,7 +1249,9 @@ async function ingestCreemWebhookBody(
       status: "pending",
       updatedAt: args.receivedAt,
     })
-    await schedulePendingCreemBillingEvents(ctx, nextAttemptAt)
+    if (args.scheduleRetry !== false) {
+      await schedulePendingCreemBillingEvents(ctx, nextAttemptAt)
+    }
     await recordProviderRunAndMetric(ctx, {
       durationMs,
       errorCode: "INCOMPLETE_SUBSCRIPTION_PERIOD",
@@ -1424,6 +1432,7 @@ export const dispatchPendingCreemBillingEvents = internalMutation({
       .take(MAX_BILLING_EVENT_RETRIES_PER_DISPATCH)
     const outcomes: Record<string, number> = {}
 
+    let earliestPendingRetryAt: number | undefined
     for (const event of due.sort(
       (left, right) =>
         ((left.nextAttemptAt as number | undefined) ?? 0) -
@@ -1433,8 +1442,20 @@ export const dispatchPendingCreemBillingEvents = internalMutation({
       const result = await ingestCreemWebhookBody(ctx, {
         rawBody: event.payloadJson as string,
         receivedAt: now,
+        scheduleRetry: false,
       })
       outcomes[result.kind] = (outcomes[result.kind] ?? 0) + 1
+      if (
+        result.kind === "pending" ||
+        result.kind === "provider_unconfigured" ||
+        result.kind === "incomplete_period"
+      ) {
+        const nextAttemptAt = now + WEBHOOK_RETRY_DELAY_MS
+        earliestPendingRetryAt =
+          earliestPendingRetryAt === undefined
+            ? nextAttemptAt
+            : Math.min(earliestPendingRetryAt, nextAttemptAt)
+      }
     }
 
     if (
@@ -1446,6 +1467,8 @@ export const dispatchPendingCreemBillingEvents = internalMutation({
         internal.billing.internal.dispatchPendingCreemBillingEvents,
         {},
       )
+    } else if (earliestPendingRetryAt !== undefined) {
+      await schedulePendingCreemBillingEvents(ctx, earliestPendingRetryAt)
     }
 
     return {

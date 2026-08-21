@@ -542,4 +542,61 @@ describe("Creem provider operation retries", () => {
     expect(runs).toHaveLength(17)
     expect(runs.every((run) => run.status === "failed")).toBe(true)
   })
+
+  it("coalesces pending retry wake-ups across a batch of due billing events", async () => {
+    vi.useFakeTimers()
+    const now = Date.parse("2026-07-26T12:00:00.000Z")
+    vi.setSystemTime(now)
+    const t = convexTest({ modules, schema })
+
+    await t.run(async (ctx) => {
+      for (let i = 0; i < 5; i += 1) {
+        await ctx.db.insert("billingEvents", {
+          attempts: 0,
+          createdAt: now - 30_000,
+          eventType: "subscription.paid",
+          livemode: false,
+          nextAttemptAt: now,
+          payloadJson: JSON.stringify({
+            created_at: now - 30_000,
+            eventType: "subscription.paid",
+            id: `evt_unconfigured_${i}`,
+            object: {
+              collection_method: "charge_automatically",
+              created_at: "2026-07-26T11:30:00.000Z",
+              customer: { id: `cust_${i}`, object: "customer" },
+              id: `sub_${i}`,
+              metadata: { internal_customer_id: "workspace_test" },
+              mode: "test",
+              object: "subscription",
+              product: { id: "prod_unconfigured_unknown", object: "product" },
+              status: "active",
+              updated_at: "2026-07-26T11:30:00.000Z",
+            },
+          }),
+          provider: "creem",
+          providerCreatedAt: Math.floor((now - 30_000) / 1000),
+          providerEventId: `evt_unconfigured_${i}`,
+          receivedAt: now - 30_000,
+          status: "pending",
+          updatedAt: now - 30_000,
+        })
+      }
+    })
+
+    const result = await t.mutation(dispatchBilling, { now })
+    expect(result).toMatchObject({
+      outcomes: { provider_unconfigured: 5 },
+      state: "dispatched",
+    })
+
+    await vi.advanceTimersByTimeAsync(30_000 + 1)
+    await t.finishInProgressScheduledFunctions()
+
+    const events = await t.run(
+      async (ctx) => await ctx.db.query("billingEvents").collect(),
+    )
+    expect(events).toHaveLength(5)
+    expect(events.every((e) => (e.attempts as number) === 2)).toBe(true)
+  })
 })
