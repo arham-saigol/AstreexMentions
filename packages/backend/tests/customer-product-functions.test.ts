@@ -822,9 +822,10 @@ describe("customer settings functions", () => {
       new Intl.DateTimeFormat("en-US", {
         hour: "2-digit",
         hourCycle: "h23",
+        minute: "2-digit",
         timeZone: "America/Los_Angeles",
       }).format(new Date(initial!.nextRunAt)),
-    ).toBe("09")
+    ).toBe("09:00")
 
     await customer.mutation(bootstrapCurrentUser, { timeZone: "UTC" })
     await expect(
@@ -865,6 +866,12 @@ describe("customer settings functions", () => {
     await expect(
       customer.mutation(updateDigestPreferences, {
         enabled: true,
+        timeZone: "+05:30",
+      }),
+    ).rejects.toMatchObject({ data: { code: "INVALID_DIGEST_PREFERENCE" } })
+    await expect(
+      customer.mutation(updateDigestPreferences, {
+        enabled: true,
         hour: 8,
         timeZone: "UTC",
       } as never),
@@ -883,9 +890,10 @@ describe("customer settings functions", () => {
       new Intl.DateTimeFormat("en-US", {
         hour: "2-digit",
         hourCycle: "h23",
+        minute: "2-digit",
         timeZone: "America/New_York",
       }).format(new Date(updated.digest.nextRunAt)),
-    ).toBe("09")
+    ).toBe("09:00")
     const preference = await t.run(
       async (ctx) =>
         await ctx.db

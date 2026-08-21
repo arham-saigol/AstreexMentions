@@ -249,4 +249,67 @@ describe("Resend webhook deletion fencing", () => {
     expect(state.outbox).not.toHaveProperty("deliveryStatus")
     expect(state.workspaceMetrics).toEqual([])
   })
+
+  it("schedules a blocked-config retry when delivery configuration is unconfigured", async () => {
+    const now = Date.parse("2026-07-27T12:00:00.000Z")
+    vi.useFakeTimers()
+    vi.setSystemTime(now)
+    delete process.env.RESEND_API_KEY
+    const t = convexTest({ modules, schema })
+
+    await t.run(async (ctx) => {
+      const userId = await ctx.db.insert("users", {
+        clerkUserId: "resend-unconfigured-user",
+        createdAt: now,
+        tokenIdentifier: "issuer|resend-unconfigured-user",
+        updatedAt: now,
+      })
+      const workspaceId = await ctx.db.insert("workspaces", {
+        createdAt: now,
+        kind: "personal",
+        name: "Unconfigured email workspace",
+        normalizedName: "unconfigured email workspace",
+        ownerUserId: userId,
+        updatedAt: now,
+      })
+      await ctx.db.insert("emailOutbox", {
+        attempts: 0,
+        createdAt: now,
+        from: "Astreex <notifications@example.com>",
+        html: "<p>Unconfigured</p>",
+        idempotencyKey: "email:unconfigured-retry",
+        nextAttemptAt: now,
+        payloadFingerprint: "fingerprint-unconfigured",
+        provider: "resend",
+        status: "pending",
+        subject: "Unconfigured",
+        to: ["owner@example.com"],
+        updatedAt: now,
+        userId,
+        workspaceId,
+      })
+    })
+
+    const result = await t.mutation(dispatchEmails, { now })
+    expect(result).toMatchObject({
+      state: "blocked_config",
+    })
+
+    vi.stubEnv("RESEND_API_KEY", "re_configured_after_retry")
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "resend-msg-123" }), {
+        headers: { "content-type": "application/json" },
+        status: 200,
+      }),
+    )
+    await vi.advanceTimersByTimeAsync(5 * 60_000 + 1)
+    await t.finishInProgressScheduledFunctions()
+
+    const outbox = await t.run(async (ctx) => {
+      return await ctx.db.query("emailOutbox").collect()
+    })
+    expect(outbox).toHaveLength(1)
+    expect(outbox[0].status).toBe("sent")
+    expect(outbox[0].providerMessageId).toBe("resend-msg-123")
+  })
 })

@@ -48,14 +48,18 @@ export function validateDailyDigestTimeZone(timeZone: string): string {
   }
 
   try {
-    Temporal.Now.zonedDateTimeISO(normalized)
+    const zdt = Temporal.Now.zonedDateTimeISO(normalized)
+    if (zdt.timeZoneId.startsWith("+") || zdt.timeZoneId.startsWith("-")) {
+      throw new RangeError(
+        `Fixed-offset time zones are not supported: ${normalized}`,
+      )
+    }
+    return zdt.timeZoneId
   } catch (error) {
     throw new RangeError(`Invalid IANA time zone: ${normalized}`, {
       cause: error,
     })
   }
-
-  return normalized
 }
 
 function instant(milliseconds: number): Temporal.Instant {

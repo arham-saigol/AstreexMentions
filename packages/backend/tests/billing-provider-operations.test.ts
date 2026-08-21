@@ -485,4 +485,61 @@ describe("Creem provider operation retries", () => {
       status: "failed",
     })
   })
+
+  it("drains stale operations across continuations when exceeding batch limit without due billing events", async () => {
+    vi.useFakeTimers()
+    const now = Date.parse("2026-07-26T12:00:00.000Z")
+    vi.setSystemTime(now)
+    const t = convexTest({ modules, schema })
+    const workspaceId = await t.run(async (ctx) => {
+      const userId = await ctx.db.insert("users", {
+        clerkUserId: "user_billing_stale_continuation",
+        createdAt: now,
+        tokenIdentifier: "issuer|user_billing_stale_continuation",
+        updatedAt: now,
+      })
+      return await ctx.db.insert("workspaces", {
+        createdAt: now,
+        kind: "personal",
+        name: "Billing stale continuation",
+        normalizedName: "billing stale continuation",
+        ownerUserId: userId,
+        updatedAt: now,
+      })
+    })
+
+    await t.run(async (ctx) => {
+      for (let i = 0; i < 17; i += 1) {
+        await ctx.db.insert("providerRuns", {
+          attempt: 1,
+          createdAt: now - PROVIDER_OPERATION_STALE_MS,
+          idempotencyKey: `checkout:stale_batch_${i}`,
+          inputCount: 1,
+          operation: "checkout",
+          outputCount: 0,
+          provider: "creem",
+          startedAt: now - PROVIDER_OPERATION_STALE_MS,
+          status: "running",
+          trigger: "manual",
+          updatedAt: now - PROVIDER_OPERATION_STALE_MS,
+          workspaceId,
+        })
+      }
+    })
+
+    const first = await t.mutation(dispatchBilling, { now })
+    expect(first).toMatchObject({
+      expiredOperations: 16,
+      state: "dispatched",
+    })
+
+    await vi.advanceTimersByTimeAsync(1)
+    await t.finishInProgressScheduledFunctions()
+
+    const runs = await t.run(async (ctx) => {
+      return await ctx.db.query("providerRuns").collect()
+    })
+    expect(runs).toHaveLength(17)
+    expect(runs.every((run) => run.status === "failed")).toBe(true)
+  })
 })

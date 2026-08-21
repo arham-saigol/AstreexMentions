@@ -1437,7 +1437,10 @@ export const dispatchPendingCreemBillingEvents = internalMutation({
       outcomes[result.kind] = (outcomes[result.kind] ?? 0) + 1
     }
 
-    if (due.length === MAX_BILLING_EVENT_RETRIES_PER_DISPATCH) {
+    if (
+      staleOperations.length === MAX_STALE_CREEM_OPERATIONS_PER_DISPATCH ||
+      due.length === MAX_BILLING_EVENT_RETRIES_PER_DISPATCH
+    ) {
       await ctx.scheduler.runAfter(
         0,
         internal.billing.internal.dispatchPendingCreemBillingEvents,

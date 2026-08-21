@@ -236,6 +236,7 @@ export const dispatchPendingEmails = internalMutation({
     const now = args.now ?? Date.now()
     const configuration = readResendDeliveryConfiguration(env)
     if (configuration.state === "provider_unconfigured") {
+      await scheduleEmailDispatchAt(ctx, now + BLOCKED_CONFIG_RETRY_MS)
       return {
         missing: configuration.missing,
         state: "blocked_config" as const,

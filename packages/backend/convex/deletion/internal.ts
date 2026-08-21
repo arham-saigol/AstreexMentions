@@ -329,6 +329,14 @@ export const dispatchDueAccountDeletions = internalMutation({
       claimed += 1
     }
 
+    if (due.length === MAX_DELETION_CLAIMS) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.deletion.internal.dispatchDueAccountDeletions,
+        {},
+      )
+    }
+
     return { claimed, dead, state: "dispatched" as const }
   },
 })
