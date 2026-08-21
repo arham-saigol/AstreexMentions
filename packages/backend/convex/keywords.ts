@@ -135,12 +135,14 @@ function validatedPhrase(value: string) {
     )
   }
   // Phrases are sent to provider search APIs as exact-phrase queries, so
-  // double quotes act as query syntax. A phrase without text besides quotes
-  // would degenerate into an empty phrase query.
-  if (!phrase.replace(/"/gu, "").trim()) {
+  // double quotes act as query syntax and cannot be tracked verbatim.
+  // Rejecting them keeps the sanitized provider query faithful to the phrase
+  // and prevents phrases that differ only by quotes from bypassing uniqueness
+  // checks while sanitizing to the same outbound query.
+  if (phrase.includes('"')) {
     keywordError(
       "INVALID_KEYWORD",
-      "Keyword phrases must contain characters besides quotes",
+      "Keyword phrases cannot contain double quotes",
     )
   }
   return { normalizedPhrase: normalizeKeywordPhrase(phrase), phrase }
