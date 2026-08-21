@@ -314,11 +314,14 @@ export const researchCompany = customerAction({
         error instanceof GeminiIntegrationError
           ? error
           : undefined
+      const provider =
+        error instanceof GeminiIntegrationError ? "gemini" : "tinyfish"
       const errorCode = integrationError?.code ?? "RESEARCH_FAILED"
       await ctx.runMutation(internal.onboardingResearchInternal.failResearch, {
         durationMs: Math.max(0, Date.now() - startedAt),
         errorCode,
         inputFingerprint,
+        provider,
         researchId: begin.researchId,
         workspaceId: ctx.workspace.id,
       })

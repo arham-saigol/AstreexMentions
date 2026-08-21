@@ -177,7 +177,7 @@ describe("onboarding company discovery", () => {
     ;(globalThis as { geminiTestResponses?: unknown[] }).geminiTestResponses = [
       Object.assign(new Error("private Vertex failure"), { statusCode: 503 }),
     ]
-    const { client } = await customer()
+    const { client, t } = await customer()
 
     await expect(
       client.action(researchCompany, {
@@ -188,6 +188,28 @@ describe("onboarding company discovery", () => {
         "Company research returned invalid data. Retry or add keywords manually.",
       retryable: true,
       state: "failed",
+    })
+    const run = await t.run(
+      async (ctx) => await ctx.db.query("providerRuns").unique(),
+    )
+    expect(run).toMatchObject({
+      errorCode: "SERVER_ERROR",
+      provider: "gemini",
+      status: "failed",
+    })
+    const bucket = await t.run(
+      async (ctx) =>
+        await ctx.db
+          .query("providerMetricBuckets")
+          .withIndex("by_provider_operation_granularity_and_bucket", (q) =>
+            q.eq("provider", "gemini").eq("operation", "onboarding.research"),
+          )
+          .first(),
+    )
+    expect(bucket).toMatchObject({
+      failureCount: 1,
+      provider: "gemini",
+      successCount: 0,
     })
   })
 

@@ -53,7 +53,7 @@ The existing category-configuration onboarding screens are removed. Default cate
 - Existing paid entitlement and recurring counters live in `subscriptions` and `usageCycles`; ingestion in `packages/backend/convex/ingestion/service.ts` atomically increments `mentionsUsed` and pauses sources at a cap. Reuse that transactional cap behavior for the evaluation rather than implementing client-side counting.
 - `packages/backend/convex/keywords.ts` currently makes every no-subscription source paused with reason `paid`; `apps/web/lib/product-access.ts` correspondingly treats non-subscribers as preview/onboarding only. Both need an explicit free-evaluation access path.
 - The public pricing section is in `apps/web/app/(public)/page.tsx`; keep its three paid cards and add only the agreed subheading/copy about the first 100 mentions.
-- Separately from this rollout, the Vertex AI Gemini mention analysis pipeline receives mention text, category definitions, filtering fields, and matched-keyword context (`packages/backend/convex/mentionAnalysis/internal.ts` and `packages/backend/convex/lib/Vertex AI GeminiMentionAnalysis.ts`).
+- Separately from this rollout, the Vertex AI Gemini mention analysis pipeline receives mention text, category definitions, filtering fields, and matched-keyword context (`packages/backend/convex/mentionAnalysis/internal.ts` and `packages/backend/convex/lib/mentionAnalysis.ts`).
 
 ## Implementation plan
 
