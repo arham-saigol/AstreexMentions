@@ -146,7 +146,7 @@ The response has one `results` array. Every result has exactly `mentionId`, `rel
 
 The onboarding action uses structured Gemini output for a search plan of at most three queries and for one to eight recommendations. It retains TinyFish bounds, untrusted-content delimiters, deduplication, one `brandCandidate`, and research rate limits.
 
-The one-minute dispatcher groups prompt-bounded jobs from one workspace under a four-minute lease. Each lease has an exact analysis snapshot. The dispatcher schedules at most four batches. It calls `createGeminiJsonRequester` after it validates the lease, mentions, workspace, and snapshot. The catalog must include exactly one enabled permanent system `Other` category.
+The event-driven Convex dispatcher groups prompt-bounded jobs from one workspace under a four-minute lease. The 15-minute cron is a recovery sweep. Each lease has an exact analysis snapshot. The dispatcher schedules at most four batches. It calls `createGeminiJsonRequester` after it validates the lease, mentions, workspace, and snapshot. The catalog must include exactly one enabled permanent system `Other` category.
 
 A result applies only after full-batch validation succeeds. Success atomically stores all analysis fields, feed state, and job state. Provider runs and metrics use `gemini` and `mention_analysis:mention-analysis-v2`. Retryable errors use deterministic queue backoff from 30 seconds to 30 minutes. Permanent or exhausted jobs become `dead`. Linked mentions fail open as visible and unclassified.
 
@@ -184,7 +184,7 @@ Idempotency exists at two layers:
 1. Convex indexes the durable outbox by `idempotencyKey` and stores a stable payload fingerprint. Reusing a key with different recipients/content/from/subject/reply-to is an `IDEMPOTENCY_COLLISION`.
 2. The same durable key is passed to Resend as `Idempotency-Key`. If a 60-second lease expires after Resend accepted the request but before Convex recorded success, the replacement worker repeats the same provider-idempotent request.
 
-The email cron claims at most 32 pending or expired-lease rows per minute. Retryable failures use up to eight attempts with delays of 30 seconds, 60 seconds, 120 seconds, and so on, capped at six hours. HTTP 408, 409, 429, and 5xx are retryable. Missing delivery configuration releases the lease, rolls back the attempt count, and retries after five minutes. Non-retryable or exhausted sends become `dead`; a linked digest run becomes `failed`.
+The event-driven email dispatcher claims at most 32 pending or expired-lease rows. The 15-minute cron is a recovery sweep. Retryable failures use up to eight attempts with delays of 30 seconds, 60 seconds, 120 seconds, and so on, capped at six hours. HTTP 408, 409, 429, and 5xx are retryable. Missing delivery configuration releases the lease, rolls back the attempt count, and retries after five minutes. Non-retryable or exhausted sends become `dead`. A linked digest run becomes `failed`.
 
 A successful send sets outbox `status: "sent"`, `deliveryStatus: "sent"`, and the provider message ID. It does not prove inbox delivery.
 

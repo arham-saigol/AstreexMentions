@@ -6,7 +6,7 @@ Use this runbook when analysis stays pending, Vertex Gemini requests fail, lease
 
 Ingestion creates one `mentionAnalysisJobs` row for each new mention. The linked mention starts with `analysisState: "pending"` and `feedState: "pending"`.
 
-The one-minute cron does this work:
+Durable wake-ups do this work. The 15-minute cron recovers missed work:
 
 - It scans at most 256 due or expired jobs.
 - It considers at most 16 workspaces.
@@ -59,7 +59,7 @@ Do not put mention text, prompts, headers, keys, or raw provider responses in in
 
 ## Verify
 
-- A cron run claims at most 80 jobs in four batches.
+- One dispatcher run claims at most 80 jobs in four batches.
 - A controlled batch applies relevance, priority, category, reasons, and the analysis version.
 - A filtered result stays out of the normal feed and remains in the Filtered view.
 - A terminal error makes the mention visible and unclassified.

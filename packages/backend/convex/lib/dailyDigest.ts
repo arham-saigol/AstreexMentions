@@ -7,12 +7,7 @@ import {
 } from "@astreex/domain"
 
 export const DEFAULT_DIGEST_MENTION_LIMIT = 20
-
-export type DailyDigestSchedule = {
-  hour: number
-  minute: number
-  timeZone: string
-}
+export const DAILY_DIGEST_DELIVERY_TIME = { hour: 9, minute: 0 } as const
 
 export type DailyDigestWindow = {
   endAt: number
@@ -46,24 +41,22 @@ export type EnqueuedDigestPlan<T extends RankableMention> = DigestPlanBase & {
 export type DailyDigestPlan<T extends RankableMention> =
   DuplicateDigestPlan | EmptyDigestPlan | EnqueuedDigestPlan<T>
 
-function assertSchedule(schedule: DailyDigestSchedule): void {
-  if (
-    !Number.isInteger(schedule.hour) ||
-    schedule.hour < 0 ||
-    schedule.hour > 23 ||
-    !Number.isInteger(schedule.minute) ||
-    schedule.minute < 0 ||
-    schedule.minute > 59
-  ) {
-    throw new RangeError(
-      "Digest schedule requires an integer hour from 0-23 and minute from 0-59",
-    )
+export function validateDailyDigestTimeZone(timeZone: string): string {
+  const normalized = timeZone.trim()
+  if (normalized.length === 0 || normalized.length > 120) {
+    throw new RangeError("Digest timezone must be a valid IANA timezone")
   }
 
   try {
-    Temporal.Now.zonedDateTimeISO(schedule.timeZone)
+    const zdt = Temporal.Now.zonedDateTimeISO(normalized)
+    if (zdt.timeZoneId.startsWith("+") || zdt.timeZoneId.startsWith("-")) {
+      throw new RangeError(
+        `Fixed-offset time zones are not supported: ${normalized}`,
+      )
+    }
+    return zdt.timeZoneId
   } catch (error) {
-    throw new RangeError(`Invalid IANA time zone: ${schedule.timeZone}`, {
+    throw new RangeError(`Invalid IANA time zone: ${normalized}`, {
       cause: error,
     })
   }
@@ -107,28 +100,28 @@ export function dailyDigestWindow(
   }
 }
 
-/** Returns the first configured local wall-clock occurrence strictly after afterAt. */
+/** Returns the next 9:00 AM local occurrence strictly after afterAt. */
 export function nextDailyDigestRunAt(
   afterAt: number,
-  schedule: DailyDigestSchedule,
+  timeZone: string,
 ): number {
-  assertSchedule(schedule)
+  const normalizedTimeZone = validateDailyDigestTimeZone(timeZone)
   const after = instant(afterAt)
-  const local = after.toZonedDateTimeISO(schedule.timeZone)
+  const local = after.toZonedDateTimeISO(normalizedTimeZone)
   let date = local.toPlainDate()
 
   const candidateFor = (candidateDate: Temporal.PlainDate) =>
     Temporal.ZonedDateTime.from(
       {
         day: candidateDate.day,
-        hour: schedule.hour,
+        hour: DAILY_DIGEST_DELIVERY_TIME.hour,
         microsecond: 0,
         millisecond: 0,
-        minute: schedule.minute,
+        minute: DAILY_DIGEST_DELIVERY_TIME.minute,
         month: candidateDate.month,
         nanosecond: 0,
         second: 0,
-        timeZone: schedule.timeZone,
+        timeZone: normalizedTimeZone,
         year: candidateDate.year,
       },
       { disambiguation: "compatible" },
@@ -173,17 +166,17 @@ export function planDailyDigest<T extends RankableMention>(input: {
   alreadyRecorded: boolean
   mentionLimit?: number
   mentions: readonly T[]
-  schedule: DailyDigestSchedule
   scheduledFor: number
+  timeZone: string
   workspaceId: string
 }): DailyDigestPlan<T> {
-  assertSchedule(input.schedule)
-  const window = dailyDigestWindow(input.scheduledFor, input.schedule.timeZone)
+  const timeZone = validateDailyDigestTimeZone(input.timeZone)
+  const window = dailyDigestWindow(input.scheduledFor, timeZone)
   const idempotencyKey = dailyDigestIdempotencyKey({
     localDate: window.localDate,
     workspaceId: input.workspaceId,
   })
-  const nextRunAt = nextDailyDigestRunAt(input.scheduledFor, input.schedule)
+  const nextRunAt = nextDailyDigestRunAt(input.scheduledFor, timeZone)
   const base = {
     idempotencyKey,
     nextRunAt,

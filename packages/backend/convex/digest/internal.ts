@@ -98,7 +98,10 @@ async function schedulePreference(
   ctx: MutationCtx,
   preference: Doc<"digestPreferences">,
   now: number,
-): Promise<"duplicate" | "enqueued" | "skipped_empty" | "skipped_recipient"> {
+): Promise<{
+  hasRemainingOverdue: boolean
+  outcome: "duplicate" | "enqueued" | "skipped_empty" | "skipped_recipient"
+}> {
   const preferenceId = preference._id
   const workspaceId = preference.workspaceId
   const userId = preference.userId
@@ -113,7 +116,7 @@ async function schedulePreference(
       enabled: false,
       updatedAt: now,
     })
-    return "skipped_recipient"
+    return { hasRemainingOverdue: false, outcome: "skipped_recipient" }
   }
 
   if (
@@ -130,21 +133,16 @@ async function schedulePreference(
       enabled: false,
       updatedAt: now,
     })
-    return "skipped_recipient"
+    return { hasRemainingOverdue: false, outcome: "skipped_recipient" }
   }
 
-  const schedule = {
-    hour: preference.hour as number,
-    minute: preference.minute as number,
-    timeZone: preference.timeZone as string,
-  }
   const scheduledFor = preference.nextRunAt as number
   const plan = planDailyDigest({
     alreadyRecorded: false,
     mentionLimit: preference.mentionLimit as number,
     mentions: [],
-    schedule,
     scheduledFor,
+    timeZone: preference.timeZone as string,
     workspaceId: String(workspaceId),
   })
   const existing = await ctx.db
@@ -158,8 +156,9 @@ async function schedulePreference(
     nextRunAt: plan.nextRunAt,
     updatedAt: now,
   })
+  const hasRemainingOverdue = plan.nextRunAt <= now
   if (existing) {
-    return "duplicate"
+    return { hasRemainingOverdue, outcome: "duplicate" }
   }
 
   const digestRunId = await ctx.db.insert("digestRuns", {
@@ -186,7 +185,7 @@ async function schedulePreference(
       digestRunId,
     },
   )
-  return "enqueued"
+  return { hasRemainingOverdue, outcome: "enqueued" }
 }
 
 export const dispatchDueDailyDigests = internalMutation({
@@ -214,12 +213,24 @@ export const dispatchDueDailyDigests = internalMutation({
       skipped_recipient: 0,
     }
 
+    let hasRemainingOverdue = false
     for (const preference of due.sort(
       (left, right) =>
         (left.nextRunAt as number) - (right.nextRunAt as number) ||
         String(left._id).localeCompare(String(right._id), "en"),
     )) {
-      outcomes[await schedulePreference(ctx, preference, now)] += 1
+      const result = await schedulePreference(ctx, preference, now)
+      outcomes[result.outcome] += 1
+      if (result.hasRemainingOverdue) {
+        hasRemainingOverdue = true
+      }
+    }
+    if (due.length === MAX_DUE_DIGESTS || hasRemainingOverdue) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.digest.internal.dispatchDueDailyDigests,
+        {},
+      )
     }
 
     return { outcomes, state: "dispatched" as const }
@@ -525,6 +536,7 @@ export const enqueueRenderedDailyDigest = internalMutation({
       .unique()
 
     let outboxId: EmailOutboxId
+    let created = false
     if (existing) {
       if (
         existing.payloadFingerprint !== fingerprint ||
@@ -559,6 +571,7 @@ export const enqueueRenderedDailyDigest = internalMutation({
           workspaceId: run.workspaceId,
         }),
       )) as EmailOutboxId
+      created = true
     }
 
     if (run.status === "processing") {
@@ -567,6 +580,13 @@ export const enqueueRenderedDailyDigest = internalMutation({
         status: "enqueued",
         updatedAt: Date.now(),
       })
+    }
+    if (created) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.email.internal.dispatchPendingEmails,
+        {},
+      )
     }
     return {
       outboxId,

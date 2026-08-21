@@ -797,14 +797,62 @@ describe("customer saved view functions", () => {
 })
 
 describe("customer settings functions", () => {
-  it("returns initialized settings and rejects invalid timezone or local time", async () => {
-    const { customer } = await bootstrappedCustomer()
+  it("initializes the digest timezone once from the browser and falls back to UTC", async () => {
+    const t = convexTest({ modules, schema: customerTestSchema })
+    const customer = t.withIdentity(identity)
+    const first = await customer.mutation(bootstrapCurrentUser, {
+      timeZone: "America/Los_Angeles",
+    })
+    const readPreference = async (userId: string, workspaceId: string) =>
+      await t.run(
+        async (ctx) =>
+          await ctx.db
+            .query("digestPreferences")
+            .withIndex("by_workspace_and_user", (q) =>
+              q
+                .eq("workspaceId", workspaceId as never)
+                .eq("userId", userId as never),
+            )
+            .unique(),
+      )
+
+    const initial = await readPreference(first.userId, first.workspaceId)
+    expect(initial).toMatchObject({ timeZone: "America/Los_Angeles" })
+    expect(
+      new Intl.DateTimeFormat("en-US", {
+        hour: "2-digit",
+        hourCycle: "h23",
+        minute: "2-digit",
+        timeZone: "America/Los_Angeles",
+      }).format(new Date(initial!.nextRunAt)),
+    ).toBe("09:00")
+
+    await customer.mutation(bootstrapCurrentUser, { timeZone: "UTC" })
+    await expect(
+      readPreference(first.userId, first.workspaceId),
+    ).resolves.toMatchObject({
+      timeZone: "America/Los_Angeles",
+    })
+
+    const fallbackCustomer = t.withIdentity({
+      ...identity,
+      subject: "user_clerk_customer_fallback",
+      tokenIdentifier:
+        "https://clerk.example.test|user_clerk_customer_fallback",
+    })
+    const fallback = await fallbackCustomer.mutation(bootstrapCurrentUser, {
+      timeZone: "Not/A_Timezone",
+    })
+    await expect(
+      readPreference(fallback.userId, fallback.workspaceId),
+    ).resolves.toMatchObject({ timeZone: "UTC" })
+  })
+
+  it("uses fixed 9:00 AM local digest scheduling and rejects invalid zones", async () => {
+    const { bootstrap, customer, t } = await bootstrappedCustomer()
     await expect(customer.query(getSettings, {})).resolves.toMatchObject({
       digest: {
         enabled: true,
-        hour: 9,
-        mentionLimit: 20,
-        minute: 0,
         timeZone: "UTC",
       },
     })
@@ -812,37 +860,53 @@ describe("customer settings functions", () => {
     await expect(
       customer.mutation(updateDigestPreferences, {
         enabled: true,
-        hour: 24,
-        mentionLimit: 20,
-        minute: 0,
-        timeZone: "UTC",
+        timeZone: "Not/A_Timezone",
+      }),
+    ).rejects.toMatchObject({ data: { code: "INVALID_DIGEST_PREFERENCE" } })
+    await expect(
+      customer.mutation(updateDigestPreferences, {
+        enabled: true,
+        timeZone: "+05:30",
       }),
     ).rejects.toMatchObject({ data: { code: "INVALID_DIGEST_PREFERENCE" } })
     await expect(
       customer.mutation(updateDigestPreferences, {
         enabled: true,
         hour: 8,
-        mentionLimit: 25,
-        minute: 30,
-        timeZone: "Not/A_Timezone",
-      }),
-    ).rejects.toMatchObject({ data: { code: "INVALID_DIGEST_PREFERENCE" } })
-    await expect(
-      customer.mutation(updateDigestPreferences, {
-        enabled: false,
-        hour: 8,
-        mentionLimit: 25,
-        minute: 30,
-        timeZone: "America/New_York",
-      }),
-    ).resolves.toMatchObject({
+        timeZone: "UTC",
+      } as never),
+    ).rejects.toThrow()
+    const updated = await customer.mutation(updateDigestPreferences, {
+      enabled: false,
+      timeZone: "America/New_York",
+    })
+    expect(updated).toMatchObject({
       digest: {
         enabled: false,
-        hour: 8,
-        mentionLimit: 25,
-        minute: 30,
         timeZone: "America/New_York",
       },
     })
+    expect(
+      new Intl.DateTimeFormat("en-US", {
+        hour: "2-digit",
+        hourCycle: "h23",
+        minute: "2-digit",
+        timeZone: "America/New_York",
+      }).format(new Date(updated.digest.nextRunAt)),
+    ).toBe("09:00")
+    const preference = await t.run(
+      async (ctx) =>
+        await ctx.db
+          .query("digestPreferences")
+          .withIndex("by_workspace_and_user", (q) =>
+            q
+              .eq("workspaceId", bootstrap.workspaceId as never)
+              .eq("userId", bootstrap.userId as never),
+          )
+          .unique(),
+    )
+    expect(preference).toMatchObject({ mentionLimit: 20 })
+    expect(preference).not.toHaveProperty("hour")
+    expect(preference).not.toHaveProperty("minute")
   })
 })

@@ -51,6 +51,32 @@ type MentionId = Id<"mentions">
 type ProviderRunId = Id<"providerRuns">
 type WorkspaceId = Id<"workspaces">
 
+async function scheduleMentionAnalysisDispatchAt(
+  ctx: MutationCtx,
+  at: number,
+): Promise<void> {
+  await ctx.scheduler.runAt(
+    at,
+    internal.mentionAnalysis.internal.dispatchDueMentionAnalysisJobs,
+    {},
+  )
+}
+
+async function scheduleNextPendingMentionAnalysisDispatch(
+  ctx: MutationCtx,
+  now: number,
+): Promise<void> {
+  const next = await ctx.db
+    .query("mentionAnalysisJobs")
+    .withIndex("by_status_and_next_attempt_at", (q) =>
+      q.eq("status", "pending").gt("nextAttemptAt", now),
+    )
+    .first()
+  if (next) {
+    await scheduleMentionAnalysisDispatchAt(ctx, next.nextAttemptAt as number)
+  }
+}
+
 export type MentionAnalysisBatchLeaseArguments = {
   analysisSnapshotJson: string
   jobIds: MentionAnalysisJobId[]
@@ -664,6 +690,7 @@ export const dispatchDueMentionAnalysisJobs = internalMutation({
   handler: async (ctx, args) => {
     const now = args.now ?? Date.now()
     const queue = await dueMentionAnalysisJobs(ctx, now)
+    const hadDueWork = queue.length > 0
     const snapshotByWorkspace = new Map<
       string,
       EnabledAnalysisSnapshot | null
@@ -786,8 +813,19 @@ export const dispatchDueMentionAnalysisJobs = internalMutation({
           mentionContextJson: selectedMentionContextJson,
         },
       )
+      await scheduleMentionAnalysisDispatchAt(ctx, lease.expiresAt)
       batches += 1
       claimed += eligible.length
+    }
+
+    if (queue.length > 0) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.mentionAnalysis.internal.dispatchDueMentionAnalysisJobs,
+        {},
+      )
+    } else if (hadDueWork) {
+      await scheduleNextPendingMentionAnalysisDispatch(ctx, now)
     }
 
     return {
@@ -877,6 +915,7 @@ export const releaseMentionAnalysisBlockedConfiguration = internalMutation({
       return { state: "stale_lease" as const }
     }
 
+    const nextAttemptAt = now + BLOCKED_CONFIGURATION_RETRY_MS
     for (const job of batch.jobs) {
       await transitionMentionAnalysisStatusMetric(ctx, {
         from: "leased",
@@ -892,15 +931,16 @@ export const releaseMentionAnalysisBlockedConfiguration = internalMutation({
           lastError: "blocked_config",
           leaseExpiresAt: undefined,
           leaseToken: undefined,
-          nextAttemptAt: now + BLOCKED_CONFIGURATION_RETRY_MS,
+          nextAttemptAt,
           status: "pending",
           updatedAt: now,
         },
       )
       await patchMentionAnalysisState(ctx, job, "pending", now)
     }
+    await scheduleMentionAnalysisDispatchAt(ctx, nextAttemptAt)
     return {
-      nextAttemptAt: now + BLOCKED_CONFIGURATION_RETRY_MS,
+      nextAttemptAt,
       state: "blocked_config" as const,
     }
   },
@@ -1128,6 +1168,7 @@ export const failMentionAnalysisBatch = internalMutation({
     const run = await findProviderRun(ctx, args.leaseToken)
     let dead = 0
     let pending = 0
+    let nextAttemptAt: number | undefined
 
     for (const job of batch.jobs) {
       const plan = planMentionAnalysisFailure({
@@ -1183,6 +1224,10 @@ export const failMentionAnalysisBatch = internalMutation({
           },
         )
         await patchMentionAnalysisState(ctx, job, "pending", now)
+        nextAttemptAt =
+          nextAttemptAt === undefined
+            ? plan.nextAttemptAt
+            : Math.min(nextAttemptAt, plan.nextAttemptAt)
       }
     }
 
@@ -1199,6 +1244,9 @@ export const failMentionAnalysisBatch = internalMutation({
         },
         now,
       )
+    }
+    if (nextAttemptAt !== undefined) {
+      await scheduleMentionAnalysisDispatchAt(ctx, nextAttemptAt)
     }
     return { dead, pending, state: "failed" as const }
   },

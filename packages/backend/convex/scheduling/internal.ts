@@ -4,6 +4,7 @@ import { type Value, v } from "convex/values"
 import { readEmailSenderConfiguration } from "../email/config"
 import {
   applyIngestionChunkAtomically,
+  scheduleIngestionDispatchers,
   type IngestionChunkResult,
 } from "../ingestion/service"
 import { MAX_INGESTION_CHUNK_SIZE } from "../ingestion/contracts"
@@ -326,20 +327,14 @@ async function dueSourcesForType(
     .take(MAX_DUE_SCAN)
 }
 
-async function claimProviderSources(
+async function dueSourcesForProvider(
   ctx: MutationCtx,
   provider: TrackingProvider,
-  availableClaims: number,
   now: number,
-): Promise<number> {
-  if (availableClaims <= 0) {
-    return 0
-  }
-
-  const sourceTypes = persistedProvidersFor(provider)
-  const sourceRows = (
+): Promise<Doc<"trackingSources">[]> {
+  return (
     await Promise.all(
-      sourceTypes.map(
+      persistedProvidersFor(provider).map(
         async (sourceType) => await dueSourcesForType(ctx, sourceType, now),
       ),
     )
@@ -350,6 +345,17 @@ async function claimProviderSources(
         (left.nextRunAt as number) - (right.nextRunAt as number) ||
         String(left._id).localeCompare(String(right._id), "en"),
     )
+}
+
+async function claimProviderSources(
+  ctx: MutationCtx,
+  sourceRows: readonly Doc<"trackingSources">[],
+  availableClaims: number,
+  now: number,
+): Promise<number> {
+  if (availableClaims <= 0) {
+    return 0
+  }
 
   let claimed = 0
   for (const source of sourceRows) {
@@ -453,6 +459,11 @@ export const dispatchDueTrackingSources = internalMutation({
     }
 
     for (const provider of providers) {
+      const sourceRows = await dueSourcesForProvider(ctx, provider, now)
+      if (sourceRows.length === 0) {
+        continue
+      }
+
       const policy = configuration.policies[provider]
       const [hourlyRequests, recentRuns] = await Promise.all([
         hourlyRequestsForProvider(ctx, provider, bucketStartAt),
@@ -471,7 +482,7 @@ export const dispatchDueTrackingSources = internalMutation({
       circuits[provider] = state.circuit
       claims[provider] = await claimProviderSources(
         ctx,
-        provider,
+        sourceRows,
         state.availableClaims,
         now,
       )
@@ -640,6 +651,7 @@ type ProviderPageIngestion = {
   rediscovered: number
   unprocessedPosition?: number | undefined
   usageExhausted: boolean
+  usageWarningEmailsEnqueued: number
 }
 
 async function ingestProviderPage(
@@ -670,6 +682,7 @@ async function ingestProviderPage(
     inserted: 0,
     rediscovered: 0,
     usageExhausted: false,
+    usageWarningEmailsEnqueued: 0,
   }
 
   for (const chunk of chunks) {
@@ -689,13 +702,17 @@ async function ingestProviderPage(
     aggregate.inserted += result.inserted
     aggregate.rediscovered += result.rediscovered
     aggregate.usageExhausted = result.usage.exhausted
+    aggregate.usageWarningEmailsEnqueued +=
+      result.warningThresholdsEnqueued.length
 
     if (result.checkpoint === "hold") {
       aggregate.unprocessedPosition = result.unprocessedPosition
+      await scheduleIngestionDispatchers(ctx, aggregate)
       return aggregate
     }
   }
 
+  await scheduleIngestionDispatchers(ctx, aggregate)
   return aggregate
 }
 

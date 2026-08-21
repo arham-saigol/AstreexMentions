@@ -28,7 +28,7 @@ Do not place rendered customer email bodies or recipient addresses in public inc
 
 ## Send retry behavior
 
-- The email cron claims at most 32 due pending or expired-lease rows per minute.
+- Durable wake-ups dispatch new rows, retries, and expired leases. The 15-minute recovery sweep claims at most 32 due rows.
 - Retryable statuses are 408, 409, 429, and 5xx, plus timeout/network/invalid-response failures.
 - Sends retry up to eight attempts with 30-second exponential delay capped at six hours.
 - The durable outbox idempotency key is sent to Resend as `Idempotency-Key`.

@@ -257,7 +257,7 @@ The canonical schema is `packages/backend/convex/schema.ts`. It defines 25 valid
 
 **Purpose.** Per-workspace/per-user daily digest schedule. A deletion-fenced recipient records the exact fence timestamp so pre-quiescence recovery does not confuse it with an explicit user disable.
 
-**Invariants.** The logical `(workspaceId, userId)` pair is singular. Hour is 0–23, minute is 0–59, mention limit is 1–100, timezone must be a valid IANA timezone, and `nextRunAt` is deterministically derived from local schedule. Bootstrap creates a default enabled 09:00 UTC preference.
+**Invariants.** The logical `(workspaceId, userId)` pair is singular. The mention limit is backend-owned. The timezone must be a valid IANA timezone. `nextRunAt` is deterministically derived for 9:00 AM local time. Bootstrap creates an enabled preference from the browser timezone, or UTC when detection is unavailable.
 
 **Indexes.**
 

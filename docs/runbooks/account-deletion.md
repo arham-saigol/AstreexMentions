@@ -17,8 +17,7 @@ only a retained `deletionJobs` row with `status = "completed"` and
    configuration.
 4. Acceptance atomically persists the current workflow-version job, disables
    the user, marks the workspace deletion-pending, and writes an audit event.
-5. The one-minute dispatcher uses five-minute token/version leases. It ignores
-   every legacy job without the current workflow version.
+5. Durable wake-ups dispatch new jobs, retries, and lease recovery. The 15-minute cron recovers missed work. The dispatcher uses five-minute token/version leases and ignores every legacy job without the current workflow version.
 6. The worker verifies Creem authoritatively and repeats the local composite
    guard in the quiescence mutation before marking the user/workspace deleted
    and revoking the owner membership.
@@ -79,8 +78,7 @@ when the user/workspace markers still equal that job's exact fence timestamp.
 
 ### `failed`
 
-The retry is automatic at `nextAttemptAt`. Confirm the error is transient and
-allow the one-minute dispatcher to reclaim it with a higher lease version.
+The retry is automatic at `nextAttemptAt`. Confirm the error is transient and allow the dispatcher to reclaim it with a higher lease version.
 Never clear a lease or decrement attempts/version manually.
 
 ### `dead`

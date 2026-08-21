@@ -567,9 +567,7 @@ export type DataModel = {
       createdAt: number;
       deletionPausedAt?: number;
       enabled: boolean;
-      hour: number;
       mentionLimit: number;
-      minute: number;
       nextRunAt: number;
       timeZone: string;
       updatedAt: number;
@@ -584,9 +582,7 @@ export type DataModel = {
       | "createdAt"
       | "deletionPausedAt"
       | "enabled"
-      | "hour"
       | "mentionLimit"
-      | "minute"
       | "nextRunAt"
       | "timeZone"
       | "updatedAt"

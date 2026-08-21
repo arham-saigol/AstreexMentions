@@ -18,6 +18,7 @@ import { DEFAULT_CATEGORIES, normalizeCategoryName } from "./lib/categories"
 import {
   DEFAULT_DIGEST_MENTION_LIMIT,
   nextDailyDigestRunAt,
+  validateDailyDigestTimeZone,
 } from "./lib/dailyDigest"
 import { adjustWorkspaceCountMetric } from "./lib/operationalMetrics"
 import { type MutationCtx } from "./_generated/server"
@@ -211,6 +212,7 @@ async function ensureDigestDefaults(
   ctx: MutationCtx,
   userId: UserId,
   workspaceId: WorkspaceId,
+  timeZone: string,
   now: number,
 ): Promise<void> {
   const existing = await ctx.db
@@ -224,15 +226,12 @@ async function ensureDigestDefaults(
     return
   }
 
-  const schedule = { hour: 9, minute: 0, timeZone: "UTC" }
   await ctx.db.insert("digestPreferences", {
     createdAt: now,
     enabled: true,
-    hour: schedule.hour,
     mentionLimit: DEFAULT_DIGEST_MENTION_LIMIT,
-    minute: schedule.minute,
-    nextRunAt: nextDailyDigestRunAt(now, schedule),
-    timeZone: schedule.timeZone,
+    nextRunAt: nextDailyDigestRunAt(now, timeZone),
+    timeZone,
     updatedAt: now,
     userId,
     workspaceId,
@@ -284,13 +283,25 @@ function validatedImageUrl(value: string): string {
   return parsed.toString()
 }
 
+function initialDigestTimeZone(browserTimeZone: string | undefined): string {
+  if (browserTimeZone === undefined) {
+    return "UTC"
+  }
+
+  try {
+    return validateDailyDigestTimeZone(browserTimeZone)
+  } catch {
+    return "UTC"
+  }
+}
+
 export const bootstrapCurrentUser = authenticatedMutation({
-  args: {},
+  args: { timeZone: v.optional(v.string()) },
   returns: v.object({
     userId: v.id("users"),
     workspaceId: v.id("workspaces"),
   }),
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
     const now = Date.now()
     const result = await bootstrapPersonalWorkspace(
       bootstrapStore(ctx),
@@ -299,7 +310,13 @@ export const bootstrapCurrentUser = authenticatedMutation({
     )
 
     await ensureDefaultCategories(ctx, result.workspaceId, now)
-    await ensureDigestDefaults(ctx, result.userId, result.workspaceId, now)
+    await ensureDigestDefaults(
+      ctx,
+      result.userId,
+      result.workspaceId,
+      initialDigestTimeZone(args.timeZone),
+      now,
+    )
 
     return { userId: result.userId, workspaceId: result.workspaceId }
   },

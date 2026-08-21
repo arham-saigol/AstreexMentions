@@ -390,9 +390,6 @@ export function GeneralSettings() {
     try {
       await updateDigest({
         enabled: digest.enabled,
-        hour: digest.hour,
-        mentionLimit: digest.mentionLimit,
-        minute: digest.minute,
         timeZone,
       })
       setStatus("Timezone saved for account scheduling.")
@@ -512,7 +509,8 @@ export function GeneralSettings() {
           Timezone
         </h4>
         <p className="text-muted-foreground mt-1 text-sm leading-6">
-          Used for the daily digest and other account-local schedules.
+          Controls local daily digest scheduling. Digests arrive around 9:00 AM
+          and can be delivered up to 15 minutes later.
         </p>
         <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
           <div className="space-y-2">

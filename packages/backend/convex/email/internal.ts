@@ -21,6 +21,17 @@ const BLOCKED_CONFIG_RETRY_MS = 5 * 60_000
 type EmailOutboxId = Id<"emailOutbox">
 type DigestRunId = Id<"digestRuns">
 
+async function scheduleEmailDispatchAt(
+  ctx: MutationCtx,
+  at: number,
+): Promise<void> {
+  await ctx.scheduler.runAt(
+    at,
+    internal.email.internal.dispatchPendingEmails,
+    {},
+  )
+}
+
 export function outboxFromRow(row: Doc<"emailOutbox">): EmailOutbox {
   const payload = {
     from: row.from as string,
@@ -225,6 +236,23 @@ export const dispatchPendingEmails = internalMutation({
     const now = args.now ?? Date.now()
     const configuration = readResendDeliveryConfiguration(env)
     if (configuration.state === "provider_unconfigured") {
+      const [pending, expired] = await Promise.all([
+        ctx.db
+          .query("emailOutbox")
+          .withIndex("by_status_and_next_attempt_at", (q) =>
+            q.eq("status", "pending").lte("nextAttemptAt", now),
+          )
+          .first(),
+        ctx.db
+          .query("emailOutbox")
+          .withIndex("by_status_and_lease_expires_at", (q) =>
+            q.eq("status", "leased").lte("leaseExpiresAt", now),
+          )
+          .first(),
+      ])
+      if (pending !== null || expired !== null) {
+        await scheduleEmailDispatchAt(ctx, now + BLOCKED_CONFIG_RETRY_MS)
+      }
       return {
         missing: configuration.missing,
         state: "blocked_config" as const,
@@ -256,6 +284,7 @@ export const dispatchPendingEmails = internalMutation({
 
     let claimed = 0
     let suppressed = 0
+    const leaseRecoveryAt = new Set<number>()
     for (const row of claimable) {
       if (await emailOwnerIsUnavailable(ctx, row)) {
         await deadLetterUnavailableEmail(ctx, row, now)
@@ -275,11 +304,23 @@ export const dispatchPendingEmails = internalMutation({
         outbox: outboxFromRow(row),
       })
       await patchOutboxState(ctx, outboxId, leased)
+      leaseRecoveryAt.add(leased.leaseExpiresAt)
       await ctx.scheduler.runAfter(0, internal.email.actions.deliverEmail, {
         leaseToken,
         outboxId,
       })
       claimed += 1
+    }
+
+    for (const at of leaseRecoveryAt) {
+      await scheduleEmailDispatchAt(ctx, at)
+    }
+    if (claimable.length === MAX_EMAIL_CLAIMS) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.email.internal.dispatchPendingEmails,
+        {},
+      )
     }
 
     return { claimed, state: "dispatched" as const, suppressed }
@@ -346,15 +387,17 @@ export const releaseEmailBlockedConfig = internalMutation({
       return { state: "stale_lease" as const }
     }
     const now = Date.now()
+    const nextAttemptAt = now + BLOCKED_CONFIG_RETRY_MS
     await ctx.db.patch("emailOutbox", args.outboxId, {
       attempts: Math.max(0, (row.attempts as number) - 1),
       lastError: "blocked_config",
       leaseExpiresAt: undefined,
       leaseToken: undefined,
-      nextAttemptAt: now + BLOCKED_CONFIG_RETRY_MS,
+      nextAttemptAt,
       status: "pending",
       updatedAt: now,
     })
+    await scheduleEmailDispatchAt(ctx, nextAttemptAt)
     return { state: "blocked_config" as const }
   },
 })
@@ -434,6 +477,9 @@ export const failEmailDelivery = internalMutation({
       retryable: args.retryable,
     })
     await patchOutboxState(ctx, args.outboxId, failed)
+    if (failed.status === "pending") {
+      await scheduleEmailDispatchAt(ctx, failed.nextAttemptAt)
+    }
     if (failed.status === "dead" && row.digestRunId !== undefined) {
       const digestRunId = row.digestRunId as DigestRunId
       const run = await ctx.db.get("digestRuns", digestRunId)

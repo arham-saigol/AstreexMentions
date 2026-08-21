@@ -6,14 +6,18 @@ This document describes deterministic/fixture-backed behavior. It does not imply
 
 ## Installed crons
 
-`packages/backend/convex/crons.ts` installs six one-minute crons:
+`packages/backend/convex/crons.ts` installs these recovery and dispatch jobs:
 
-1. dispatch durable account deletions;
-2. retry pending Creem billing events;
-3. dispatch due tracking sources;
-4. dispatch due mention analysis jobs;
-5. dispatch due daily digest preferences;
-6. dispatch pending/expired-lease email outbox rows.
+| Job                    | Interval   | Role                                                           |
+| ---------------------- | ---------- | -------------------------------------------------------------- |
+| Tracking sources       | 1 minute   | Dispatch due source collection.                                |
+| Account deletion       | 15 minutes | Recover due or expired deletion work.                          |
+| Creem billing events   | 15 minutes | Recover persisted event retries and stale provider operations. |
+| Mention analysis       | 15 minutes | Recover due retries and expired leases.                        |
+| Daily digests          | 15 minutes | Dispatch due local schedules.                                  |
+| Email outbox           | 15 minutes | Recover due retries and expired leases.                        |
+| Monitoring access      | 5 minutes  | Reconcile expired monitoring access.                           |
+| Free mention retention | 1 hour     | Erase expired free-evaluation mentions.                        |
 
 ## Tracking source model
 
@@ -184,11 +188,11 @@ At the mention cap, active workspace sources are atomically paused for usage. Th
 
 ### Creem billing inbox
 
-Verified Creem events are deduplicated by provider event ID. Pending target/configuration failures retry after 30 seconds; the cron processes at most 16 due events each minute. Current processing runs directly in the mutation and does not use the schema's optional billing-event lease fields.
+Verified Creem events are deduplicated by provider event ID. Pending target or configuration failures retry after 30 seconds and schedule a wake-up. The 15-minute cron recovers up to 16 due events. Current processing runs directly in the mutation and does not use the optional billing-event lease fields.
 
 ### Vertex AI Gemini mention analysis
 
-The mention analysis cron scans up to 256 due or expired jobs. It considers at most 16 workspaces and schedules at most four batches. Each prompt-bounded batch contains at most 20 jobs from one workspace. Thus, one dispatch claims at most 80 jobs.
+The mention analysis dispatcher scans up to 256 due or expired jobs. It considers at most 16 workspaces and schedules at most four batches. Each prompt-bounded batch contains at most 20 jobs from one workspace. Thus, one dispatch claims at most 80 jobs. New jobs, retries, and leases schedule durable wake-ups. The 15-minute cron is a recovery sweep.
 
 A claim snapshots the workspace filtering fields and the enabled category catalog. The catalog must contain exactly one enabled permanent system `Other` category. Jobs receive one shared four-minute lease. Linked mentions move to `analysisState: "leased"` and remain out of both customer feeds. Before the provider call, the action validates the lease, complete snapshot, mention links, workspace, and full input.
 
@@ -198,13 +202,13 @@ Missing or invalid Vertex configuration causes no provider call or telemetry wri
 
 ### Daily digest
 
-The digest cron scans at most 64 enabled due preferences, sorted by `nextRunAt` then ID. In one mutation it advances the preference to the next local wall-clock occurrence, records one run per workspace/local date, snapshots the deterministic top mention IDs, and schedules rendering. Empty days are recorded as `skipped_empty` and send no email. Time windows use IANA time zones and local calendar boundaries, including 23/25-hour DST days.
+The digest dispatcher scans at most 64 enabled due preferences, sorted by `nextRunAt` then ID. It schedules itself immediately after a full batch. In one mutation it advances the preference to the next 9:00 AM local occurrence, records one run per workspace/local date, snapshots deterministic top mention IDs, and schedules rendering. Empty days are recorded as `skipped_empty` and send no email. Time windows use IANA time zones and local calendar boundaries, including 23/25-hour DST days.
 
 Digest runs do not currently have a lease. Idempotency keys prevent duplicate daily runs and duplicate outbox rows.
 
 ### Email outbox
 
-The email cron claims at most 32 due pending or expired-lease rows. Email leases last 60 seconds and expired leases are recoverable. The durable outbox key is reused as Resend's provider idempotency key. Retryable sends use up to eight attempts with 30-second exponential backoff capped at six hours. Missing delivery configuration releases the lease, does not consume the attempted claim, and retries in five minutes.
+The email dispatcher claims at most 32 due pending or expired-lease rows. New rows, retries, and leases schedule durable wake-ups. Email leases last 60 seconds and expired leases are recoverable. The durable outbox key is reused as Resend's provider idempotency key. Retryable sends use up to eight attempts with 30-second exponential backoff capped at six hours. Missing delivery configuration releases the lease, does not consume the attempted claim, and retries in five minutes. The 15-minute cron is a recovery sweep.
 
 See [providers.md](./providers.md) for the exact Resend transport and webhook projection.
 
@@ -216,10 +220,7 @@ See [providers.md](./providers.md) for the exact Resend transport and webhook pr
 
 ## Durable account deletion
 
-The deletion cron claims at most eight due current-version account jobs per
-minute. Pending/failed work and expired leased/running work are eligible.
-Claims increment attempts and `leaseVersion`, issue a unique five-minute token,
-and schedule the internal action. Legacy versions are never auto-claimed.
+The deletion dispatcher claims at most eight due current-version account jobs. Pending or failed work and expired leased or running work are eligible. New jobs, retries, and leases schedule durable wake-ups. Claims increment attempts and `leaseVersion`, issue a unique five-minute token, and schedule the internal action. Legacy versions are never auto-claimed. The 15-minute cron is a recovery sweep.
 
 The action proceeds through `billing_check`, `purge`, `verify_data`,
 `identity_delete`, `security_fence`, and `done`. Purge uses batches of 50 and

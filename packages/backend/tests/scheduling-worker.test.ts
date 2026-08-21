@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs"
 
 import { convexTest } from "convex-test"
-import { makeFunctionReference } from "convex/server"
-import type { GenericId } from "convex/values"
+import { defineSchema, defineTable, makeFunctionReference } from "convex/server"
+import { type GenericId, v } from "convex/values"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { createAlgoliaHackerNewsAdapter } from "../convex/integrations/providers/algoliaHackerNews"
@@ -18,6 +18,16 @@ const modules = {
   "./scheduling/internal.ts": async () =>
     await import("../convex/scheduling/internal"),
 }
+
+const dispatchTrackingSources = makeFunctionReference<
+  "mutation",
+  { now?: number },
+  {
+    circuits: Record<string, "closed" | "open">
+    claims: Record<string, number>
+    state: string
+  }
+>("scheduling/internal:dispatchDueTrackingSources")
 
 const executeTrackingSource = makeFunctionReference<
   "action",
@@ -271,6 +281,39 @@ afterEach(() => {
 })
 
 describe("durable tracking action", () => {
+  it("skips provider telemetry reads when no tracking source is due", async () => {
+    const idleSchema = defineSchema({
+      trackingSources: defineTable(v.any()).index(
+        "by_source_type_status_and_next_run_at",
+        ["sourceType", "status", "nextRunAt"],
+      ),
+    })
+    const t = convexTest({
+      modules: {
+        "./_generated/server.ts": async () => ({}),
+        "./scheduling/internal.ts": async () =>
+          await import("../convex/scheduling/internal"),
+      },
+      schema: idleSchema,
+    })
+
+    await expect(
+      t.mutation(dispatchTrackingSources, { now: NOW }),
+    ).resolves.toEqual({
+      circuits: {
+        algolia_hacker_news: "closed",
+        fetchlayer_reddit: "closed",
+        xquik: "closed",
+      },
+      claims: {
+        algolia_hacker_news: 0,
+        fetchlayer_reddit: 0,
+        xquik: 0,
+      },
+      state: "dispatched",
+    })
+  })
+
   it("fetches, stages, and atomically ingests one leased provider page", async () => {
     const { readPersistedState, seedLeasedHackerNewsSource, t } =
       createSchedulingHarness()

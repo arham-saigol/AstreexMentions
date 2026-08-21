@@ -35,6 +35,14 @@ type BootstrapAttempt =
   | { attempt: number; description: string; state: "error" }
   | { attempt: number; state: "ready" }
 
+export function browserTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
+  } catch {
+    return "UTC"
+  }
+}
+
 export function useProductBootstrap(
   convexAuthenticated: boolean,
 ): ProductBootstrapState {
@@ -52,7 +60,7 @@ export function useProductBootstrap(
 
     let active = true
 
-    void bootstrapCurrentUser({})
+    void bootstrapCurrentUser({ timeZone: browserTimeZone() })
       .then(() => {
         if (!active) {
           return

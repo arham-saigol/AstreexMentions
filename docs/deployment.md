@@ -246,7 +246,7 @@ Subscribe the endpoint to the supported events available in the relevant Creem e
 - **Checkout:** `POST /checkouts` with the mapped product ID, an idempotent request ID, the configured success URL, optional Clerk email, and `internal_customer_id` metadata containing the Astreex workspace ID.
 - **Upgrade:** `POST /subscriptions/{subscriptionId}/upgrade` with the target product and `update_behavior: "proration-charge-immediately"`.
 - **Portal:** `POST /customers/billing` for the Creem customer ID stored on the synchronized subscription.
-- **Webhook processing:** signed events are persisted and processed idempotently; a one-minute cron retries pending Creem billing events.
+- **Webhook processing:** signed events are persisted and processed idempotently. Durable wake-ups retry pending Creem billing events, and a 15-minute cron recovers missed work.
 
 Checkout, upgrade, and portal actions deliberately return a provider-unconfigured state when required values are missing. They must not be described as operational until credential-backed tests complete.
 
@@ -290,7 +290,7 @@ Subscribe to the delivery events that the repository understands:
 - `email.failed`
 - `email.suppressed`
 
-Email delivery is durable: messages are written to an outbox, a one-minute cron dispatches pending entries, Resend requests use idempotency keys, and signed webhook events update delivery state.
+Email delivery is durable: messages are written to an outbox, durable wake-ups dispatch pending entries, Resend requests use idempotency keys, and signed webhook events update delivery state. A 15-minute cron recovers missed work.
 
 ## 7. Monitoring and analysis providers
 
@@ -328,7 +328,7 @@ The Hacker News adapter calls the public Algolia endpoint `https://hn.algolia.co
 
 Enable `aiplatform.googleapis.com` in the Google Cloud project. Use the `global` endpoint so this model and Standard PayGo are available. Billing status and Vertex quota can still block requests. Create a dedicated Astreex service account. Grant only `roles/aiplatform.user`. Store its complete JSON credential only in the Convex deployment. Restrict access to this secret and rotate it through the secret-rotation runbook.
 
-The model name is fixed in code. No environment variable selects a different model. A one-minute Convex cron dispatches same-workspace batches of up to 20 jobs. The worker uses four-minute leases, full-result validation, and atomic application. Missing or invalid Vertex configuration returns jobs to pending without a consumed attempt or provider telemetry. The retry delay is five minutes. Local validation does not prove model access, quota, or output quality.
+The model name is fixed in code. No environment variable selects a different model. Durable wake-ups dispatch same-workspace batches of up to 20 jobs. A 15-minute cron recovers missed work. The worker uses four-minute leases, full-result validation, and atomic application. Missing or invalid Vertex configuration returns jobs to pending without a consumed attempt or provider telemetry. The retry delay is five minutes. Local validation does not prove model access, quota, or output quality.
 
 Before you deploy the narrowed provider schema to a development deployment, erase stale mention-analysis jobs, provider runs, and metric buckets. Re-ingest development mentions when you need analysis evidence. Do not add a provider compatibility path or a data migration.
 
@@ -531,7 +531,7 @@ These are manual or separately automated release checks. They require real accou
 
 - Bootstrap a fresh user and personal workspace.
 - Create, update, pause/resume, and remove a keyword while checking plan limits.
-- Confirm the one-minute crons are installed and producing no configuration errors.
+- Confirm that the installed dispatcher crons have no configuration errors.
 - Inspect Convex logs for rejected auth, schema, scheduler, webhook, or provider errors.
 
 ### Provider ingestion
@@ -546,7 +546,7 @@ These are manual or separately automated release checks. They require real accou
 1. Set `VERTEX_AI_PROJECT_ID`, `VERTEX_AI_LOCATION=global`, `VERTEX_AI_SERVICE_ACCOUNT_JSON`, and `VERTEX_AI_TIMEOUT_MS` in a non-production Convex deployment.
 2. Make sure that the service account can access `gemini-3.5-flash-lite` while the selected billing account is active.
 3. Run onboarding discovery. Make sure that both structured Gemini calls complete.
-4. Ingest 20 labeled mentions in one workspace. Make sure that one Gemini request applies complete valid results atomically.
+4. Ingest 20 labeled mentions in one workspace. Make sure that the event-driven dispatcher schedules one Gemini request and applies complete valid results atomically.
 5. Inspect provider runs and hourly metric buckets. Make sure that they use `gemini` and `mention_analysis:mention-analysis-v2`.
 6. Safely simulate a `429` or timeout. Make sure that the queue retries with no partial results or secret output.
 7. Compare the result with the independent fixture. Do not reduce the 20-mention batch size to fit the fixture.

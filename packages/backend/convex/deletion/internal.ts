@@ -39,6 +39,17 @@ type DeletionJobId = Id<"deletionJobs">
 type UserId = Id<"users">
 type WorkspaceId = Id<"workspaces">
 
+async function scheduleDeletionDispatchAt(
+  ctx: MutationCtx,
+  at: number,
+): Promise<void> {
+  await ctx.scheduler.runAt(
+    at,
+    internal.deletion.internal.dispatchDueAccountDeletions,
+    {},
+  )
+}
+
 export type AccountDeletionLeaseArguments = {
   deletionJobId: DeletionJobId
   leaseToken: string
@@ -314,7 +325,16 @@ export const dispatchDueAccountDeletions = internalMutation({
           leaseVersion: lease.version,
         },
       )
+      await scheduleDeletionDispatchAt(ctx, lease.expiresAt)
       claimed += 1
+    }
+
+    if (due.length === MAX_DELETION_CLAIMS) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.deletion.internal.dispatchDueAccountDeletions,
+        {},
+      )
     }
 
     return { claimed, dead, state: "dispatched" as const }
@@ -853,13 +873,15 @@ export const purgeAccountDeletionBatch = internalMutation({
         { stage },
       )
     }
+    const leaseExpiresAt = now + ACCOUNT_DELETION_LEASE_MS
     await ctx.db.patch("deletionJobs", args.deletionJobId, {
-      leaseExpiresAt: now + ACCOUNT_DELETION_LEASE_MS,
+      leaseExpiresAt,
       ...(next === null
         ? { phase: "verify_data", purgeStage: undefined }
         : { purgeStage: next }),
       updatedAt: now,
     })
+    await scheduleDeletionDispatchAt(ctx, leaseExpiresAt)
     return {
       affected,
       phase: next === null ? ("verify_data" as const) : ("purge" as const),
@@ -993,6 +1015,7 @@ export const completeIdentityDeletion = internalMutation({
       status: "pending",
       updatedAt: now,
     })
+    await scheduleDeletionDispatchAt(ctx, args.fenceExpiresAt)
     await recordDeletionAudit(
       ctx,
       { ...job, phase: "security_fence" },
@@ -1019,13 +1042,15 @@ export const finalizeSecurityTombstone = internalMutation({
     }
     const fenceExpiresAt = job.securityFenceExpiresAt as number | undefined
     if (fenceExpiresAt === undefined || fenceExpiresAt > now) {
+      const nextAttemptAt = fenceExpiresAt ?? now + ACCOUNT_DELETION_LEASE_MS
       await ctx.db.patch("deletionJobs", args.deletionJobId, {
         leaseExpiresAt: undefined,
         leaseToken: undefined,
-        nextAttemptAt: fenceExpiresAt ?? now + ACCOUNT_DELETION_LEASE_MS,
+        nextAttemptAt,
         status: "pending",
         updatedAt: now,
       })
+      await scheduleDeletionDispatchAt(ctx, nextAttemptAt)
       return { state: "waiting" as const }
     }
 
@@ -1093,6 +1118,7 @@ export const continueAccountDeletion = internalMutation({
         leaseVersion: lease.version,
       },
     )
+    await scheduleDeletionDispatchAt(ctx, lease.expiresAt)
     return { state: "continued" as const }
   },
 })
@@ -1128,6 +1154,9 @@ export const failAccountDeletionAttempt = internalMutation({
       status: plan.status,
       updatedAt: now,
     })
+    if (plan.status === "failed") {
+      await scheduleDeletionDispatchAt(ctx, plan.nextAttemptAt)
+    }
     await recordDeletionAudit(
       ctx,
       job,

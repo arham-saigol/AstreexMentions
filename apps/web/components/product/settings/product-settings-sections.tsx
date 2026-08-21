@@ -45,7 +45,7 @@ export const productSettingsSections: SettingsDialogSection[] = [
     render: () => <UsageSettings />,
   },
   {
-    description: "Daily email delivery time and timezone",
+    description: "Daily email around 9:00 AM in your account timezone",
     icon: BellIcon,
     id: "digest",
     label: "Digest",

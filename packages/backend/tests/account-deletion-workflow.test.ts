@@ -651,6 +651,64 @@ describe("account deletion leases, purge isolation, and ordering", () => {
     })
     expect((await persistedJob(t, legacyId))?.status).toBe("pending")
   })
+
+  it("continues immediately when a claim batch reaches MAX_DELETION_CLAIMS", async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+    const t = createBackendTest()
+    await t.run(async (ctx) => {
+      for (let i = 0; i < 9; i += 1) {
+        const userId = await ctx.db.insert("users", {
+          clerkUserId: `user_del_continuation_${i}`,
+          createdAt: NOW,
+          tokenIdentifier: `issuer|user_del_continuation_${i}`,
+          updatedAt: NOW,
+        })
+        const workspaceId = await ctx.db.insert("workspaces", {
+          createdAt: NOW,
+          kind: "personal",
+          name: `Del Workspace ${i}`,
+          normalizedName: `del workspace ${i}`,
+          ownerUserId: userId,
+          updatedAt: NOW,
+        })
+        await ctx.db.insert("deletionJobs", {
+          accountUserId: userId,
+          attempts: 0,
+          billingGuardStatus: "confirmed_inactive",
+          createdAt: NOW,
+          idempotencyKey: `del_job_continuation_${i}`,
+          identityClerkUserId: `user_del_continuation_${i}`,
+          kind: "account",
+          maxAttempts: 10,
+          nextAttemptAt: NOW,
+          phase: "billing_check",
+          requestedByUserId: userId,
+          scheduledAt: NOW,
+          status: "pending",
+          updatedAt: NOW,
+          workflowVersion: ACCOUNT_DELETION_WORKFLOW_VERSION,
+          workspaceId,
+        })
+      }
+    })
+
+    const first = await t.mutation(dispatchReference, { now: NOW })
+    expect(first).toEqual({
+      claimed: 8,
+      dead: 0,
+      state: "dispatched",
+    })
+
+    await vi.advanceTimersByTimeAsync(1)
+    await t.finishInProgressScheduledFunctions()
+
+    const jobs = await t.run(
+      async (ctx) => await ctx.db.query("deletionJobs").collect(),
+    )
+    expect(jobs).toHaveLength(9)
+    expect(jobs.every((j) => (j.attempts as number) >= 1)).toBe(true)
+  })
 })
 
 describe("account deletion model and Clerk outcomes", () => {
@@ -754,26 +812,36 @@ describe("account deletion model and Clerk outcomes", () => {
       }),
     )
 
-    await t.mutation(dispatchReference, { now: NOW })
-    await t.finishAllScheduledFunctions(vi.runAllTimers)
+    await vi.advanceTimersByTimeAsync(1)
+    await t.finishInProgressScheduledFunctions()
+    await vi.advanceTimersByTimeAsync(1)
+    await t.finishInProgressScheduledFunctions()
+    await vi.advanceTimersByTimeAsync(1)
+    await t.finishInProgressScheduledFunctions()
     const fenced = await persistedJob(t, accepted.deletionJobId)
     expect(fenced).toMatchObject({
       attempts: 1,
-      dataDeletionVerifiedAt: NOW,
-      identityDeletionVerifiedAt: NOW,
-      nextAttemptAt: NOW + FENCE_MS,
       phase: "security_fence",
-      securityFenceExpiresAt: NOW + FENCE_MS,
       status: "pending",
       workflowVersion: ACCOUNT_DELETION_WORKFLOW_VERSION,
     })
+    expect(fenced?.dataDeletionVerifiedAt).toEqual(expect.any(Number))
+    expect(fenced?.identityDeletionVerifiedAt).toBe(
+      fenced?.dataDeletionVerifiedAt,
+    )
+    expect(fenced?.nextAttemptAt).toBe(fenced?.securityFenceExpiresAt)
+    expect(
+      (fenced?.securityFenceExpiresAt ?? 0) -
+        (fenced?.identityDeletionVerifiedAt ?? 0),
+    ).toBe(FENCE_MS)
     expect(clerkCalls).toEqual(["GET", "DELETE", "GET"])
 
-    vi.setSystemTime(NOW + FENCE_MS)
-    await t.mutation(dispatchReference, { now: NOW + FENCE_MS })
-    await t.finishAllScheduledFunctions(vi.runAllTimers)
+    await vi.advanceTimersByTimeAsync(FENCE_MS)
+    await t.finishInProgressScheduledFunctions()
+    await vi.advanceTimersByTimeAsync(1)
+    await t.finishInProgressScheduledFunctions()
     expect(await persistedJob(t, accepted.deletionJobId)).toMatchObject({
-      completedAt: NOW + FENCE_MS,
+      completedAt: expect.any(Number),
       phase: "done",
       status: "completed",
     })

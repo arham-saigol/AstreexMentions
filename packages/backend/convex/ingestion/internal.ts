@@ -5,6 +5,7 @@ import { env, internalMutation } from "../_generated/server"
 import { parseIngestionChunkJson } from "./contracts"
 import {
   applyIngestionChunkAtomically,
+  scheduleIngestionDispatchers,
   type IngestionChunkResult,
 } from "./service"
 
@@ -14,7 +15,7 @@ export const applyIngestionChunk = internalMutation({
     const input = parseIngestionChunkJson(args.inputJson)
     const sender = readEmailSenderConfiguration(env)
 
-    return await applyIngestionChunkAtomically(ctx, input, {
+    const result = await applyIngestionChunkAtomically(ctx, input, {
       ...(sender.state === "configured"
         ? {
             emailFrom: sender.from,
@@ -25,5 +26,10 @@ export const applyIngestionChunk = internalMutation({
         : {}),
       now: Date.now(),
     })
+    await scheduleIngestionDispatchers(ctx, {
+      mentionAnalysisJobsEnqueued: result.mentionAnalysisJobsEnqueued,
+      usageWarningEmailsEnqueued: result.warningThresholdsEnqueued.length,
+    })
+    return result
   },
 })

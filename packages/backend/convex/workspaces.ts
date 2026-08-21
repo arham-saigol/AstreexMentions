@@ -1,6 +1,7 @@
 import type { UserIdentity } from "convex/server"
 import { ConvexError, v } from "convex/values"
 
+import { internal } from "./_generated/api"
 import { readDeletionBillingSnapshot } from "./deletion/billing"
 import {
   ACCOUNT_DELETION_MAX_ATTEMPTS,
@@ -431,6 +432,11 @@ async function acceptDeletion(
     deletionPendingAt: now,
     updatedAt: now,
   })
+  await ctx.scheduler.runAfter(
+    0,
+    internal.deletion.internal.dispatchDueAccountDeletions,
+    {},
+  )
   return deletionJobId
 }
 
