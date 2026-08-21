@@ -202,6 +202,7 @@ export const researchCompany = customerAction({
     }
 
     const startedAt = Date.now()
+    let activeProvider: "gemini" | "tinyfish" = "tinyfish"
     try {
       const tinyfish = createTinyFishClient({
         apiKey: tinyFishApiKey,
@@ -231,6 +232,7 @@ export const researchCompany = customerAction({
       ]
         .filter(Boolean)
         .join("\n\n---\n\n")
+      activeProvider = "gemini"
       const searchPlan = searchPlanSchema.parse(
         await requestGeminiJson(
           {
@@ -245,6 +247,7 @@ export const researchCompany = customerAction({
           new AbortController().signal,
         ),
       )
+      activeProvider = "tinyfish"
       const searchMaterial = []
       for (const query of searchPlan.queries) {
         const results = await tinyfish.search(
@@ -253,6 +256,7 @@ export const researchCompany = customerAction({
         )
         searchMaterial.push({ query, results })
       }
+      activeProvider = "gemini"
       const discovered = discoverySchema.parse(
         await requestGeminiJson(
           {
@@ -315,7 +319,11 @@ export const researchCompany = customerAction({
           ? error
           : undefined
       const provider =
-        error instanceof GeminiIntegrationError ? "gemini" : "tinyfish"
+        error instanceof TinyFishIntegrationError
+          ? "tinyfish"
+          : error instanceof GeminiIntegrationError
+            ? "gemini"
+            : activeProvider
       const errorCode = integrationError?.code ?? "RESEARCH_FAILED"
       await ctx.runMutation(internal.onboardingResearchInternal.failResearch, {
         durationMs: Math.max(0, Date.now() - startedAt),

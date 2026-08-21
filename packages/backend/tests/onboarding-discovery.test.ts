@@ -170,6 +170,14 @@ describe("onboarding company discovery", () => {
       status: "failed",
     })
     expect(research?.suggestionsJson).toBeUndefined()
+    const run = await t.run(
+      async (ctx) => await ctx.db.query("providerRuns").unique(),
+    )
+    expect(run).toMatchObject({
+      errorCode: "RESEARCH_FAILED",
+      provider: "gemini",
+      status: "failed",
+    })
   })
 
   it("returns a retryable customer-safe failure for a Gemini provider error", async () => {
