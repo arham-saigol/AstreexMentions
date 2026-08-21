@@ -312,6 +312,11 @@ export function MentionsScreen() {
     [cursor, deferredSearch, filters, selectedViewId, sort],
   )
 
+  const queryArgsKey = useMemo(
+    () => JSON.stringify(queryArguments),
+    [queryArguments],
+  )
+
   const categoriesValue = useQuery(
     api.categories.listCategories,
     preview ? "skip" : {},
@@ -324,13 +329,32 @@ export function MentionsScreen() {
     api.mentions.listMentions,
     preview ? "skip" : { ...queryArguments, now },
   )
+  const [lastMentions, setLastMentions] = useState<{
+    queryArgsKey: string
+    value: NonNullable<typeof mentionsValue>
+  }>()
+  if (
+    mentionsValue !== undefined &&
+    (lastMentions?.queryArgsKey !== queryArgsKey ||
+      lastMentions.value !== mentionsValue)
+  ) {
+    setLastMentions({ queryArgsKey, value: mentionsValue })
+  }
+  const effectiveMentionsValue =
+    mentionsValue ??
+    (lastMentions?.queryArgsKey === queryArgsKey
+      ? lastMentions.value
+      : undefined)
 
   const updateMentionStatus = useMutation(api.mentions.updateMentionStatus)
   const restoreFilteredMention = useMutation(
     api.mentions.restoreFilteredMention,
   )
 
-  const mentions = useMemo(() => mentionsValue?.items ?? [], [mentionsValue])
+  const mentions = useMemo(
+    () => effectiveMentionsValue?.items ?? [],
+    [effectiveMentionsValue],
+  )
 
   useEffect(() => {
     const serverStatuses = new Map<string, MentionStatus>(
@@ -468,7 +492,7 @@ export function MentionsScreen() {
 
   const usage = billing.usage ?? billing.evaluation
   const usageLimited =
-    mentionsValue?.monitoringState === "usage_limited" ||
+    effectiveMentionsValue?.monitoringState === "usage_limited" ||
     Boolean(
       usage &&
       usage.mentionLimit > 0 &&
@@ -479,14 +503,14 @@ export function MentionsScreen() {
     !preview &&
     (categoriesValue === undefined ||
       keywordsValue === undefined ||
-      mentionsValue === undefined)
+      effectiveMentionsValue === undefined)
 
   const categories = categoriesValue ?? []
   const keywords = keywordsValue ?? []
   const allKeywordsPaused =
     keywords.length > 0 &&
     keywords.every((keyword) => keyword.status === "paused")
-  const monitoringState = mentionsValue?.monitoringState ?? "active"
+  const monitoringState = effectiveMentionsValue?.monitoringState ?? "active"
   const setupRequired =
     monitoringState === "setup_required" || keywords.length === 0
   const paused = monitoringState === "paused" || allKeywordsPaused
@@ -496,15 +520,15 @@ export function MentionsScreen() {
   const filtered = hasSearchOrFilters || selectedViewId !== null
   const paginationAvailable =
     cursorHistory.length > 0 ||
-    (mentionsValue !== undefined &&
-      !mentionsValue.isDone &&
-      Boolean(mentionsValue.nextCursor))
+    (effectiveMentionsValue !== undefined &&
+      !effectiveMentionsValue.isDone &&
+      Boolean(effectiveMentionsValue.nextCursor))
   const sparsePageCursor =
-    mentionsValue !== undefined
+    effectiveMentionsValue !== undefined
       ? nextSparseMentionCursor({
           filtered,
-          itemCount: mentionsValue.items.length,
-          nextCursor: mentionsValue.nextCursor,
+          itemCount: effectiveMentionsValue.items.length,
+          nextCursor: effectiveMentionsValue.nextCursor,
         })
       : undefined
 
@@ -698,8 +722,8 @@ export function MentionsScreen() {
               <>
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <p className="text-muted-foreground text-xs">
-                    {mentionsValue?.totalCount !== undefined
-                      ? `${mentionsValue.totalCount} mentions`
+                    {effectiveMentionsValue?.totalCount !== undefined
+                      ? `${effectiveMentionsValue.totalCount} mentions`
                       : `${visibleMentions.length} mentions on this page`}
                   </p>
                 </div>
@@ -747,19 +771,19 @@ export function MentionsScreen() {
                   variant="outline"
                   size="sm"
                   disabled={
-                    mentionsValue === undefined ||
-                    mentionsValue.isDone ||
-                    !mentionsValue.nextCursor
+                    effectiveMentionsValue === undefined ||
+                    effectiveMentionsValue.isDone ||
+                    !effectiveMentionsValue.nextCursor
                   }
                   onClick={() => {
                     if (
-                      mentionsValue === undefined ||
-                      !mentionsValue.nextCursor
+                      effectiveMentionsValue === undefined ||
+                      !effectiveMentionsValue.nextCursor
                     ) {
                       return
                     }
                     setCursorHistory((current) => [...current, cursor])
-                    setCursor(mentionsValue.nextCursor ?? undefined)
+                    setCursor(effectiveMentionsValue.nextCursor ?? undefined)
                   }}
                 >
                   Next

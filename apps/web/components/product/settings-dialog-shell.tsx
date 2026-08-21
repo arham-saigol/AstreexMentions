@@ -121,7 +121,7 @@ export function SettingsDialogShell({
                 <TabsTrigger
                   key={id}
                   value={id}
-                  className="h-10 flex-none justify-start px-3 data-[state=active]:shadow-none sm:w-full"
+                  className="h-10 flex-none justify-start px-3 sm:w-full"
                 >
                   <SectionIcon aria-hidden="true" className="size-4" />
                   {label}

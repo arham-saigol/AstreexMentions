@@ -46,7 +46,7 @@ function KeywordUsage({
   return (
     <section
       aria-labelledby="keyword-usage-title"
-      className="border-border mt-5 grid gap-4 border-y py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+      className="border-border bg-card mt-6 grid gap-4 rounded-lg border p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:p-5"
     >
       <div className="min-w-0">
         <div className="flex items-baseline justify-between gap-4">
@@ -102,6 +102,12 @@ export function KeywordsScreen() {
 
   const listValue = useQuery(api.keywords.listKeywords, {})
   const summaryValue = useQuery(api.keywords.getKeywordSummary, { now })
+  const [lastSummary, setLastSummary] = useState<
+    NonNullable<typeof summaryValue> | undefined
+  >()
+  if (summaryValue !== undefined && summaryValue !== lastSummary) {
+    setLastSummary(summaryValue)
+  }
 
   const createKeyword = useMutation(api.keywords.createKeyword)
   const updateKeyword = useMutation(api.keywords.updateKeyword)
@@ -109,9 +115,9 @@ export function KeywordsScreen() {
   const resumeKeyword = useMutation(api.keywords.resumeKeyword)
   const deleteKeyword = useMutation(api.keywords.deleteKeyword)
 
-  const loading = listValue === undefined || summaryValue === undefined
+  const summary = summaryValue ?? lastSummary
+  const loading = listValue === undefined || summary === undefined
   const keywords = listValue ?? []
-  const summary = summaryValue ?? null
   const limit =
     summary?.limit ??
     billing.usage?.keywordLimit ??

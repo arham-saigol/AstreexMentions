@@ -52,8 +52,8 @@ function NavigationLinks({
             className={cn(
               "relative flex min-h-10 items-center gap-3 rounded-md px-3 py-2 text-[13px] font-medium transition-colors duration-[var(--motion-control)]",
               active
-                ? "bg-card text-sidebar-accent-foreground shadow-xs"
-                : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground",
+                ? "bg-[var(--brand-soft)] text-[var(--brand-soft-ink)]"
+                : "text-sidebar-foreground hover:bg-muted/60 hover:text-foreground",
               mobile && "py-3",
             )}
           >
@@ -166,8 +166,10 @@ export function AdminShell({ children }: { children: ReactNode }) {
             />
           </div>
         </header>
-        <main className="bg-card mx-auto min-h-[calc(100dvh-4rem)] w-full max-w-[96rem] px-4 py-8 sm:px-8 lg:px-10 lg:py-10">
-          {children}
+        <main className="min-h-[calc(100dvh-4rem)]">
+          <div className="mx-auto w-full max-w-[96rem] px-4 py-8 sm:px-8 lg:px-10 lg:py-10">
+            {children}
+          </div>
         </main>
       </div>
     </div>

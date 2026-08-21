@@ -99,11 +99,27 @@ function errorForHttpStatus(
   now: number,
 ): ProviderAdapterError {
   const status = response.status
-  if (status === 401 || status === 402 || status === 403) {
+  if (status === 401) {
     return new ProviderAdapterError(
       provider,
       "auth",
       "Provider authentication failed",
+      { retryable: false, status },
+    )
+  }
+  if (status === 402) {
+    return new ProviderAdapterError(
+      provider,
+      "quota",
+      "Provider account quota or credits exhausted",
+      { retryable: false, status },
+    )
+  }
+  if (status === 403) {
+    return new ProviderAdapterError(
+      provider,
+      "auth",
+      "Provider access forbidden",
       { retryable: false, status },
     )
   }

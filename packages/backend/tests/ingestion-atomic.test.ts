@@ -361,8 +361,10 @@ describe("serializable atomic ingestion", () => {
     const state = await snapshot(t, seeded)
     expect(state.mentions).toHaveLength(1)
     expect(state.mentions[0]).toMatchObject({
+      analysisState: "pending",
       body: original.body,
       engagementScore: 99,
+      feedState: "pending",
       lastMatchedAt: NOW + 2,
       likeCount: 42,
     })

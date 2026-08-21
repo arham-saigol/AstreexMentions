@@ -1,14 +1,12 @@
 /* ----------------------------------------------------------------------------
- * Astreex global foundation — Astryx (Meta Design Library) + Tailwind v4 bridge.
+ * Astreex design system — owned Tailwind v4 tokens and primitives.
  *
- * Layer order is imported first (see layers.css): Next.js hoists @import content
- * above inline CSS, so the @layer declaration must live in its own file.
- *
- * Migration model (per Astryx migration guide): Tailwind coexists during
- * migration. A compatibility shim below repoints the prior shadcn semantic
- * tokens + raw canvas/ink tokens to live Astryx tokens, so existing markup
- * keeps rendering against the new neutral + amber-accent system while each
- * surface migrates to Astryx primitives incrementally.
+ * One dark-first token system for the marketing site and the product app.
+ * Theme (dark/light) is set on <html data-theme> by an inline no-flash script
+ * (OS preference by default; an explicit choice persists in the app). The
+ * @theme inline bridge below repoints every semantic Tailwind utility and the
+ * legacy raw tokens the components use onto these values, so changing
+ * data-theme restyles the whole product without touching component code.
  * --------------------------------------------------------------------------- */
 
 @import "./layers.css";
@@ -16,130 +14,311 @@
 /* Tailwind v4 coexistence (split imports so each piece lands in its layer). */
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/preflight.css" layer(base);
-@import "@astryxdesign/core/reset.css";
-@import "@astryxdesign/core/astryx.css";
-@import "@astryxdesign/theme-neutral/theme.css";
-@import "@astryxdesign/core/tailwind-theme.css";
 @import "tailwindcss/utilities.css" layer(utilities);
 
 @source "../**/*.{ts,tsx}";
 
-/* ----------------------------------------------------------------------------
- * Theme tuning — neutral base, single restrained amber accent.
- *
- * Scoped to the same [data-astryx-theme="neutral"] surface the neutral theme
- * uses; higher specificity than the theme block plus later source order wins.
- * Accent uses a warm amber fill with near-black "on-accent" text for AA contrast
- * on the primary CTA — the "single restrained accent" direction.
- * --------------------------------------------------------------------------- */
-[data-astryx-theme="neutral"] {
-  --color-accent: #b26c2e;
-  --color-accent-muted: #f6ead7;
-  --color-on-accent: #1a130a;
-  --color-text-accent: #8a5a23;
+/* ============================================================================
+   :root — dark (Notion Obsidian / Near-Black default).
+   ============================================================================ */
+:root {
+  color-scheme: dark;
 
-  /* Premium modern typography: unified Geist sans (no editorial serif). */
-  --font-family-body: var(--font-geist, ui-sans-serif, system-ui, sans-serif);
-  --font-family-heading: var(
-    --font-geist,
-    ui-sans-serif,
-    system-ui,
-    sans-serif
-  );
-  --font-family-code: var(
-    --font-jetbrains-mono,
-    ui-monospace,
-    "SF Mono",
-    Consolas,
-    monospace
-  );
+  --font-sans:
+    "Geist", var(--font-geist), -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, "Inter", Helvetica, sans-serif;
+  --font-mono:
+    "Geist Mono", var(--font-geist-mono), "JetBrains Mono", "SFMono-Regular",
+    Consolas, monospace;
+
+  /* Brand ramp (Notion Blue & Obsidian Scale) */
+  --brand-50: #f0f7fd;
+  --brand-100: #dceefa;
+  --brand-200: #bde0f6;
+  --brand-300: #8ecbf0;
+  --brand-400: #529cca;
+  --brand-500: #2383e2;
+  --brand-600: #1868b7;
+  --brand-700: #145293;
+  --brand-800: #134579;
+  --brand-900: #143b64;
+
+  /* Neutral ramp (Notion Near-Black / Charcoal scale) */
+  --gray-0: #ffffff;
+  --gray-50: #f7f6f3;
+  --gray-100: #ebebeb;
+  --gray-200: #d7d5cf;
+  --gray-300: #b4b3af;
+  --gray-400: #9b9b9b;
+  --gray-500: #787774;
+  --gray-600: #606060;
+  --gray-700: #3e3e3e;
+  --gray-800: #2e2e2e;
+  --gray-850: #252525;
+  --gray-900: #202020;
+  --gray-950: #191919;
+  --black: #121212;
+
+  /* Semantic pairs (Notion dark pastel tags) */
+  --green: #7fd496;
+  --green-bg: rgba(46, 170, 118, 0.24);
+  --blue: #78bde9;
+  --blue-bg: rgba(0, 120, 223, 0.24);
+  --yellow: #e8c75d;
+  --yellow-bg: rgba(223, 171, 1, 0.24);
+  --red: #f08993;
+  --red-bg: rgba(235, 87, 87, 0.24);
+  --purple: #d09ee8;
+  --purple-bg: rgba(155, 81, 224, 0.24);
+  --orange: #f0af75;
+  --orange-bg: rgba(242, 153, 74, 0.24);
+
+  /* Surfaces (Notion near-black hierarchy) */
+  --canvas: #191919;
+  --canvas-raised: #202020;
+  --surface: #252525;
+  --surface-hover: rgba(255, 255, 255, 0.055);
+  --surface-active: rgba(255, 255, 255, 0.09);
+  --surface-inset: #191919;
+
+  /* Text (Notion near-white ink) */
+  --text: #ebebeb;
+  --text-secondary: #9b9b9b;
+  --text-tertiary: #606060;
+  --text-disabled: #4a4a4a;
+
+  /* Lines */
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.14);
+
+  /* Accent (Primary Blue) */
+  --accent: #0075de;
+  --accent-hover: #1f8df8;
+  --accent-pressed: #0062bd;
+  --on-accent: #ffffff;
+  --on-red: #ffffff;
+  --accent-soft: rgba(0, 117, 222, 0.16);
+  --accent-soft-ink: #52a9ff;
+  --focus: #0075de;
+  --accent-contrast: var(--on-accent);
+  --overlay: rgba(0, 0, 0, 0.65);
+
+  /* Spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+  --space-24: 96px;
+
+  /* Radius (Notion subtle 4px / 6px / 8px hierarchy) */
+  --radius-xs: 3px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+  --radius-round: 999px;
+
+  /* Elevation */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3), 0 2px 6px rgba(0, 0, 0, 0.15);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4), 0 2px 6px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.5), 0 4px 12px rgba(0, 0, 0, 0.25);
+  --shadow-control:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05), 0 1px 2px rgba(0, 0, 0, 0.25);
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.2, 0.9, 0.25, 1.2);
+  --fast: 100ms;
+  --medium: 180ms;
+  --slow: 350ms;
+
+  /* Layout */
+  --sidebar-w: 254px;
+  --topbar-h: 56px;
+  --control-h: 36px;
+  --icon-h: 32px;
+  --section-gap: 64px;
+
+  /* Transitions.dev tuned durations shared by overlay/anchored surfaces. */
+  --dropdown-open-dur: 200ms;
+  --dropdown-close-dur: 120ms;
+  --dropdown-pre-scale: 0.98;
+  --dropdown-closing-scale: 0.99;
+  --dropdown-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --modal-open-dur: 200ms;
+  --modal-close-dur: 120ms;
+  --modal-scale: 0.98;
+  --modal-scale-close: 0.99;
+  --modal-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --check-box: 120ms;
+  --check-draw: 280ms;
+  --check-delay: 0ms;
+  --check-uncheck: 120ms;
+  --check-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --icon-swap-dur: 200ms;
+  --icon-swap-blur: 2px;
+  --icon-swap-start-scale: 0.3;
+  --icon-swap-ease: ease-in-out;
 }
 
+/* ============================================================================
+   Light theme — Notion Warm Paper & Near-White. Selected on <html data-theme="light">.
+   Semantic pairs swap foregrounds + backgrounds together for authentic Notion pastel tags.
+   ============================================================================ */
+[data-theme="light"] {
+  color-scheme: light;
+
+  --canvas: #ffffff;
+  --canvas-raised: #f7f6f3;
+  --surface: #ffffff;
+  --surface-hover: rgba(55, 53, 47, 0.06);
+  --surface-active: rgba(55, 53, 47, 0.1);
+  --surface-inset: #f7f6f3;
+
+  --text: #37352f;
+  --text-secondary: #787774;
+  --text-tertiary: #9b9a97;
+  --text-disabled: #b4b3af;
+
+  --line: rgba(55, 53, 47, 0.09);
+  --line-strong: rgba(55, 53, 47, 0.16);
+
+  --accent: #2383e2;
+  --accent-hover: #1868b7;
+  --accent-pressed: #0f5499;
+  --on-accent: #ffffff;
+  --on-red: #ffffff;
+  --accent-soft: rgba(35, 131, 226, 0.08);
+  --accent-soft-ink: #0c70b8;
+  --focus: #2383e2;
+  --accent-contrast: var(--on-accent);
+  --overlay: rgba(15, 15, 15, 0.45);
+
+  --green: #218358;
+  --green-bg: rgba(46, 170, 118, 0.12);
+  --blue: #0c70b8;
+  --blue-bg: rgba(0, 120, 223, 0.12);
+  --yellow: #8f6b00;
+  --yellow-bg: rgba(223, 171, 1, 0.14);
+  --red: #c13838;
+  --red-bg: rgba(235, 87, 87, 0.12);
+  --purple: #8936cf;
+  --purple-bg: rgba(155, 81, 224, 0.12);
+  --orange: #cc6717;
+  --orange-bg: rgba(242, 153, 74, 0.12);
+
+  --shadow-xs: 0 1px 2px rgba(15, 15, 15, 0.04);
+  --shadow-sm:
+    0 1px 3px rgba(15, 15, 15, 0.06), 0 2px 6px rgba(15, 15, 15, 0.03);
+  --shadow-md:
+    0 4px 16px rgba(15, 15, 15, 0.08), 0 1px 3px rgba(15, 15, 15, 0.04);
+  --shadow-lg:
+    0 8px 30px rgba(15, 15, 15, 0.12), 0 2px 8px rgba(15, 15, 15, 0.06);
+  --shadow-control:
+    inset 0 0 0 1px rgba(55, 53, 47, 0.08), 0 1px 2px rgba(15, 15, 15, 0.04);
+}
+
+/* ----------------------------------------------------------------------------
+   Legacy raw-token aliases the components were written against. They repoint
+   onto the live kit tokens so existing component/SVG code keeps working while
+   the system reads as the kit. A single place to read theme direction from.
+   --------------------------------------------------------------------------- */
 @layer base {
   :root {
-    /* --- Brand accent ramp (amber) for legacy `var(--brand*)` callers. --- */
-    --brand: var(--color-accent);
-    --brand-hover: #9c5d27;
-    --brand-pressed: #874e20;
-    --brand-soft: var(--color-accent-muted);
-    --brand-soft-ink: var(--color-text-accent);
-    --brand-contrast: var(--color-on-accent);
-    --signal: var(--color-accent);
-    --signal-soft: var(--color-accent-muted);
-    --focus: var(--color-accent);
+    /* Brand accent aliases for legacy `var(--brand*)` callers. */
+    --brand: var(--accent);
+    --brand-hover: var(--accent-hover);
+    --brand-pressed: var(--accent-pressed);
+    --brand-soft: var(--accent-soft);
+    --brand-soft-ink: var(--accent-soft-ink);
+    --brand-contrast: var(--accent-contrast);
+    --signal: var(--accent);
+    --signal-soft: var(--accent-soft);
 
-    /* --- Legacy canvas / surface scale -> Astryx background tokens. --- */
-    --canvas: var(--color-background-body);
-    --canvas-soft: var(--color-background-surface);
-    --surface: var(--color-background-card);
-    --surface-soft: var(--color-background-muted);
-    --surface-sunk: var(--color-background-muted);
-    --surface-strong: var(--color-background-muted);
+    /* Canvas / surface scale */
+    --canvas-soft: var(--canvas-raised);
+    --surface-soft: var(--surface-inset);
+    --surface-sunk: var(--surface-inset);
+    --surface-strong: var(--surface-active);
 
-    /* --- Legacy ink scale -> Astryx text tokens. --- */
-    --ink: var(--color-text-primary);
-    --ink-secondary: var(--color-text-secondary);
-    --ink-tertiary: var(--color-text-secondary);
-    --ink-faint: var(--color-text-disabled);
+    /* Ink scale */
+    --ink: var(--text);
+    --ink-secondary: var(--text-secondary);
+    --ink-tertiary: var(--text-tertiary);
+    --ink-faint: var(--text-disabled);
 
-    /* --- Legacy line scale -> Astryx border tokens. --- */
-    --line: var(--color-border);
-    --line-2: var(--color-border);
-    --line-strong: var(--color-border-emphasized);
+    /* Line scale */
+    --line-2: var(--line);
 
-    --danger: var(--color-error);
-    --danger-contrast: var(--color-on-error);
+    --danger: var(--red);
+    --danger-contrast: var(--red);
 
-    --ease-editorial: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-editorial: var(--ease-out);
 
-    /* Legacy motion durations retained for `var(--motion-*)` callers. */
+    /* Motion durations retained for `var(--motion-*)` callers. */
     --motion-instant: 0ms;
-    --motion-feedback: 90ms;
-    --motion-control: 140ms;
-    --motion-overlay: 200ms;
-    --motion-layout: 320ms;
+    --motion-feedback: var(--fast);
+    --motion-control: var(--medium);
+    --motion-overlay: var(--medium);
+    --motion-layout: var(--slow);
     --motion-emphasis: 600ms;
-
-    /* transitions.dev: shared overlays, anchored surfaces, and controls. */
-    --dropdown-open-dur: 250ms;
-    --dropdown-close-dur: 150ms;
-    --dropdown-pre-scale: 0.97;
-    --dropdown-closing-scale: 0.99;
-    --dropdown-ease: cubic-bezier(0.22, 1, 0.36, 1);
-    --modal-open-dur: 250ms;
-    --modal-close-dur: 150ms;
-    --modal-scale: 0.96;
-    --modal-scale-close: 0.96;
-    --modal-ease: cubic-bezier(0.22, 1, 0.36, 1);
-    --check-box: 150ms;
-    --check-draw: 350ms;
-    --check-delay: 0ms;
-    --check-uncheck: 150ms;
-    --check-ease: cubic-bezier(0.22, 1, 0.36, 1);
-    --icon-swap-dur: 250ms;
-    --icon-swap-blur: 2px;
-    --icon-swap-start-scale: 0.25;
-    --icon-swap-ease: ease-in-out;
-
-    /* Shadows backed by Astryx shadow scale. */
-    --shadow-soft: var(--shadow-low);
-    --shadow-lift: var(--shadow-med);
   }
 
   html {
-    color-scheme: light;
+    scroll-behavior: smooth;
+    scroll-padding-top: 84px;
+    -webkit-text-size-adjust: 100%;
   }
 
   body {
-    @apply bg-background text-foreground min-h-dvh overflow-x-hidden font-sans antialiased;
-    font-size: 15px;
-    line-height: 1.6;
+    background: var(--canvas);
+    color: var(--text);
+    min-height: 100dvh;
+    overflow-x: hidden;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
+    transition:
+      background var(--medium) ease,
+      color var(--medium) ease;
   }
 
   ::selection {
-    background: var(--color-accent-muted);
-    color: var(--color-text-accent);
+    background: rgba(35, 131, 226, 0.28);
+    color: inherit;
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+  }
+
+  button {
+    color: inherit;
+  }
+
+  svg {
+    display: block;
+    flex: 0 0 auto;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+    border-radius: 4px;
   }
 
   button:not(:disabled),
@@ -147,130 +326,128 @@
   summary {
     cursor: pointer;
   }
-
-  :focus-visible {
-    outline: 2px solid var(--color-accent);
-    outline-offset: 2px;
-    border-radius: 4px;
-  }
 }
 
 /* ----------------------------------------------------------------------------
- * Tailwind theme shim — keep every prior shadcn semantic utility working by
- * repointing it to a live Astryx token. The utilities generated from these
- * names (bg-primary, text-muted-foreground, border-border, bg-destructive, ...)
- * resolve to the active theme via CSS custom properties, so theme/cosmetic
- * changes flow automatically. Astryx tailwind-theme.css already maps several
- * of these; entries here override on top for the shadcn conventions the code
- * relies on (e.g. --color-primary = accent for primary actions).
- * --------------------------------------------------------------------------- */
+   Tailwind theme bridge. `inline` emits utilities that reference the runtime
+   theme vars, so flipping <html data-theme> restyles everything. Maps the
+   shadcn / project semantic names the code relies on onto the kit tokens.
+   --------------------------------------------------------------------------- */
 @theme inline {
-  --color-background: var(--color-background-body);
-  --color-foreground: var(--color-text-primary);
+  --color-background: var(--canvas);
+  --color-foreground: var(--text);
 
-  --color-card: var(--color-background-card);
-  --color-card-foreground: var(--color-text-primary);
-  --color-popover: var(--color-background-popover);
-  --color-popover-foreground: var(--color-text-primary);
-  --color-overlay: rgb(0 0 0 / 55%);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--text);
+  --color-popover: var(--canvas-raised);
+  --color-popover-foreground: var(--text);
+  --color-overlay: var(--overlay);
 
-  --color-primary: var(--color-accent);
-  --color-primary-foreground: var(--color-on-accent);
+  --color-primary: var(--accent);
+  --color-primary-foreground: var(--on-accent);
 
-  --color-secondary: var(--color-background-muted);
-  --color-secondary-foreground: var(--color-text-primary);
+  --color-secondary: var(--surface-active);
+  --color-secondary-foreground: var(--text);
 
-  --color-muted: var(--color-background-muted);
-  --color-muted-foreground: var(--color-text-secondary);
+  /* shadcn "accent" slot = soft Notion blue surface with blue text */
+  --color-accent: var(--accent-soft);
+  --color-accent-foreground: var(--accent-soft-ink);
+  --color-accent-muted: var(--accent-soft);
 
-  --color-accent: var(--color-accent-muted);
-  --color-accent-foreground: var(--color-text-accent);
+  --color-muted: var(--surface-hover);
+  --color-muted-foreground: var(--text-secondary);
 
-  --color-destructive: var(--color-error);
-  --color-destructive-foreground: var(--color-on-error);
+  --color-destructive: var(--red);
+  --color-destructive-foreground: var(--on-red);
 
-  --color-border: var(--color-border);
-  --color-input: var(--color-border-emphasized);
-  --color-ring: var(--color-accent);
+  --color-border: var(--line);
+  --color-input: var(--line-strong);
+  --color-ring: var(--focus);
 
-  --color-sidebar: var(--color-background-surface);
-  --color-sidebar-foreground: var(--color-text-secondary);
-  --color-sidebar-accent: var(--color-background-muted);
-  --color-sidebar-accent-foreground: var(--color-text-primary);
-  --color-sidebar-border: var(--color-border);
+  --color-sidebar: var(--canvas-raised);
+  --color-sidebar-foreground: var(--text-secondary);
+  --color-sidebar-accent: var(--surface-hover);
+  --color-sidebar-accent-foreground: var(--text);
+  --color-sidebar-border: var(--line);
 
-  /* Intent categories -> Astryx hue palettes. */
-  --color-question: var(--color-background-blue);
-  --color-question-foreground: var(--color-text-blue);
-  --color-complaint: var(--color-background-red);
-  --color-complaint-foreground: var(--color-text-red);
-  --color-praise: var(--color-background-green);
-  --color-praise-foreground: var(--color-text-green);
-  --color-bug: var(--color-background-orange);
-  --color-bug-foreground: var(--color-text-orange);
-  --color-feature: var(--color-background-yellow);
-  --color-feature-foreground: var(--color-text-yellow);
-  --color-competitor: var(--color-background-purple);
-  --color-competitor-foreground: var(--color-text-purple);
-  --color-other: var(--color-background-gray);
-  --color-other-foreground: var(--color-text-gray);
+  /* Intent categories -> Notion authentic pastel pairs */
+  --color-question: var(--blue-bg);
+  --color-question-foreground: var(--blue);
+  --color-complaint: var(--orange-bg);
+  --color-complaint-foreground: var(--orange);
+  --color-praise: var(--green-bg);
+  --color-praise-foreground: var(--green);
+  --color-bug: var(--red-bg);
+  --color-bug-foreground: var(--red);
+  --color-feature: var(--purple-bg);
+  --color-feature-foreground: var(--purple);
+  --color-competitor: var(--surface-active);
+  --color-competitor-foreground: var(--text-secondary);
+  --color-other: var(--surface-active);
+  --color-other-foreground: var(--text-secondary);
 
-  --font-sans: var(--font-family-body);
-  --font-serif: var(--font-family-heading);
-  --font-mono: var(--font-family-code);
-  --font-display: var(--font-family-heading);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --font-serif: var(--font-sans);
+  --font-display: var(--font-sans);
 
-  --radius-sm: var(--radius-inner);
-  --radius-md: var(--radius-element);
-  --radius-lg: var(--radius-container);
-  --radius-xl: var(--radius-page);
+  --radius-xs: var(--radius-xs);
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+  --radius-2xl: var(--radius-2xl);
 
-  --shadow-xs: var(--shadow-low);
-  --shadow-sm: var(--shadow-low);
-  --shadow-md: var(--shadow-med);
-  --shadow-lg: var(--shadow-high);
+  --shadow-xs: var(--shadow-xs);
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+
+  --length-control: var(--control-h);
+  --length-section-gap: var(--section-gap);
+  --width-sidebar: var(--sidebar-w);
+  --height-topbar: var(--topbar-h);
 }
 
 @layer utilities {
-  /* Display is the system sans now; kept as a thin alias during migration so
-     prior `font-display` call sites render cleanly without code churn. */
+  /* Unified sans display — the kit drops the editorial serif; `font-display`
+     and `font-serif` both render as Geist so prior call sites stay clean. */
   .font-display {
-    font-family: var(--font-family-heading);
-    font-weight: var(--font-weight-semibold);
+    font-family: var(--font-sans);
+    font-weight: 600;
     letter-spacing: -0.02em;
   }
 
-  /* Serious, modern eyebrow — quiet sans label, not the old mono/serif tag. */
+  /* Modern eyebrow — quiet sans label with a leading rule. */
   .editorial-eyebrow {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    color: var(--color-text-secondary);
-    font-family: var(--font-family-body);
-    font-size: 0.75rem;
-    font-weight: var(--font-weight-semibold);
-    letter-spacing: 0.04em;
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
   }
 
   .editorial-eyebrow::before {
-    width: 1.5rem;
+    width: 1.125rem;
     height: 1px;
-    background: var(--color-border-emphasized);
+    background: currentColor;
     content: "";
   }
 
-  /* Surface feedback using Astryx tokens + motion. */
   .surface-hover {
     transition:
-      border-color var(--duration-medium-min, 180ms) var(--ease-standard, ease),
-      box-shadow var(--duration-medium-min, 180ms) var(--ease-standard, ease),
-      transform var(--duration-medium-min, 180ms) var(--ease-standard, ease);
+      border-color var(--medium) var(--ease-out),
+      box-shadow var(--medium) var(--ease-out),
+      transform var(--medium) var(--ease-out);
   }
 
   .surface-hover:hover {
-    border-color: var(--color-border-emphasized);
-    box-shadow: var(--shadow-med);
+    border-color: var(--line-strong);
+    box-shadow: var(--shadow-md);
     transform: translateY(-1px);
   }
 
@@ -374,6 +551,46 @@
     filter: blur(var(--icon-swap-blur));
     transform: scale(var(--icon-swap-start-scale));
   }
+
+  /* Kit skeleton shimmer — a soft sweep using the line-strong token, so it
+     reads correctly in both themes. */
+  .astro-skeleton {
+    position: relative;
+    overflow: hidden;
+    background: var(--surface-active);
+  }
+
+  .astro-skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in srgb, var(--line-strong) 55%, transparent),
+      transparent
+    );
+    animation: astro-shimmer 1.5s ease-in-out infinite;
+  }
+
+  /* Kit progress fill entrance. */
+  .astro-progress-fill {
+    transform-origin: left;
+    animation: astro-progress-in 0.8s var(--ease-out) both;
+  }
+}
+
+@keyframes astro-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes astro-progress-in {
+  from {
+    transform: scaleX(0);
+  }
 }
 
 @keyframes t-dropdown-open {
@@ -402,10 +619,12 @@
   from {
     opacity: 0;
     scale: var(--modal-scale);
+    filter: blur(3px);
   }
   to {
     opacity: 1;
     scale: 1;
+    filter: blur(0);
   }
 }
 
@@ -443,7 +662,7 @@
   *::before,
   *::after {
     scroll-behavior: auto !important;
-    transition-duration: 0ms !important;
+    transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
   }

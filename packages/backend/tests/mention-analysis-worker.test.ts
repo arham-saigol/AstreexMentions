@@ -13,6 +13,7 @@ import {
 } from "../convex/mentionAnalysis/model"
 import {
   buildDeepSeekMentionAnalysisRequest,
+  DEEPSEEK_MENTION_ANALYSIS_MODEL,
   MAX_MENTION_ANALYSIS_BATCH_PROMPT_CHARS,
   MAX_MENTION_ANALYSIS_MENTION_TEXT_CHARS,
   type MentionAnalysisCategory,
@@ -210,7 +211,7 @@ async function seedMentionAnalysis(
         idempotencyKey: `mention-analysis:mention:${String(mentionId)}`,
         maxAttempts: options.maxAttempts ?? 3,
         mentionId,
-        model: "deepseek-v4-pro",
+        model: DEEPSEEK_MENTION_ANALYSIS_MODEL,
         nextAttemptAt: NOW,
         status: "pending",
         updatedAt: NOW - 1_000 + index,
@@ -578,7 +579,7 @@ describe("durable DeepSeek mention analysis worker", () => {
       },
     )
     expect(request).toMatchObject({
-      model: "deepseek-v4-pro",
+      model: DEEPSEEK_MENTION_ANALYSIS_MODEL,
       reasoning_effort: "high",
       response_format: { type: "json_object" },
       temperature: 0,
@@ -637,7 +638,7 @@ describe("durable DeepSeek mention analysis worker", () => {
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined
     const body = JSON.parse(String(init?.body)) as Record<string, unknown>
     expect(body).toMatchObject({
-      model: "deepseek-v4-pro",
+      model: DEEPSEEK_MENTION_ANALYSIS_MODEL,
       reasoning_effort: "high",
       response_format: { type: "json_object" },
       temperature: 0,

@@ -222,6 +222,8 @@ function outboundRequest(
   const parsed = deepSeekMentionAnalysisRequestSchema.safeParse({
     ...request,
     reasoning_effort: "high",
+    response_format: { type: "json_object" },
+    temperature: 0,
     thinking: { type: "enabled" },
   })
   if (!parsed.success) {

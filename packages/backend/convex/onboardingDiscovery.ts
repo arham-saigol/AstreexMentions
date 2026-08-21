@@ -109,7 +109,7 @@ async function deepSeekJson(
           { content: system, role: "system" },
           { content: user, role: "user" },
         ],
-        model: "deepseek-v4-pro",
+        model: "deepseek-v4-flash",
         reasoning_effort: "high",
         response_format: { type: "json_object" },
         temperature: 0,
@@ -117,7 +117,9 @@ async function deepSeekJson(
       }),
       signal: controller.signal,
     })
-    if (!response.ok) throw new Error(`DeepSeek HTTP ${response.status}`)
+    if (!response.ok) {
+      throw new Error(`DeepSeek HTTP ${response.status}`)
+    }
     const envelope = deepSeekEnvelopeSchema.parse(
       JSON.parse(await response.text()) as unknown,
     )

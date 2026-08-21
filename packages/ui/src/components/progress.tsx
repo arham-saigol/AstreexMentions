@@ -1,20 +1,40 @@
-import {
-  ProgressBar,
-  type ProgressBarProps,
-} from "@astryxdesign/core/ProgressBar"
+import { cn } from "../lib/utils"
 
-type ProgressProps = Omit<ProgressBarProps, "label" | "isLabelHidden"> & {
+/**
+ * Determinate progress bar with a 7px inset track and accent fill.
+ * Values are clamped to 0–100; callers provide an `aria-label`.
+ */
+export type ProgressProps = {
+  value?: number
+  className?: string
   "aria-label": string
 }
 
-/**
- * Compatibility wrapper over Astryx ProgressBar. Existing callers already
- * provide an accessible aria-label; Astryx renders that label off-screen while
- * standardizing all progress tracks to the design-system 8px height.
- */
-function Progress({ "aria-label": label, ...props }: ProgressProps) {
-  return <ProgressBar label={label} isLabelHidden {...props} />
+function Progress({
+  value = 0,
+  className,
+  "aria-label": ariaLabel,
+}: ProgressProps) {
+  const clamped = Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0))
+
+  return (
+    <div
+      role="progressbar"
+      aria-label={ariaLabel}
+      aria-valuenow={clamped}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      className={cn(
+        "relative h-[7px] w-full overflow-hidden rounded-full border border-[var(--line)] bg-[var(--surface-inset)]",
+        className,
+      )}
+    >
+      <span
+        className="astro-progress-fill block h-full rounded-full bg-[var(--accent)]"
+        style={{ width: `${clamped}%` }}
+      />
+    </div>
+  )
 }
 
 export { Progress }
-export type { ProgressProps }

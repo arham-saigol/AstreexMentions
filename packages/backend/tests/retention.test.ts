@@ -4,6 +4,7 @@ import type { GenericId } from "convex/values"
 import { describe, expect, it } from "vitest"
 
 import schema from "../convex/schema"
+import { DEEPSEEK_MENTION_ANALYSIS_MODEL } from "../convex/lib/deepseekMentionAnalysis"
 import { RETENTION_BATCH_SIZE } from "../convex/retention"
 
 const NOW = Date.parse("2026-08-01T12:00:00.000Z")
@@ -121,7 +122,7 @@ describe("free mention retention", () => {
           idempotencyKey: `retention:${index}`,
           maxAttempts: 3,
           mentionId,
-          model: "deepseek-v4-pro",
+          model: DEEPSEEK_MENTION_ANALYSIS_MODEL,
           nextAttemptAt: NOW,
           status: "pending",
           updatedAt: NOW,

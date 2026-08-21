@@ -5,7 +5,7 @@ export const MAX_ANALYSIS_REASON_CHARS = 500
 export const MAX_FILTERING_CONTEXT_CHARS = 2_000
 export const MAX_FILTERING_GUIDELINES_CHARS = 2_000
 export const MENTION_ANALYSIS_VERSION = "mention-analysis-v1"
-export const DEEPSEEK_MENTION_ANALYSIS_MODEL = "deepseek-v4-pro"
+export const DEEPSEEK_MENTION_ANALYSIS_MODEL = "deepseek-v4-flash"
 export const DEFAULT_MENTION_ANALYSIS_MAX_ATTEMPTS = 3
 const MENTION_ANALYSIS_TEXT_TRUNCATION_MARKER = "\n\n[truncated]"
 
@@ -317,15 +317,15 @@ export function buildDeepSeekMentionAnalysisRequest(
   }
 
   return {
+    messages: [
+      { content: systemContent, role: "system" },
+      { content: userContent, role: "user" },
+    ],
     model: DEEPSEEK_MENTION_ANALYSIS_MODEL,
     reasoning_effort: "high",
+    response_format: { type: "json_object" },
     temperature: 0,
     thinking: { type: "enabled" },
-    response_format: { type: "json_object" },
-    messages: [
-      { role: "system", content: systemContent },
-      { role: "user", content: userContent },
-    ],
   }
 }
 

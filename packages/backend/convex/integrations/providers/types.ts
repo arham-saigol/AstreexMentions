@@ -2,7 +2,13 @@ export type ProviderAdapterName =
   "algolia_hacker_news" | "fetchlayer_reddit" | "xquik"
 
 export type ProviderErrorCode =
-  "auth" | "invalid_query" | "malformed" | "network" | "rate_limit" | "server"
+  | "auth"
+  | "invalid_query"
+  | "malformed"
+  | "network"
+  | "quota"
+  | "rate_limit"
+  | "server"
 
 export class ProviderAdapterError extends Error {
   readonly code: ProviderErrorCode

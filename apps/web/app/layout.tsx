@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next"
-import { Geist, JetBrains_Mono, Newsreader } from "next/font/google"
+import { Geist, Geist_Mono } from "next/font/google"
 import type { ReactNode } from "react"
+
+import { themeScript } from "@astreex/ui/theme-config"
 
 import { Providers } from "@/components/providers"
 import { getRuntimeConfiguration, getSiteUrl } from "@/lib/env"
@@ -15,16 +17,9 @@ const geist = Geist({
   display: "swap",
 })
 
-const newsreader = Newsreader({
+const geistMono = Geist_Mono({
   subsets: ["latin"],
-  variable: "--font-newsreader",
-  display: "swap",
-  style: ["normal", "italic"],
-})
-
-const jetBrainsMono = JetBrains_Mono({
-  subsets: ["latin"],
-  variable: "--font-jetbrains-mono",
+  variable: "--font-geist-mono",
   display: "swap",
 })
 
@@ -61,8 +56,11 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  colorScheme: "light",
-  themeColor: "#f7f6f3",
+  colorScheme: "dark light",
+  themeColor: [
+    { media: "(prefers-color-scheme: dark)", color: "#191919" },
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+  ],
 }
 
 export default function RootLayout({ children }: { children: ReactNode }) {
@@ -71,12 +69,14 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html
       lang="en"
-      data-theme="light"
-      data-astryx-theme="neutral"
-      className={`${geist.variable} ${jetBrainsMono.variable} ${newsreader.variable}`}
       suppressHydrationWarning
+      className={`${geist.variable} ${geistMono.variable}`}
     >
       <body>
+        {/* Resolves the theme before first paint so the right token set
+            applies with no flash. OS preference by default; an explicit
+            choice persists under the key the provider reads. */}
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         <Providers
           clerkPublishableKey={configuration.clerk.publishableKey}
           convexUrl={configuration.convex.url}

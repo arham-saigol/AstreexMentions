@@ -645,7 +645,7 @@ type ProviderPageIngestion = {
 async function ingestProviderPage(
   ctx: MutationCtx,
   input: {
-    emailFrom: string
+    emailFrom?: string | undefined
     emailReplyTo?: string | undefined
     items: ReturnType<typeof parseProviderSearchResultJson>["items"]
     keywordId: KeywordId
@@ -926,41 +926,20 @@ export const applyNextTrackingProviderPage = internalMutation({
     }
 
     const sender = readEmailSenderConfiguration(env)
-    if (sender.state === "provider_unconfigured") {
-      await ctx.db.patch("trackingSources", args.trackingSourceId, {
-        leaseExpiresAt: undefined,
-        leaseToken: undefined,
-        pauseReason: "config",
-        status: "paused",
-        updatedAt: now,
-      })
-      await finishTrackingProviderRun(
-        ctx,
-        {
-          durationMs: pendingPage.durationMs as number,
-          errorCode: "resend_provider_unconfigured",
-          errorMessage: "Resend email sender is not configured",
-          outputCount: providerOutputCount,
-          run,
-          status: "failed",
-        },
-        now,
-      )
-      return sender
-    }
+    const emailFrom = sender.state === "configured" ? sender.from : undefined
+    const emailReplyTo =
+      sender.state === "configured" ? sender.replyTo : undefined
 
     const ingestion = await ingestProviderPage(
       ctx,
       {
-        emailFrom: sender.from,
+        ...(emailFrom !== undefined ? { emailFrom } : {}),
+        ...(emailReplyTo !== undefined ? { emailReplyTo } : {}),
         items: result.items,
         keywordId: eligibility.keywordId,
         startPosition,
         trackingSourceId: args.trackingSourceId,
         workspaceId: eligibility.workspaceId,
-        ...(sender.replyTo === undefined
-          ? {}
-          : { emailReplyTo: sender.replyTo }),
       },
       now,
     )

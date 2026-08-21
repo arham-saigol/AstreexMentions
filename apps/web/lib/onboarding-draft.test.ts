@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest"
 
 import {
+  buildFullWebsiteUrl,
   canReuseOnboardingCheckout,
   clearOnboardingDraftStorage,
   CHECKOUT_INTENT_TTL_MS,
@@ -46,14 +47,14 @@ describe("onboarding draft", () => {
     expect(parsed.keywords[0]).not.toHaveProperty("kind")
   })
 
-  it("requires selected keywords to have a phrase, description within 160 characters, and a platform", () => {
+  it("preserves incomplete editor rows while bounding persisted fields", () => {
     const draft = createOnboardingDraft("Astreex")
     expect(
       onboardingDraftSchema.safeParse({
         ...draft,
-        keywords: [{ ...keyword(0), platforms: [] }],
+        keywords: [{ ...keyword(0), phrase: "", platforms: [] }],
       }).success,
-    ).toBe(false)
+    ).toBe(true)
     expect(
       onboardingDraftSchema.safeParse({
         ...draft,
@@ -125,5 +126,20 @@ describe("onboarding draft", () => {
     const removeItem = vi.fn()
     clearOnboardingDraftStorage({ removeItem }, "workspace_1")
     expect(removeItem).toHaveBeenCalledWith("astreex:onboarding:workspace_1:v3")
+  })
+
+  it("builds canonical full website URLs preserving explicit schemes", () => {
+    expect(buildFullWebsiteUrl("http://example.com")).toBe("http://example.com")
+    expect(buildFullWebsiteUrl("http://example.com/blog")).toBe(
+      "http://example.com/blog",
+    )
+    expect(buildFullWebsiteUrl("https://example.com")).toBe("https://example.com")
+    expect(buildFullWebsiteUrl("example.com")).toBe("https://example.com")
+    expect(buildFullWebsiteUrl("//example.com")).toBe("https://example.com")
+    expect(buildFullWebsiteUrl("   http://example.com   ")).toBe(
+      "http://example.com",
+    )
+    expect(buildFullWebsiteUrl("")).toBe("")
+    expect(buildFullWebsiteUrl("   ")).toBe("")
   })
 })

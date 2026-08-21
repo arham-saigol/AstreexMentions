@@ -3,7 +3,7 @@
 import { ClerkProvider, useAuth } from "@clerk/nextjs"
 import { ConvexReactClient } from "convex/react"
 import { ConvexProviderWithClerk } from "convex/react-clerk"
-import { AstryxTheme } from "@astreex/ui/astryx-theme"
+import { ThemeProvider } from "@astreex/ui/theme-provider"
 import { useState, type ReactNode } from "react"
 
 import type { AdminPublicEnv } from "@/lib/env"
@@ -57,7 +57,7 @@ export function Providers({
   clerkPublishableKey,
   convexUrl,
 }: ProvidersProps) {
-  const themed = <AstryxTheme>{children}</AstryxTheme>
+  const themed = <ThemeProvider>{children}</ThemeProvider>
 
   return clerkPublishableKey ? (
     <ConfiguredClerkProvider

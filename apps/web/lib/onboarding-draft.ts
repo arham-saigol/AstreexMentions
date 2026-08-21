@@ -12,9 +12,9 @@ export const onboardingKeywordDraftSchema = z
     brandCandidate: z.boolean(),
     clientId: z.string().trim().min(1),
     description: z.string().trim().max(160),
-    phrase: z.string().trim().min(1).max(160),
+    phrase: z.string().trim().max(160),
     origin: z.enum(["custom", "suggestion"]),
-    platforms: z.array(onboardingPlatformSchema).min(1),
+    platforms: z.array(onboardingPlatformSchema),
     selected: z.boolean(),
   })
   .strict()
@@ -53,7 +53,7 @@ export const onboardingDraftSchema = z
   .superRefine((draft, context) => {
     const selectedPhrases = new Set<string>()
     for (const [index, keyword] of draft.keywords.entries()) {
-      if (!keyword.selected) continue
+      if (!keyword.selected || !keyword.phrase) continue
       const normalized = normalizeKeywordPhrase(keyword.phrase)
       if (selectedPhrases.has(normalized)) {
         context.addIssue({
@@ -110,18 +110,33 @@ export function normalizeKeywordPhrase(value: string): string {
   return value.trim().replace(/\s+/g, " ").toLocaleLowerCase("en")
 }
 
+export function buildFullWebsiteUrl(input: string): string {
+  const trimmed = input.trim()
+  if (!trimmed) return ""
+  if (/^[a-z][a-z\d+.-]*:\/\//i.test(trimmed)) {
+    return trimmed
+  }
+  if (trimmed.startsWith("//")) {
+    return `https:${trimmed}`
+  }
+  return `https://${trimmed}`
+}
+
 export function mergeResearchKeywordDrafts(
   existing: readonly OnboardingKeywordDraft[],
   suggestions: readonly OnboardingKeywordDraft[],
 ): OnboardingKeywordDraft[] {
-  const custom = existing.filter((keyword) => keyword.origin === "custom")
+  const custom = existing.filter(
+    (keyword) => keyword.origin === "custom" && keyword.phrase.trim(),
+  )
   const phrases = new Set(
     custom.map((keyword) => normalizeKeywordPhrase(keyword.phrase)),
   )
   const merged = [...custom]
   for (const suggestion of suggestions) {
     const phrase = normalizeKeywordPhrase(suggestion.phrase)
-    if (phrases.has(phrase) || merged.length >= MAX_DRAFT_KEYWORDS) continue
+    if (!phrase || phrases.has(phrase) || merged.length >= MAX_DRAFT_KEYWORDS)
+      continue
     phrases.add(phrase)
     merged.push(suggestion)
   }

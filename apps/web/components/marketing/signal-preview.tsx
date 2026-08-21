@@ -15,7 +15,7 @@ const exampleMentions = [
     variant: "question",
     time: "2h",
     icon: RedditLogoIcon,
-    glyph: "bg-[var(--category-other)] text-foreground",
+    glyph: "bg-[#ff4500] text-white",
   },
   {
     source: "X",
@@ -26,7 +26,7 @@ const exampleMentions = [
     variant: "feature",
     time: "5h",
     icon: XLogoIcon,
-    glyph: "bg-foreground text-white",
+    glyph: "bg-black text-white",
   },
   {
     source: "Hacker News",
@@ -37,7 +37,7 @@ const exampleMentions = [
     variant: "praise",
     time: "1d",
     icon: NewspaperClippingIcon,
-    glyph: "bg-bug text-bug-foreground",
+    glyph: "bg-[#ff6600] text-black",
   },
 ] as const
 

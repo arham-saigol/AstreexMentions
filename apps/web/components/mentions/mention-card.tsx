@@ -29,20 +29,20 @@ function platformDetails(platform: MentionItem["platform"]) {
     return {
       label: "X",
       Icon: XLogoIcon,
-      glyph: "bg-foreground text-white",
+      glyph: "bg-black text-white",
     }
   }
   if (platform === "reddit") {
     return {
       label: "Reddit",
       Icon: RedditLogoIcon,
-      glyph: "bg-other text-other-foreground",
+      glyph: "bg-[#ff4500] text-white",
     }
   }
   return {
     label: "Hacker News",
     Icon: NewspaperClippingIcon,
-    glyph: "bg-bug text-bug-foreground",
+    glyph: "bg-[#ff6600] text-black",
   }
 }
 

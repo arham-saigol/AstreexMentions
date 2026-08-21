@@ -131,7 +131,7 @@ https://news.ycombinator.com/item?id={objectID}
 | -------------- | ------------------------------------------------ |
 | Environment    | `DEEPSEEK_API_KEY`                               |
 | Endpoint       | `POST https://api.deepseek.com/chat/completions` |
-| Model          | `deepseek-v4-pro`                                |
+| Model          | `deepseek-v4-flash`                              |
 | Timeout        | `DEEPSEEK_TIMEOUT_MS`, default 120 seconds       |
 | Authentication | `Authorization: Bearer <DEEPSEEK_API_KEY>`       |
 
@@ -139,7 +139,7 @@ The integration validates and sends this strict request shape:
 
 ```json
 {
-  "model": "deepseek-v4-pro",
+  "model": "deepseek-v4-flash",
   "temperature": 0,
   "reasoning_effort": "high",
   "thinking": { "type": "enabled" },
@@ -186,7 +186,7 @@ The one-minute Convex dispatcher groups prompt-bounded jobs from one workspace u
 
 A result applies only after full-batch validation succeeds. Success atomically stores all analysis fields, feed state, and job state. Provider runs and metrics use a versioned `mention_analysis:` operation. Retryable errors use deterministic queue backoff from 30 seconds to 30 minutes. Permanent or exhausted jobs become `dead`. Linked mentions fail open as visible and unclassified. Missing or invalid DeepSeek configuration causes no request or provider telemetry. It restores the claimed attempt and returns jobs to pending for five minutes.
 
-Fixture-backed and `convex-test` worker coverage does not prove that a real account can access `deepseek-v4-pro`, accepts the implemented request fields, or returns valid production analysis.
+Fixture-backed and `convex-test` worker coverage does not prove that a real account can access `deepseek-v4-flash`, accepts the implemented request fields, or returns valid production analysis.
 
 ## Email: Resend
 

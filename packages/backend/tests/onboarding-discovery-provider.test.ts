@@ -11,13 +11,19 @@ describe("TinyFish onboarding provider boundary", () => {
   it("rejects credentials, localhost, private IPs, and non-HTTP input", () => {
     for (const value of [
       "javascript:alert(1)",
+      "ftp://example.com",
       "https://user:secret@example.com",
       "http://localhost:3000",
       "http://127.0.0.1",
       "http://169.254.169.254/latest/meta-data",
       "http://10.0.0.1",
+      "http://192.0.0.1",
+      "http://198.18.0.1",
+      "http://224.0.0.1",
+      "http://240.0.0.1",
       "http://[::ffff:127.0.0.1]",
       "http://[febf::1]",
+      "http://[fec0::1]",
     ]) {
       expect(() => canonicalResearchUrl(value)).toThrow(
         TinyFishIntegrationError,
@@ -26,6 +32,22 @@ describe("TinyFish onboarding provider boundary", () => {
     expect(canonicalResearchUrl(" https://example.com/about#team ")).toBe(
       "https://example.com/about",
     )
+    expect(canonicalResearchUrl("example.com/about")).toBe(
+      "https://example.com/about",
+    )
+  })
+
+  it("rejects every unsafe Fetch target before calling TinyFish", async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>()
+    const client = createTinyFishClient({ apiKey: "secret", fetch })
+
+    await expect(
+      client.fetchMarkdown(
+        ["https://example.com", "https://224.0.0.1"],
+        "Research",
+      ),
+    ).rejects.toMatchObject({ code: "INVALID_INPUT" })
+    expect(fetch).not.toHaveBeenCalled()
   })
 
   it("uses X-API-Key, bounded Fetch input, and truncates remote page material", async () => {
@@ -57,6 +79,31 @@ describe("TinyFish onboarding provider boundary", () => {
     expect(JSON.parse(String(init?.body))).toMatchObject({
       format: "markdown",
       urls: ["https://example.com/"],
+    })
+  })
+
+  it("rejects unsafe resolved Fetch destinations", async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          results: [
+            {
+              final_url: "https://192.0.0.1/",
+              text: "private content",
+              url: "https://example.com/",
+            },
+          ],
+        }),
+        { status: 200 },
+      ),
+    )
+    const client = createTinyFishClient({ apiKey: "secret", fetch })
+
+    await expect(
+      client.fetchMarkdown(["https://example.com"], "Research"),
+    ).rejects.toMatchObject({
+      code: "INVALID_RESPONSE",
+      retryable: false,
     })
   })
 

@@ -1,24 +1,33 @@
-import { Divider, type DividerProps } from "@astryxdesign/core/Divider"
+import { cn } from "../lib/utils"
 
-type SeparatorProps = Omit<DividerProps, "label"> & {
+export type SeparatorProps = {
   /** Decorative separators are hidden from assistive technology by default. */
   decorative?: boolean
+  orientation?: "horizontal" | "vertical"
+  className?: string
 }
 
 /**
- * Compatibility wrapper over Astryx Divider. Existing separators are purely
- * visual; aria-hidden preserves that contract even though Astryx correctly
- * emits role="separator" for semantic dividers.
+ * Separator styled to the kit. Purely decorative by default; opt into a
+ * semantic divider with `decorative={false}`.
  */
-function Separator({ decorative = true, ...props }: SeparatorProps) {
+function Separator({
+  decorative = true,
+  orientation = "horizontal",
+  className,
+}: SeparatorProps) {
   return (
-    <Divider
+    <div
       data-slot="separator"
+      role={decorative ? undefined : "separator"}
       aria-hidden={decorative ? "true" : undefined}
-      {...props}
+      className={cn(
+        "bg-[var(--line)]",
+        orientation === "vertical" ? "h-full w-px self-stretch" : "h-px w-full",
+        className,
+      )}
     />
   )
 }
 
 export { Separator }
-export type { SeparatorProps }

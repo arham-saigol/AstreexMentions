@@ -5,31 +5,33 @@ import type * as React from "react"
 import { cn } from "../lib/utils"
 
 const badgeVariants = cva(
-  "inline-flex min-h-6 w-fit shrink-0 items-center justify-center gap-1.5 overflow-hidden rounded-full border px-2.5 py-1 text-[11px] leading-none font-medium tracking-[0.06em] whitespace-nowrap uppercase transition-colors duration-[var(--motion-control)] before:hidden before:size-1.5 before:shrink-0 before:rounded-full before:bg-current before:opacity-70 before:content-[''] [&>svg]:pointer-events-none [&>svg]:size-3",
+  "inline-flex min-h-[22px] w-fit shrink-0 items-center gap-1.5 overflow-hidden rounded-full border px-2 py-0.5 text-[11px] font-medium whitespace-nowrap transition-[background-color,border-color,color] duration-[var(--motion-feedback)] [&>svg]:pointer-events-none [&>svg]:size-3",
   {
     variants: {
       variant: {
         default: "border-transparent bg-primary text-primary-foreground",
         secondary:
-          "border-transparent bg-[var(--brand-soft)] text-[var(--brand-soft-ink)]",
-        destructive:
-          "border-transparent bg-destructive text-destructive-foreground",
+          "border-transparent bg-[var(--surface-active)] text-[var(--text)]",
+        destructive: "border-transparent bg-[var(--red-bg)] text-[var(--red)]",
+        success: "border-transparent bg-[var(--green-bg)] text-[var(--green)]",
+        warning:
+          "border-transparent bg-[var(--yellow-bg)] text-[var(--yellow)]",
         outline:
-          "border-border bg-background text-[var(--ink-secondary)] before:hidden",
+          "border-[var(--line)] bg-[var(--surface-inset)] text-[var(--text-secondary)]",
         muted:
-          "border-transparent bg-muted text-[var(--ink-secondary)] before:hidden",
+          "border-transparent bg-[var(--surface-hover)] text-[var(--text-secondary)]",
         question:
-          "border-transparent bg-question text-question-foreground before:block",
+          "border-transparent bg-question text-question-foreground before:size-[5px] before:shrink-0 before:rounded-full before:bg-current before:content-['']",
         complaint:
-          "border-transparent bg-complaint text-complaint-foreground before:block",
+          "border-transparent bg-complaint text-complaint-foreground before:size-[5px] before:shrink-0 before:rounded-full before:bg-current before:content-['']",
         praise:
-          "border-transparent bg-praise text-praise-foreground before:block",
-        bug: "border-transparent bg-bug text-bug-foreground before:block",
+          "border-transparent bg-praise text-praise-foreground before:size-[5px] before:shrink-0 before:rounded-full before:bg-current before:content-['']",
+        bug: "border-transparent bg-bug text-bug-foreground before:size-[5px] before:shrink-0 before:rounded-full before:bg-current before:content-['']",
         feature:
-          "border-transparent bg-feature text-feature-foreground before:block",
+          "border-transparent bg-feature text-feature-foreground before:size-[5px] before:shrink-0 before:rounded-full before:bg-current before:content-['']",
         competitor:
-          "border-transparent bg-competitor text-competitor-foreground before:block",
-        other: "border-transparent bg-other text-other-foreground before:block",
+          "border-transparent bg-competitor text-competitor-foreground before:size-[5px] before:shrink-0 before:rounded-full before:bg-current before:content-['']",
+        other: "border-transparent bg-other text-other-foreground",
       },
     },
     defaultVariants: {
@@ -87,4 +89,5 @@ function CategoryBadge({
 }
 
 export { Badge, CategoryBadge, badgeVariants, mentionCategoryVariants }
+
 export type { MentionCategory }

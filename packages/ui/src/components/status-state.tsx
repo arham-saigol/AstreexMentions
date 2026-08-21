@@ -5,16 +5,19 @@ import type * as React from "react"
 import { cn } from "../lib/utils"
 
 const statusStateVariants = cva(
-  "flex items-start gap-3 rounded-lg border p-4 text-sm [&_[data-slot=status-state-icon]>svg]:size-5",
+  "flex items-start gap-3 rounded-[var(--radius-md)] border p-3.5 text-[13px] [&_[data-slot=status-state-icon]>svg]:size-4",
   {
     variants: {
       variant: {
-        info: "border-border bg-muted/50 text-foreground",
-        success: "border-praise bg-praise/50 text-praise-foreground",
+        info: "border-[color-mix(in_srgb,var(--blue)_28%,transparent)] bg-[var(--blue-bg)] text-[var(--blue)]",
+        success:
+          "border-[color-mix(in_srgb,var(--green)_28%,transparent)] bg-[var(--green-bg)] text-[var(--green)]",
         warning:
-          "border-competitor bg-competitor/50 text-competitor-foreground",
-        error: "border-bug bg-bug/50 text-bug-foreground",
-        loading: "border-border bg-muted/50 text-foreground",
+          "border-[color-mix(in_srgb,var(--yellow)_28%,transparent)] bg-[var(--yellow-bg)] text-[var(--yellow)]",
+        error:
+          "border-[color-mix(in_srgb,var(--red)_28%,transparent)] bg-[var(--red-bg)] text-[var(--red)]",
+        loading:
+          "border-[var(--line)] bg-[var(--surface-inset)] text-foreground",
       },
     },
     defaultVariants: {
@@ -87,7 +90,7 @@ function StatusState({
         )}
       </div>
       <div className="min-w-0 flex-1">
-        <p className="font-medium">{title}</p>
+        <p className="font-semibold">{title}</p>
         {description && (
           <div className="mt-1 text-current/80">{description}</div>
         )}

@@ -271,10 +271,10 @@ export default function HomePage() {
               return (
                 <article
                   key={plan.id}
-                  className={`bg-card flex flex-col rounded-xl border p-7 transition-[border-color,box-shadow,transform] hover:-translate-y-0.5 ${
+                  className={`bg-card flex flex-col rounded-[var(--radius-lg)] border p-7 transition-[border-color,box-shadow,transform] duration-[var(--motion-control)] ease-[var(--ease-out)] hover:-translate-y-1 hover:shadow-[var(--shadow-md)] ${
                     popular
-                      ? "border-accent ring-accent/40 shadow-sm ring-1"
-                      : "border-border hover:shadow-sm"
+                      ? "border-[color-mix(in_srgb,var(--accent)_55%,var(--line))] shadow-[var(--shadow-md)] ring-1 ring-[color-mix(in_srgb,var(--accent)_32%,transparent)]"
+                      : "border-border hover:border-[var(--line-strong)]"
                   }`}
                 >
                   {popular && (
@@ -282,12 +282,12 @@ export default function HomePage() {
                       Most popular
                     </Badge>
                   )}
-                  <p className="text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase">
+                  <p className="text-muted-foreground text-[11px] font-semibold tracking-[0.12em] uppercase">
                     {plan.name}
                   </p>
-                  <p className="mt-3 text-5xl font-semibold tracking-[-0.03em]">
+                  <p className="mt-3 text-[44px] font-semibold tracking-[-0.04em]">
                     ${plan.priceUsd}
-                    <span className="text-muted-foreground ml-1 text-sm font-normal tracking-normal">
+                    <span className="text-muted-foreground ml-1.5 text-sm font-normal tracking-normal">
                       / month
                     </span>
                   </p>

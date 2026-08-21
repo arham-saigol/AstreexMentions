@@ -202,7 +202,7 @@ The repository-root `.env.example` is an inventory, not a file automatically loa
 
 ### Variables present in `.env.example`
 
-The example currently contains 34 unique variable names. `ADMIN_CLERK_USER_ID` appears twice because the same exact value must be installed in the admin Next.js environment and the Convex deployment.
+The example currently contains 36 unique variable names. `ADMIN_CLERK_USER_ID` appears twice because the same exact value must be installed in the admin Next.js environment and the Convex deployment.
 
 | Variable                            | Destination and current behavior                                                                                                                                                |
 | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -233,8 +233,10 @@ The example currently contains 34 unique variable names. `ADMIN_CLERK_USER_ID` a
 | `RESEND_REPLY_TO_EMAIL`             | Convex; optional reply-to address. Blank means no separate reply-to.                                                                                                            |
 | `FETCHLAYER_API_KEY`                | Convex; Reddit post and comment search through FetchLayer.                                                                                                                      |
 | `XQUIK_API_KEY`                     | Convex; X search through Xquik.                                                                                                                                                 |
-| `DEEPSEEK_API_KEY`                  | Convex; credential used by the one-minute mention analysis worker with fixed model `deepseek-v4-pro`.                                                                           |
+| `DEEPSEEK_API_KEY`                  | Convex; credential used by the one-minute mention analysis worker with fixed model `deepseek-v4-flash`.                                                                         |
 | `DEEPSEEK_TIMEOUT_MS`               | Convex; optional positive timeout, default `120000`.                                                                                                                            |
+| `TINYFISH_API_KEY`                  | Convex; onboarding company research web fetch and search through TinyFish.                                                                                                      |
+| `TINYFISH_TIMEOUT_MS`               | Convex; optional positive timeout, default `45000`.                                                                                                                             |
 | `XQUIK_REQUESTS_PER_SECOND`         | Convex; optional positive integer, default `100`. Hourly budget is value × 3,600; minute claims are capped at `min(60, value × 55)`.                                            |
 | `FETCHLAYER_REQUESTS_PER_MINUTE`    | Convex; optional positive integer, default `30`, used as the minute cap and multiplied by 60 for the hourly budget.                                                             |
 | `HN_REQUESTS_PER_HOUR`              | Convex; optional positive integer, default `9000`, used as the Hacker News hourly budget. Minute claims are capped at `min(12, value)`; invalid input blocks tracking dispatch. |
@@ -261,7 +263,8 @@ configured identity-fence duration in the target environment.
 - X: Xquik, `https://xquik.com/api/v1/x/tweets/search`
 - Reddit: FetchLayer, `https://fetchlayer.dev/api/reddit`
 - Hacker News: public Algolia Hacker News API
-- Mention analysis: DeepSeek chat completions with `deepseek-v4-pro`, dispatched from the durable Convex mention analysis queue
+- Onboarding research: TinyFish Markdown Fetch (`https://api.fetch.tinyfish.ai`) and Search (`https://api.search.tinyfish.ai`)
+- Mention analysis: DeepSeek chat completions with `deepseek-v4-flash`, dispatched from the durable Convex mention analysis queue
 - Billing: Creem test or production API selected by `CREEM_MODE`
 - Email: Resend API and signed webhook delivery events
 

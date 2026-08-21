@@ -7,7 +7,7 @@ function EmptyState({ className, ...props }: React.ComponentProps<"section">) {
     <section
       data-slot="empty-state"
       className={cn(
-        "border-border bg-card flex min-h-48 w-full flex-col items-center justify-center rounded-lg border px-6 py-10 text-center",
+        "bg-card flex min-h-[256px] w-full flex-col items-center justify-center rounded-[var(--radius-lg)] border border-[var(--line)] px-6 py-10 text-center",
         className,
       )}
       {...props}
@@ -21,7 +21,7 @@ function EmptyStateIcon({ className, ...props }: React.ComponentProps<"div">) {
       data-slot="empty-state-icon"
       aria-hidden="true"
       className={cn(
-        "border-border bg-muted text-muted-foreground mb-4 grid size-10 place-items-center rounded-lg border [&_svg]:size-5",
+        "mb-4 grid size-12 place-items-center rounded-full border border-[var(--line)] bg-[var(--surface-inset)] text-[var(--text-tertiary)] [&_svg]:size-5",
         className,
       )}
       {...props}
@@ -34,7 +34,7 @@ function EmptyStateTitle({ className, ...props }: React.ComponentProps<"h3">) {
     <h3
       data-slot="empty-state-title"
       className={cn(
-        "text-foreground font-serif text-lg font-medium tracking-[-0.01em]",
+        "text-foreground text-[16px] font-semibold tracking-[-0.01em]",
         className,
       )}
       {...props}
@@ -49,7 +49,10 @@ function EmptyStateDescription({
   return (
     <p
       data-slot="empty-state-description"
-      className={cn("text-muted-foreground mt-1 max-w-md text-sm", className)}
+      className={cn(
+        "text-muted-foreground mt-1.5 max-w-[320px] text-[13px] leading-relaxed",
+        className,
+      )}
       {...props}
     />
   )

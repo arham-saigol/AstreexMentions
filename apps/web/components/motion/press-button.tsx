@@ -12,7 +12,7 @@ import { cn } from "@astreex/ui/lib/utils"
  * for a button: pointer-tracked press with 3D tilt toward the cursor,
  * keyboard parity (Space/Enter), abandoned-gesture handling (drag off + release
  * cancels, blur/visibilitychange reset), and a `prefers-reduced-motion` opt-out
- * (consumed by the styled component below). Reskinned to Astryx tokens here.
+ * (consumed by the styled component below).
  * Source: https://github.com/ddoemonn/interior  (components/interior/press-depth.tsx)
  */
 
@@ -145,10 +145,9 @@ const TILT = 7
 
 /**
  * Primary call-to-action with interior.dev tactile press depth and a subtle 3D
- * tilt toward the pointer. Styled against the Astryx amber-accent primary tokens.
+ * tilt toward the pointer. It uses the shared primary-action tokens.
  * Renders a real link (so middle-click / open-in-new-tab still works). Reduced
- * motion disables the tilt + spring. For the rest of the product, the shared
- * shadcn-style <Button> continues to back onto the same Astryx tokens.
+ * motion disables the tilt + spring. The shared Button uses the same tokens.
  */
 export function PressButton({
   href,
