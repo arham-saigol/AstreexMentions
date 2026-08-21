@@ -25,7 +25,7 @@ The exact-admin-only `/metrics` page renders selectable 7/30/90-day ranges with:
 
 The backend query also returns provider max latency/input/output/rate-limit/retry totals, mention platform totals, subscriptions, mention analysis, delivery states, and usage-paused workspace count. The current admin frontend schema does not parse or render those additional fields. Inspect the underlying Convex tables for incident triage.
 
-Provider metric names are the persisted `provider` values. Tracking runs use `x`, `reddit_posts`, `reddit_comments`, and `hacker_news`; mention analysis uses `deepseek`; email and billing use `resend` and `creem`.
+Provider metric names are persisted `provider` values. Tracking runs use `x`, `reddit_posts`, `reddit_comments`, and `hacker_news`. Mention analysis uses `gemini`. Email and billing use `resend` and `creem`.
 
 ## Runbooks
 

@@ -5,14 +5,14 @@ import { internal } from "../_generated/api"
 import { v } from "convex/values"
 
 import {
-  createDeepSeekMentionAnalysisRequester,
-  DeepSeekIntegrationError,
-  readDeepSeekRuntimeConfiguration,
-} from "../integrations/deepseek"
+  createGeminiJsonRequester,
+  GeminiIntegrationError,
+  readGeminiRuntimeConfiguration,
+} from "../integrations/gemini"
 import {
-  buildDeepSeekMentionAnalysisRequest,
+  buildMentionAnalysisGenerationRequest,
   MentionAnalysisValidationError,
-} from "../lib/deepseekMentionAnalysis"
+} from "../lib/mentionAnalysis"
 import { env, internalAction } from "../_generated/server"
 import {
   MentionAnalysisOrchestrationError,
@@ -27,7 +27,7 @@ type SafeMentionAnalysisFailure = {
 }
 
 function safeFailure(error: unknown): SafeMentionAnalysisFailure {
-  if (error instanceof DeepSeekIntegrationError) {
+  if (error instanceof GeminiIntegrationError) {
     return {
       code: error.code,
       message: error.message,
@@ -41,7 +41,7 @@ function safeFailure(error: unknown): SafeMentionAnalysisFailure {
   ) {
     return {
       code: "invalid_analysis_request",
-      message: "DeepSeek mention analysis request could not be built",
+      message: "Vertex Gemini mention analysis request could not be built",
       retryable: false,
     }
   }
@@ -51,13 +51,14 @@ function safeFailure(error: unknown): SafeMentionAnalysisFailure {
   ) {
     return {
       code: "invalid_model_output",
-      message: "DeepSeek mention analysis output failed total batch validation",
+      message:
+        "Vertex Gemini mention analysis output failed total batch validation",
       retryable: true,
     }
   }
   return {
     code: "mention_analysis_execution_failed",
-    message: "DeepSeek mention analysis execution failed",
+    message: "Vertex Gemini mention analysis execution failed",
     retryable: true,
   }
 }
@@ -90,7 +91,7 @@ export const executeMentionAnalysisBatch = internalAction({
       )
     }
 
-    const configuration = readDeepSeekRuntimeConfiguration(env)
+    const configuration = readGeminiRuntimeConfiguration(env)
     if (configuration.state === "provider_unconfigured") {
       await ctx.runMutation(
         internal.mentionAnalysis.internal
@@ -104,18 +105,15 @@ export const executeMentionAnalysisBatch = internalAction({
       }
     }
 
-    let request: ReturnType<typeof buildDeepSeekMentionAnalysisRequest>
-    let requester: ReturnType<typeof createDeepSeekMentionAnalysisRequester>
+    let request: ReturnType<typeof buildMentionAnalysisGenerationRequest>
+    let requester: ReturnType<typeof createGeminiJsonRequester>
     try {
-      request = buildDeepSeekMentionAnalysisRequest(
+      request = buildMentionAnalysisGenerationRequest(
         context.mentions,
         context.categories,
         context.context,
       )
-      requester = createDeepSeekMentionAnalysisRequester({
-        apiKey: configuration.apiKey,
-        timeoutMs: configuration.timeoutMs,
-      })
+      requester = createGeminiJsonRequester({ configuration })
     } catch (error) {
       const failure = safeFailure(error)
       return await ctx.runMutation(

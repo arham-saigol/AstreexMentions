@@ -12,12 +12,34 @@ import {
   mentionText,
 } from "../convex/mentionAnalysis/model"
 import {
-  buildDeepSeekMentionAnalysisRequest,
-  DEEPSEEK_MENTION_ANALYSIS_MODEL,
+  buildMentionAnalysisGenerationRequest,
   MAX_MENTION_ANALYSIS_BATCH_PROMPT_CHARS,
   MAX_MENTION_ANALYSIS_MENTION_TEXT_CHARS,
   type MentionAnalysisCategory,
-} from "../convex/lib/deepseekMentionAnalysis"
+} from "../convex/lib/mentionAnalysis"
+import { GEMINI_MODEL } from "../convex/integrations/gemini"
+import { vertexServiceAccountJson } from "./fixtures/vertexServiceAccount"
+
+vi.mock("@google/genai", () => ({
+  GoogleGenAI: class {
+    readonly models = {
+      generateContent: async (request: unknown) => {
+        const response = await fetch("https://vertex.test/generateContent", {
+          body: JSON.stringify(request),
+          method: "POST",
+        })
+        if (!response.ok) {
+          throw Object.assign(new Error("Vertex Gemini request failed"), {
+            headers: response.headers,
+            statusCode: response.status,
+          })
+        }
+        return { text: await response.text() }
+      },
+    }
+  },
+  ThinkingLevel: { MEDIUM: "MEDIUM" },
+}))
 
 const NOW = Date.parse("2026-07-26T12:00:00.000Z")
 const BLOCKED_CONFIGURATION_RETRY_MS = 5 * 60_000
@@ -108,10 +130,7 @@ type MentionAnalysisFixture = {
 const fixture = JSON.parse(
   readFileSync(
     fileURLToPath(
-      new URL(
-        "./fixtures/mention-analysis/deepseek-cases.json",
-        import.meta.url,
-      ),
+      new URL("./fixtures/mention-analysis/gemini-cases.json", import.meta.url),
     ),
     "utf8",
   ),
@@ -211,7 +230,7 @@ async function seedMentionAnalysis(
         idempotencyKey: `mention-analysis:mention:${String(mentionId)}`,
         maxAttempts: options.maxAttempts ?? 3,
         mentionId,
-        model: DEEPSEEK_MENTION_ANALYSIS_MODEL,
+        model: GEMINI_MODEL,
         nextAttemptAt: NOW,
         status: "pending",
         updatedAt: NOW - 1_000 + index,
@@ -378,51 +397,60 @@ function mentionAnalysisOutput(
 
 function completionFetch(output: unknown) {
   return vi.fn(
-    async () =>
-      new Response(
-        JSON.stringify({
-          choices: [{ message: { content: JSON.stringify(output) } }],
-        }),
-        { status: 200 },
-      ),
+    async () => new Response(JSON.stringify(output), { status: 200 }),
   )
 }
 
-let previousApiKey: string | undefined
+const VERTEX_SERVICE_ACCOUNT_JSON = vertexServiceAccountJson()
+
+function configureVertex(): void {
+  process.env.VERTEX_AI_PROJECT_ID = "astreex-test"
+  process.env.VERTEX_AI_SERVICE_ACCOUNT_JSON = VERTEX_SERVICE_ACCOUNT_JSON
+}
+
+let previousProjectId: string | undefined
+let previousServiceAccount: string | undefined
 let previousTimeout: string | undefined
 
 beforeEach(() => {
-  previousApiKey = process.env.DEEPSEEK_API_KEY
-  previousTimeout = process.env.DEEPSEEK_TIMEOUT_MS
-  delete process.env.DEEPSEEK_API_KEY
-  delete process.env.DEEPSEEK_TIMEOUT_MS
+  previousProjectId = process.env.VERTEX_AI_PROJECT_ID
+  previousServiceAccount = process.env.VERTEX_AI_SERVICE_ACCOUNT_JSON
+  previousTimeout = process.env.VERTEX_AI_TIMEOUT_MS
+  delete process.env.VERTEX_AI_PROJECT_ID
+  delete process.env.VERTEX_AI_SERVICE_ACCOUNT_JSON
+  delete process.env.VERTEX_AI_TIMEOUT_MS
   vi.useFakeTimers()
   vi.setSystemTime(NOW)
 })
 
 afterEach(() => {
-  if (previousApiKey === undefined) {
-    delete process.env.DEEPSEEK_API_KEY
+  if (previousProjectId === undefined) {
+    delete process.env.VERTEX_AI_PROJECT_ID
   } else {
-    process.env.DEEPSEEK_API_KEY = previousApiKey
+    process.env.VERTEX_AI_PROJECT_ID = previousProjectId
+  }
+  if (previousServiceAccount === undefined) {
+    delete process.env.VERTEX_AI_SERVICE_ACCOUNT_JSON
+  } else {
+    process.env.VERTEX_AI_SERVICE_ACCOUNT_JSON = previousServiceAccount
   }
   if (previousTimeout === undefined) {
-    delete process.env.DEEPSEEK_TIMEOUT_MS
+    delete process.env.VERTEX_AI_TIMEOUT_MS
   } else {
-    process.env.DEEPSEEK_TIMEOUT_MS = previousTimeout
+    process.env.VERTEX_AI_TIMEOUT_MS = previousTimeout
   }
   vi.clearAllTimers()
   vi.useRealTimers()
   vi.unstubAllGlobals()
 })
 
-describe("durable DeepSeek mention analysis worker", () => {
+describe("durable Gemini mention analysis worker", () => {
   it("binds leases to the mention analysis policy version", async () => {
     const t = createBackendTest()
     const seeded = await seedMentionAnalysis(t, { mentionCount: 1 })
 
     expect(JSON.parse(snapshotJson(seeded))).toMatchObject({
-      analysisVersion: "mention-analysis-v1",
+      analysisVersion: "mention-analysis-v2",
     })
   })
 
@@ -562,7 +590,7 @@ describe("durable DeepSeek mention analysis worker", () => {
     }
   })
 
-  it("puts every enabled category description in the prompt and sends required DeepSeek controls", async () => {
+  it("puts every enabled category description in the prompt and sends required Gemini controls", async () => {
     const promptCategories: MentionAnalysisCategory[] = fixture.categories.map(
       (category, index) => ({
         description: category.description,
@@ -570,7 +598,7 @@ describe("durable DeepSeek mention analysis worker", () => {
         name: category.name,
       }),
     )
-    const request = buildDeepSeekMentionAnalysisRequest(
+    const request = buildMentionAnalysisGenerationRequest(
       [{ id: "fixture-mention", text: "Fixture mention text" }],
       promptCategories,
       {
@@ -579,27 +607,44 @@ describe("durable DeepSeek mention analysis worker", () => {
       },
     )
     expect(request).toMatchObject({
-      model: DEEPSEEK_MENTION_ANALYSIS_MODEL,
-      reasoning_effort: "high",
-      response_format: { type: "json_object" },
-      temperature: 0,
-      thinking: { type: "enabled" },
+      responseJsonSchema: {
+        additionalProperties: false,
+        required: ["results"],
+        type: "object",
+      },
     })
+    expect(request.responseJsonSchema.properties).toEqual(
+      expect.objectContaining({
+        results: expect.objectContaining({
+          items: expect.objectContaining({
+            additionalProperties: false,
+            required: [
+              "mentionId",
+              "relevant",
+              "relevanceReason",
+              "priority",
+              "priorityReason",
+              "categoryId",
+            ],
+          }),
+        }),
+      }),
+    )
     for (const category of fixture.categories) {
-      expect(request.messages[0].content).toContain(category.description)
+      expect(request.systemInstruction).toContain(category.description)
     }
-    expect(request.messages[0].content).not.toContain(
+    expect(request.systemInstruction).not.toContain(
       fixture.disabledCategory.description,
     )
     expect(() =>
-      buildDeepSeekMentionAnalysisRequest(
+      buildMentionAnalysisGenerationRequest(
         [{ id: "fixture-mention", text: "Fixture mention text" }],
         promptCategories.filter((category) => category.name !== "Other"),
         { filteringContext: "Astreex is a mention monitoring product." },
       ),
     ).toThrowError(expect.objectContaining({ code: "INVALID_CATALOG" }))
     expect(() =>
-      buildDeepSeekMentionAnalysisRequest(
+      buildMentionAnalysisGenerationRequest(
         [{ id: "fixture-mention", text: "Fixture mention text" }],
         promptCategories.map((category, index) =>
           index === 0 ? { ...category, description: "" } : category,
@@ -612,7 +657,7 @@ describe("durable DeepSeek mention analysis worker", () => {
     const seeded = await seedMentionAnalysis(t, { mentionCount: 1 })
     const fetchMock = completionFetch(mentionAnalysisOutput(seeded, "valid"))
     vi.stubGlobal("fetch", fetchMock)
-    process.env.DEEPSEEK_API_KEY = "deepseek_fixture_key"
+    configureVertex()
     await t.mutation(dispatchReference, { now: NOW })
     const [args] = await leasedBatchArguments(t, seeded)
 
@@ -638,15 +683,15 @@ describe("durable DeepSeek mention analysis worker", () => {
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined
     const body = JSON.parse(String(init?.body)) as Record<string, unknown>
     expect(body).toMatchObject({
-      model: DEEPSEEK_MENTION_ANALYSIS_MODEL,
-      reasoning_effort: "high",
-      response_format: { type: "json_object" },
-      temperature: 0,
-      thinking: { type: "enabled" },
+      config: {
+        responseMimeType: "application/json",
+        thinkingConfig: { thinkingLevel: "MEDIUM" },
+      },
+      contents: expect.any(String),
+      model: GEMINI_MODEL,
     })
-    const systemPrompt = (
-      body.messages as Array<{ content: string; role: string }>
-    )[0]!.content
+    const systemPrompt = (body.config as { systemInstruction: string })
+      .systemInstruction
     for (const category of fixture.categories) {
       expect(systemPrompt).toContain(category.description)
     }
@@ -724,7 +769,7 @@ describe("durable DeepSeek mention analysis worker", () => {
       const [args] = await leasedBatchArguments(t, seeded)
       const fetchMock = completionFetch(mentionAnalysisOutput(seeded, kind))
       vi.stubGlobal("fetch", fetchMock)
-      process.env.DEEPSEEK_API_KEY = "deepseek_fixture_key"
+      configureVertex()
 
       await expect(t.action(executeReference, args!)).resolves.toMatchObject({
         dead: 0,
@@ -850,10 +895,10 @@ describe("durable DeepSeek mention analysis worker", () => {
     await t.mutation(dispatchReference, { now: NOW })
     const [args] = await leasedBatchArguments(t, seeded)
     const fetchMock = vi.fn(async () => {
-      throw new Error("stale leases must not call DeepSeek")
+      throw new Error("stale leases must not call Gemini")
     })
     vi.stubGlobal("fetch", fetchMock)
-    process.env.DEEPSEEK_API_KEY = "deepseek_fixture_key"
+    configureVertex()
     vi.setSystemTime(NOW + MENTION_ANALYSIS_LEASE_MS)
 
     await expect(t.action(executeReference, args!)).resolves.toEqual({
@@ -885,7 +930,7 @@ describe("durable DeepSeek mention analysis worker", () => {
         }),
     )
     vi.stubGlobal("fetch", fetchMock)
-    process.env.DEEPSEEK_API_KEY = "deepseek_fixture_key"
+    configureVertex()
 
     await t.mutation(dispatchReference, { now: NOW })
     const [firstArgs] = await leasedBatchArguments(t, seeded)
@@ -955,7 +1000,7 @@ describe("durable DeepSeek mention analysis worker", () => {
         }),
     )
     vi.stubGlobal("fetch", fetchMock)
-    process.env.DEEPSEEK_API_KEY = "deepseek_fixture_key"
+    configureVertex()
 
     await t.mutation(dispatchReference, { now: NOW })
     const [args] = await leasedBatchArguments(t, seeded)
@@ -983,14 +1028,14 @@ describe("durable DeepSeek mention analysis worker", () => {
     const t = createBackendTest()
     const seeded = await seedMentionAnalysis(t, { mentionCount: 1 })
     const fetchMock = vi.fn(async () => {
-      throw new Error("missing configuration must not call DeepSeek")
+      throw new Error("missing configuration must not call Gemini")
     })
     vi.stubGlobal("fetch", fetchMock)
 
     await t.mutation(dispatchReference, { now: NOW })
     const [args] = await leasedBatchArguments(t, seeded)
     await expect(t.action(executeReference, args!)).resolves.toMatchObject({
-      missing: ["DEEPSEEK_API_KEY"],
+      missing: ["VERTEX_AI_PROJECT_ID", "VERTEX_AI_SERVICE_ACCOUNT_JSON"],
       state: "blocked_config",
     })
     const blocked = await t.run(async (ctx) => ({
@@ -1031,7 +1076,7 @@ describe("durable DeepSeek mention analysis worker", () => {
     )
     const fetchMock = completionFetch(mentionAnalysisOutput(seeded, "valid"))
     vi.stubGlobal("fetch", fetchMock)
-    process.env.DEEPSEEK_API_KEY = "deepseek_fixture_key"
+    configureVertex()
 
     await t.mutation(dispatchReference, { now: NOW })
     const [args] = await leasedBatchArguments(t, seeded)
@@ -1060,7 +1105,7 @@ describe("durable DeepSeek mention analysis worker", () => {
     expect(state.mentions).toEqual([
       expect.objectContaining({
         analysisState: "completed",
-        analysisVersion: "mention-analysis-v1",
+        analysisVersion: "mention-analysis-v2",
         feedState: "visible",
         priority: "medium",
         priorityReason: "A customer question should be reviewed soon.",
@@ -1068,7 +1113,7 @@ describe("durable DeepSeek mention analysis worker", () => {
       }),
       expect.objectContaining({
         analysisState: "completed",
-        analysisVersion: "mention-analysis-v1",
+        analysisVersion: "mention-analysis-v2",
         feedState: "filtered",
         priority: "high",
         priorityReason: "The severe regression needs immediate review.",
@@ -1079,9 +1124,9 @@ describe("durable DeepSeek mention analysis worker", () => {
       expect.objectContaining({
         attempt: 1,
         inputCount: 2,
-        operation: "mention_analysis:mention-analysis-v1",
+        operation: "mention_analysis:mention-analysis-v2",
         outputCount: 2,
-        provider: "deepseek",
+        provider: "gemini",
         status: "succeeded",
         trigger: "scheduled",
       }),

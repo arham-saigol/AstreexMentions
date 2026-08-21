@@ -4,6 +4,7 @@ import type { Id } from "./_generated/dataModel"
 import { internalMutation, internalQuery } from "./_generated/server"
 import { onboardingResearchRateLimiter } from "./lib/onboardingResearchRateLimit"
 import { recordProviderMetricBuckets } from "./lib/providerMetricBuckets"
+import { providerValidator } from "./schema"
 const RUN_STALE_MS = 5 * 60_000
 
 type ResearchId = Id<"onboardingResearch">
@@ -101,7 +102,7 @@ export const beginResearch = internalMutation({
             inputItemCount: 1,
             operation: "onboarding.research",
             outputItemCount: 0,
-            provider: "tinyfish",
+            provider: abandonedRun.provider,
             rateLimitedCount: 0,
             retryCount: 0,
             successCount: 0,
@@ -161,6 +162,7 @@ export const beginResearch = internalMutation({
         errorMessage: undefined,
         finishedAt: undefined,
         outputCount: 0,
+        provider: "tinyfish",
         startedAt: now,
         status: "running",
         updatedAt: now,
@@ -240,6 +242,7 @@ export const completeResearch = internalMutation({
         durationMs: args.durationMs,
         finishedAt: now,
         outputCount: 1,
+        provider: "tinyfish",
         status: "succeeded",
         updatedAt: now,
       })
@@ -268,6 +271,7 @@ export const failResearch = internalMutation({
     durationMs: v.number(),
     errorCode: v.string(),
     inputFingerprint: v.string(),
+    provider: v.optional(providerValidator),
     researchId: v.id("onboardingResearch"),
     workspaceId: v.id("workspaces"),
   },
@@ -295,12 +299,14 @@ export const failResearch = internalMutation({
         ),
       )
       .unique()
+    const failedProvider = args.provider ?? "tinyfish"
     if (run?.status === "running") {
       await ctx.db.patch("providerRuns", run._id, {
         durationMs: args.durationMs,
         errorCode: args.errorCode.slice(0, 80),
         errorMessage: "Onboarding research provider request failed",
         finishedAt: now,
+        provider: failedProvider,
         status: "failed",
         updatedAt: now,
       })
@@ -312,7 +318,7 @@ export const failResearch = internalMutation({
           inputItemCount: 1,
           operation: "onboarding.research",
           outputItemCount: 0,
-          provider: "tinyfish",
+          provider: failedProvider,
           rateLimitedCount: args.errorCode === "RATE_LIMIT" ? 1 : 0,
           retryCount: run.attempt > 1 ? 1 : 0,
           successCount: 0,

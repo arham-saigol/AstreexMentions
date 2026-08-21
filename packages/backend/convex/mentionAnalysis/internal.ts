@@ -2,14 +2,14 @@ import { internal } from "../_generated/api"
 import { v } from "convex/values"
 
 import {
-  buildDeepSeekMentionAnalysisRequest,
-  DEEPSEEK_MENTION_ANALYSIS_MODEL,
+  buildMentionAnalysisGenerationRequest,
   MAX_MENTION_ANALYSIS_BATCH_SIZE,
   MENTION_ANALYSIS_VERSION,
   type MentionAnalysisCategory,
   type MentionAnalysisContext,
   type MentionAnalysisMention,
-} from "../lib/deepseekMentionAnalysis"
+} from "../lib/mentionAnalysis"
+import { GEMINI_MODEL } from "../integrations/geminiModel"
 import { isCategorySystemKey } from "../lib/categories"
 import { recordProviderMetricBuckets } from "../lib/providerMetricBuckets"
 import { incrementDailySystemMetric } from "../lib/systemMetricBuckets"
@@ -42,7 +42,7 @@ const MAX_DUE_SCAN = 256
 const MAX_BATCHES_PER_DISPATCH = 4
 const MAX_WORKSPACES_PER_DISPATCH = 16
 const BLOCKED_CONFIGURATION_RETRY_MS = 5 * 60_000
-const DEEPSEEK_MENTION_ANALYSIS_OPERATION = `mention_analysis:${MENTION_ANALYSIS_VERSION}`
+const GEMINI_MENTION_ANALYSIS_OPERATION = `mention_analysis:${MENTION_ANALYSIS_VERSION}`
 const MAX_KEYWORD_CONTEXTS_PER_MENTION = 3
 
 type MentionAnalysisJobId = Id<"mentionAnalysisJobs">
@@ -112,7 +112,7 @@ function jobForClaim(
 }
 
 function providerRunIdempotencyKey(leaseToken: string): string {
-  return `deepseek:mention-analysis:${leaseToken}`
+  return `gemini:mention-analysis:${leaseToken}`
 }
 
 async function findProviderRun(
@@ -157,9 +157,9 @@ async function recordProviderMetric(
       durationMs: input.durationMs,
       failureCount: failureIncrement,
       inputItemCount: input.inputCount,
-      operation: DEEPSEEK_MENTION_ANALYSIS_OPERATION,
+      operation: GEMINI_MENTION_ANALYSIS_OPERATION,
       outputItemCount: input.outputCount,
-      provider: "deepseek",
+      provider: "gemini",
       rateLimitedCount: rateLimitedIncrement,
       retryCount: retryIncrement,
       successCount: successIncrement,
@@ -351,10 +351,7 @@ async function dueMentionAnalysisJobs(
   const claimable: Doc<"mentionAnalysisJobs">[] = []
 
   for (const row of rows) {
-    if (
-      !hasValidAttemptCounters(row) ||
-      row.model !== DEEPSEEK_MENTION_ANALYSIS_MODEL
-    ) {
+    if (!hasValidAttemptCounters(row) || row.model !== GEMINI_MODEL) {
       await markJobDead(ctx, row, "invalid_job", now)
       continue
     }
@@ -476,7 +473,7 @@ async function currentBatchLease(
         job.leaseToken !== args.leaseToken ||
         job.leaseExpiresAt !== leaseExpiresAt ||
         job.workspaceId !== workspaceId ||
-        job.model !== DEEPSEEK_MENTION_ANALYSIS_MODEL,
+        job.model !== GEMINI_MODEL,
     )
   ) {
     return null
@@ -648,7 +645,7 @@ function promptBoundedJobs(
   const selected: MentionAnalysisMention[] = []
   for (const candidate of candidates) {
     try {
-      buildDeepSeekMentionAnalysisRequest(
+      buildMentionAnalysisGenerationRequest(
         [...selected, candidate.mention],
         categories,
         context,
@@ -957,9 +954,9 @@ export const startMentionAnalysisProviderRun = internalMutation({
       createdAt: now,
       idempotencyKey,
       inputCount: batch.jobs.length,
-      operation: DEEPSEEK_MENTION_ANALYSIS_OPERATION,
+      operation: GEMINI_MENTION_ANALYSIS_OPERATION,
       outputCount: 0,
-      provider: "deepseek",
+      provider: "gemini",
       startedAt: now,
       status: "running",
       trigger: attempt > 1 ? "retry" : "scheduled",

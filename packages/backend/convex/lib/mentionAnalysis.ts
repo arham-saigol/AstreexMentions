@@ -4,8 +4,7 @@ export const MAX_MENTION_ANALYSIS_MENTION_TEXT_CHARS = 4_000
 export const MAX_ANALYSIS_REASON_CHARS = 500
 export const MAX_FILTERING_CONTEXT_CHARS = 2_000
 export const MAX_FILTERING_GUIDELINES_CHARS = 2_000
-export const MENTION_ANALYSIS_VERSION = "mention-analysis-v1"
-export const DEEPSEEK_MENTION_ANALYSIS_MODEL = "deepseek-v4-flash"
+export const MENTION_ANALYSIS_VERSION = "mention-analysis-v2"
 export const DEFAULT_MENTION_ANALYSIS_MAX_ATTEMPTS = 3
 const MENTION_ANALYSIS_TEXT_TRUNCATION_MARKER = "\n\n[truncated]"
 
@@ -52,41 +51,10 @@ export class MentionAnalysisValidationError extends Error {
   }
 }
 
-export type DeepSeekMentionAnalysisRequest = {
-  messages: readonly [
-    { content: string; role: "system" },
-    { content: string; role: "user" },
-  ]
-  model: typeof DEEPSEEK_MENTION_ANALYSIS_MODEL
-  reasoning_effort: "high"
-  response_format: { type: "json_object" }
-  temperature: 0
-  thinking: { type: "enabled" }
-}
-
-export type DeepSeekRequester = (
-  request: DeepSeekMentionAnalysisRequest,
-  signal: AbortSignal,
-) => Promise<unknown>
-
-export class DeepSeekRequestError extends Error {
-  readonly retryable: boolean
-  readonly status?: number
-
-  constructor(
-    message: string,
-    options: { cause?: unknown; retryable: boolean; status?: number },
-  ) {
-    super(
-      message,
-      options.cause === undefined ? undefined : { cause: options.cause },
-    )
-    this.name = "DeepSeekRequestError"
-    this.retryable = options.retryable
-    if (options.status !== undefined) {
-      this.status = options.status
-    }
-  }
+export type MentionAnalysisGenerationRequest = {
+  responseJsonSchema: Record<string, unknown>
+  systemInstruction: string
+  userContent: string
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -280,11 +248,11 @@ export function validateMentionAnalysisContext(
   }
 }
 
-export function buildDeepSeekMentionAnalysisRequest(
+export function buildMentionAnalysisGenerationRequest(
   mentions: readonly MentionAnalysisMention[],
   categories: readonly MentionAnalysisCategory[],
   context: MentionAnalysisContext,
-): DeepSeekMentionAnalysisRequest {
+): MentionAnalysisGenerationRequest {
   const validatedMentions = validateMentionAnalysisBatch(mentions)
   const validatedCategories = validateMentionAnalysisCatalog(categories)
   const validatedContext = validateMentionAnalysisContext(context)
@@ -317,15 +285,48 @@ export function buildDeepSeekMentionAnalysisRequest(
   }
 
   return {
-    messages: [
-      { content: systemContent, role: "system" },
-      { content: userContent, role: "user" },
-    ],
-    model: DEEPSEEK_MENTION_ANALYSIS_MODEL,
-    reasoning_effort: "high",
-    response_format: { type: "json_object" },
-    temperature: 0,
-    thinking: { type: "enabled" },
+    responseJsonSchema: {
+      additionalProperties: false,
+      properties: {
+        results: {
+          items: {
+            additionalProperties: false,
+            properties: {
+              categoryId: { minLength: 1, type: "string" },
+              mentionId: { minLength: 1, type: "string" },
+              priority: { enum: ["low", "medium", "high"], type: "string" },
+              priorityReason: {
+                maxLength: MAX_ANALYSIS_REASON_CHARS,
+                minLength: 1,
+                type: "string",
+              },
+              relevant: { type: "boolean" },
+              relevanceReason: {
+                maxLength: MAX_ANALYSIS_REASON_CHARS,
+                minLength: 1,
+                type: "string",
+              },
+            },
+            required: [
+              "mentionId",
+              "relevant",
+              "relevanceReason",
+              "priority",
+              "priorityReason",
+              "categoryId",
+            ],
+            type: "object",
+          },
+          maxItems: validatedMentions.length,
+          minItems: validatedMentions.length,
+          type: "array",
+        },
+      },
+      required: ["results"],
+      type: "object",
+    },
+    systemInstruction: systemContent,
+    userContent,
   }
 }
 

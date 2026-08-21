@@ -29,7 +29,7 @@
     }
   ],
   "disabledCategory": {
-    "description": "A disabled category that must never be sent to DeepSeek.",
+    "description": "A disabled category that must never be sent to Gemini.",
     "enabled": false,
     "isSystem": false,
     "name": "Disabled fixture category"

@@ -2,7 +2,7 @@
 
 External calls are isolated in backend adapters/actions. Provider responses are normalized and validated before a Convex mutation can persist them.
 
-This document describes implemented request contracts and fixture-backed behavior. It does not claim that Xquik, FetchLayer, Algolia, DeepSeek, or Resend credentials and quotas have been tested live.
+This document describes implemented request contracts and fixture-backed behavior. It does not claim that Xquik, FetchLayer, Algolia, Vertex AI, or Resend credentials and quotas have been tested live.
 
 ## Common monitoring adapter contract
 
@@ -125,68 +125,34 @@ https://news.ycombinator.com/item?id={objectID}
 
 `HN_REQUESTS_PER_HOUR` is a positive integer with default `9000`. It is the hourly request budget, and the minute claim cap is `min(12, HN_REQUESTS_PER_HOUR)`. A lower value reduces both limits; a higher value never raises the minute cap above 12. Invalid input makes the shared tracking-dispatch configuration fail closed.
 
-## Mention analysis: DeepSeek
+## Gemini on Vertex AI
 
-| Property       | Contract                                         |
-| -------------- | ------------------------------------------------ |
-| Environment    | `DEEPSEEK_API_KEY`                               |
-| Endpoint       | `POST https://api.deepseek.com/chat/completions` |
-| Model          | `deepseek-v4-flash`                              |
-| Timeout        | `DEEPSEEK_TIMEOUT_MS`, default 120 seconds       |
-| Authentication | `Authorization: Bearer <DEEPSEEK_API_KEY>`       |
+| Property   | Contract                                                |
+| ---------- | ------------------------------------------------------- |
+| SDK        | Node `@google/genai` SDK in Vertex AI mode              |
+| Model      | Fixed `gemini-3.5-flash-lite`                           |
+| Project    | Required `VERTEX_AI_PROJECT_ID`                         |
+| Location   | `VERTEX_AI_LOCATION`; default `global`                  |
+| Credential | Required Convex secret `VERTEX_AI_SERVICE_ACCOUNT_JSON` |
+| Timeout    | `VERTEX_AI_TIMEOUT_MS`; default 120 seconds             |
 
-The integration validates and sends this strict request shape:
+The integration creates `GoogleGenAI` with `vertexai: true`, the configured project, the configured location, and explicit service-account credentials. It never uses a browser key or an application credential file.
 
-```json
-{
-  "model": "deepseek-v4-flash",
-  "temperature": 0,
-  "reasoning_effort": "high",
-  "thinking": { "type": "enabled" },
-  "response_format": { "type": "json_object" },
-  "messages": [
-    { "role": "system", "content": "<mention analysis contract>" },
-    {
-      "role": "user",
-      "content": "{\"context\":{...},\"mentions\":[...]}"
-    }
-  ]
-}
-```
+Mention analysis and onboarding discovery call the same `generateContent` boundary. Each request has separate system instructions and user content. The boundary sets `responseMimeType: "application/json"`, a response JSON schema, and medium thinking. It returns parsed unknown JSON. Application code validates every value before storage.
 
-The prompt:
+The mention-analysis prompt includes filtering context, enabled categories, bounded keyword context, and untrusted-content warnings. A batch contains at most 20 mentions. The combined policy prompt and input cannot exceed 48,000 characters.
 
-- includes the reviewed filtering context and guidelines once per batch;
-- includes bounded matched-keyword context with each mention;
-- includes only enabled category IDs, names, and descriptions;
-- defines relevance and low, medium, and high-priority policy;
-- treats all supplied text as untrusted data, never as instructions;
-- requires JSON only and forbids extra IDs, omissions, duplicates, and extra fields.
+The response has one `results` array. Every result has exactly `mentionId`, `relevant`, `relevanceReason`, `priority`, `priorityReason`, and `categoryId`. The provider schema disallows extra properties. Application validation still requires every input ID exactly once, enabled category IDs, valid priorities, and bounded reasons.
 
-A batch contains at most 20 unique, non-empty mentions. Its prompt cannot exceed 48,000 characters. All text fields and output reasons have fixed limits. The response content must be valid JSON with exactly:
+The onboarding action uses structured Gemini output for a search plan of at most three queries and for one to eight recommendations. It retains TinyFish bounds, untrusted-content delimiters, deduplication, one `brandCandidate`, and research rate limits.
 
-```json
-{
-  "results": [
-    {
-      "mentionId": "<input id>",
-      "relevant": true,
-      "relevanceReason": "<bounded explanation>",
-      "priority": "low",
-      "priorityReason": "<bounded explanation>",
-      "categoryId": "<enabled category id>"
-    }
-  ]
-}
-```
+The one-minute dispatcher groups prompt-bounded jobs from one workspace under a four-minute lease. Each lease has an exact analysis snapshot. The dispatcher schedules at most four batches. It calls `createGeminiJsonRequester` after it validates the lease, mentions, workspace, and snapshot. The catalog must include exactly one enabled permanent system `Other` category.
 
-Validation covers all input mentions. Every input ID must appear exactly once. Every category ID must come from the enabled catalog. An invalid ID, priority, reason, or object shape rejects the full batch before storage changes.
+A result applies only after full-batch validation succeeds. Success atomically stores all analysis fields, feed state, and job state. Provider runs and metrics use `gemini` and `mention_analysis:mention-analysis-v2`. Retryable errors use deterministic queue backoff from 30 seconds to 30 minutes. Permanent or exhausted jobs become `dead`. Linked mentions fail open as visible and unclassified.
 
-The one-minute Convex dispatcher groups prompt-bounded jobs from one workspace under a four-minute lease. Each lease has an exact analysis snapshot. The dispatcher schedules at most four batches. It calls `createDeepSeekMentionAnalysisRequester` only after it validates the lease, mentions, workspace, and snapshot. The catalog must include exactly one enabled permanent system `Other` category.
+The integration retries timeouts, network errors, `429`, and Vertex `5xx` errors. It uses a valid provider retry delay. It treats invalid configuration, authentication, authorization, invalid requests, and unsupported models as permanent. Missing or invalid Vertex configuration makes no request or telemetry write. The worker restores the claimed attempt and returns jobs to pending after five minutes.
 
-A result applies only after full-batch validation succeeds. Success atomically stores all analysis fields, feed state, and job state. Provider runs and metrics use a versioned `mention_analysis:` operation. Retryable errors use deterministic queue backoff from 30 seconds to 30 minutes. Permanent or exhausted jobs become `dead`. Linked mentions fail open as visible and unclassified. Missing or invalid DeepSeek configuration causes no request or provider telemetry. It restores the claimed attempt and returns jobs to pending for five minutes.
-
-Fixture-backed and `convex-test` worker coverage does not prove that a real account can access `deepseek-v4-flash`, accepts the implemented request fields, or returns valid production analysis.
+Fixture-backed tests do not prove that a deployed service account can access the model in `global`, has quota, or returns acceptable production output.
 
 ## Email: Resend
 
@@ -270,8 +236,8 @@ If timestamp and type are equal, the lexicographically greater event ID wins. Ol
 
 - Monitoring adapters: `packages/backend/convex/integrations/providers/`
 - Monitoring action: `packages/backend/convex/scheduling/actions.ts`
-- DeepSeek transport: `packages/backend/convex/integrations/deepseek.ts`
-- DeepSeek validation: `packages/backend/convex/lib/deepseekMentionAnalysis.ts`
+- Vertex Gemini transport: `packages/backend/convex/integrations/gemini.ts`
+- Mention-analysis validation: `packages/backend/convex/lib/mentionAnalysis.ts`
 - Resend transport: `packages/backend/convex/integrations/resend.ts`
 - Resend outbox: `packages/backend/convex/email/internal.ts`
 - Resend webhook: `packages/backend/convex/email/resendHttp.ts` and `email/webhookInternal.ts`
