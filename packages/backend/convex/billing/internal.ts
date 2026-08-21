@@ -1447,8 +1447,7 @@ export const dispatchPendingCreemBillingEvents = internalMutation({
       outcomes[result.kind] = (outcomes[result.kind] ?? 0) + 1
       if (
         result.kind === "pending" ||
-        result.kind === "provider_unconfigured" ||
-        result.kind === "incomplete_period"
+        result.kind === "provider_unconfigured"
       ) {
         const nextAttemptAt = now + WEBHOOK_RETRY_DELAY_MS
         earliestPendingRetryAt =

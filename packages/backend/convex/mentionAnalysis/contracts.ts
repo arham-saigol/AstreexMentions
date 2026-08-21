@@ -6,7 +6,7 @@ import {
   MAX_FILTERING_GUIDELINES_CHARS,
   MAX_MENTION_ANALYSIS_BATCH_SIZE,
   MENTION_ANALYSIS_VERSION,
-} from "../lib/deepseekMentionAnalysis"
+} from "../lib/mentionAnalysis"
 
 const nonEmptyStringSchema = z.string().trim().min(1)
 

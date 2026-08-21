@@ -1373,7 +1373,7 @@ export type DataModel = {
         | "reddit_posts"
         | "reddit_comments"
         | "hacker_news"
-        | "deepseek"
+        | "gemini"
         | "resend"
         | "creem"
         | "tinyfish";
@@ -1446,7 +1446,7 @@ export type DataModel = {
         | "reddit_posts"
         | "reddit_comments"
         | "hacker_news"
-        | "deepseek"
+        | "gemini"
         | "resend"
         | "creem"
         | "tinyfish";

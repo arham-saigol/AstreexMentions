@@ -1,6 +1,6 @@
 # Mention analysis failures
 
-Use this runbook when analysis stays pending, DeepSeek requests fail, leases expire, or results are not applied.
+Use this runbook when analysis stays pending, Vertex Gemini requests fail, leases expire, or results are not applied.
 
 ## Expected behavior
 
@@ -15,7 +15,7 @@ Durable wake-ups do this work. The 15-minute cron recovers missed work:
 - It snapshots the filtering fields and enabled categories.
 - It gives each batch a four-minute lease.
 
-The action checks the lease and snapshot before it calls DeepSeek. It validates the complete response before it writes any result.
+The action checks the lease and snapshot before it calls Vertex Gemini. It validates the complete response before it writes any result.
 
 A successful result sets relevance, priority, category, reasons, and the analysis version. Relevant mentions become visible. Irrelevant mentions move to the Filtered view.
 
@@ -35,7 +35,7 @@ A successful result sets relevance, priority, category, reasons, and the analysi
 1. Make sure that `dispatch mention analysis jobs` is installed in `packages/backend/convex/crons.ts`.
 2. Inspect `mentionAnalysisJobs` by status, due time, lease time, workspace, attempt count, and `lastError`.
 3. Inspect linked mentions for `analysisState`, `feedState`, `priority`, `categoryId`, and `analysisVersion`.
-4. Inspect `providerRuns` for provider `deepseek` and an operation that starts with `mention_analysis:`.
+4. Inspect `providerRuns` for provider `gemini` and operation `mention_analysis:mention-analysis-v2`.
 5. Inspect `providerMetricBuckets` for request, error, retry, rate-limit, latency, and item totals.
 6. Inspect the workspace filtering fields and enabled category catalog.
 7. Make sure that one enabled permanent system category has `systemKey: "other"` and `name: "Other"`.
@@ -67,4 +67,4 @@ Do not put mention text, prompts, headers, keys, or raw provider responses in in
 - A stale action cannot apply after a lease or snapshot change.
 - Missing configuration causes no provider request and no consumed attempt.
 
-Local tests do not prove that production provider credentials work. Use a real DeepSeek request when credential evidence is required.
+Local tests do not prove that production provider credentials work. Use a real Vertex Gemini request when credential evidence is required.

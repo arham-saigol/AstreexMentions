@@ -4,18 +4,18 @@ Rotate secrets in the exact service and deployment where they are used. The root
 
 ## Inventory by destination
 
-| Destination              | Sensitive values                                                                                                                              |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| Customer Vercel project  | `CLERK_SECRET_KEY`                                                                                                                            |
-| Admin Vercel project     | `CLERK_SECRET_KEY`; `ADMIN_CLERK_USER_ID` is access-sensitive even though it is not a secret                                                  |
-| Convex deployment        | `CREEM_API_KEY`, `CREEM_WEBHOOK_SECRET`, `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET`, `XQUIK_API_KEY`, `FETCHLAYER_API_KEY`, `DEEPSEEK_API_KEY` |
-| Dedicated backend CI job | `CONVEX_DEPLOY_KEY`                                                                                                                           |
+| Destination              | Sensitive values                                                                                                                                            |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Customer Vercel project  | `CLERK_SECRET_KEY`                                                                                                                                          |
+| Admin Vercel project     | `CLERK_SECRET_KEY`; `ADMIN_CLERK_USER_ID` is access-sensitive even though it is not a secret                                                                |
+| Convex deployment        | `CREEM_API_KEY`, `CREEM_WEBHOOK_SECRET`, `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET`, `XQUIK_API_KEY`, `FETCHLAYER_API_KEY`, `VERTEX_AI_SERVICE_ACCOUNT_JSON` |
+| Dedicated backend CI job | `CONVEX_DEPLOY_KEY`                                                                                                                                         |
 
 Clerk publishable keys, Convex URLs, issuer domain, sender address, product allowlist, and rate settings are configuration, but rotating/changing them can still cause outages or access changes.
 
 ## Standard API-key rotation
 
-Use for Creem API, Resend API, Xquik, FetchLayer, and DeepSeek when the provider supports overlapping keys.
+Use for Creem API, Resend API, Xquik, and FetchLayer when the provider supports overlapping keys.
 
 1. Identify test versus production and create a restricted replacement key.
 2. Set it in the matching Convex deployment, omitting the CLI value to avoid shell history:
@@ -28,7 +28,17 @@ Use for Creem API, Resend API, Xquik, FetchLayer, and DeepSeek when the provider
 4. Revoke the old key.
 5. Verify again and record provider key identifier, not the secret.
 
-Avoid a gap between revocation and installation. For Xquik/FetchLayer, a missing key encountered by a claimed source creates `paused/config`; restoring the key does not bulk-resume those sources. For Resend, pending outbox rows remain durable and can retry after configuration returns. For DeepSeek, missing configuration returns leased mention analysis jobs to `pending`, restores the attempt count, and schedules another check in five minutes.
+Avoid a gap between revocation and installation. For Xquik/FetchLayer, a missing key encountered by a claimed source creates `paused/config`; restoring the key does not bulk-resume those sources. For Resend, pending outbox rows remain durable and can retry after configuration returns. For Vertex AI, missing configuration returns leased mention analysis jobs to `pending`, restores the attempt count, and schedules another check in five minutes.
+
+## Vertex service-account rotation
+
+1. Create a replacement credential for the dedicated Astreex service account.
+2. Restrict access to the JSON file. Do not store the file in the repository, Vercel, shell history, tickets, or logs.
+3. Set `VERTEX_AI_SERVICE_ACCOUNT_JSON` in the target Convex deployment with the interactive CLI command.
+4. Run the Vertex Gemini smoke test. Inspect `gemini` provider runs and metric buckets.
+5. Disable and then delete the old credential in Google Cloud. Record credential identifiers, not JSON values.
+
+Keep the service account limited to `roles/aiplatform.user`. Rotate the credential after suspected disclosure and on the team schedule.
 
 ## Webhook-secret rotation
 

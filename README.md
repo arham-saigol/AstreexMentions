@@ -1,6 +1,6 @@
 # Astreex
 
-Astreex is a pnpm/Turborepo monorepo for monitoring customer conversations across X, Reddit, and Hacker News. It contains a customer-facing Next.js application, a restricted administrator application, a shared Convex backend, billing through Creem, email through Resend, and a DeepSeek mention analysis adapter.
+Astreex is a pnpm/Turborepo monorepo for monitoring customer conversations across X, Reddit, and Hacker News. It contains a customer-facing Next.js application, a restricted administrator application, a shared Convex backend, billing through Creem, email through Resend, and Vertex AI Gemini mention analysis.
 
 ## Repository status
 
@@ -60,7 +60,8 @@ The customer app listens on `http://localhost:3000`; the admin app listens on `h
 - pnpm `10.34.5` through Corepack; the workspace accepts pnpm `>=10.30.0 <11`
 - A Convex account for connected backend development
 - A Clerk application with the desired sign-in methods and a JWT template named `convex`
-- Creem, Resend, Xquik, FetchLayer, and DeepSeek accounts for their live runtime integrations
+- Creem, Resend, Xquik, and FetchLayer accounts for their live integrations
+- A Google Cloud project with Vertex AI enabled and a restricted service account
 - No API key is required for Hacker News because that adapter uses the public Algolia Hacker News API
 
 ```sh
@@ -202,7 +203,7 @@ The repository-root `.env.example` is an inventory, not a file automatically loa
 
 ### Variables present in `.env.example`
 
-The example currently contains 36 unique variable names. `ADMIN_CLERK_USER_ID` appears twice because the same exact value must be installed in the admin Next.js environment and the Convex deployment.
+The example currently contains 38 unique variable names. `ADMIN_CLERK_USER_ID` appears twice because the same exact value must be installed in the admin Next.js environment and the Convex deployment.
 
 | Variable                            | Destination and current behavior                                                                                                                                                |
 | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -233,8 +234,10 @@ The example currently contains 36 unique variable names. `ADMIN_CLERK_USER_ID` a
 | `RESEND_REPLY_TO_EMAIL`             | Convex; optional reply-to address. Blank means no separate reply-to.                                                                                                            |
 | `FETCHLAYER_API_KEY`                | Convex; Reddit post and comment search through FetchLayer.                                                                                                                      |
 | `XQUIK_API_KEY`                     | Convex; X search through Xquik.                                                                                                                                                 |
-| `DEEPSEEK_API_KEY`                  | Convex; credential used by the event-driven mention analysis worker with fixed model `deepseek-v4-flash`.                                                                       |
-| `DEEPSEEK_TIMEOUT_MS`               | Convex; optional positive timeout, default `120000`.                                                                                                                            |
+| `VERTEX_AI_PROJECT_ID`              | Convex; required Google Cloud project ID for Vertex AI.                                                                                                                         |
+| `VERTEX_AI_LOCATION`                | Convex; optional Vertex location. Use `global`, which is the default.                                                                                                           |
+| `VERTEX_AI_SERVICE_ACCOUNT_JSON`    | Convex secret; required complete service-account JSON. Grant this identity only `roles/aiplatform.user`. Never expose this value through `NEXT_PUBLIC_*`.                       |
+| `VERTEX_AI_TIMEOUT_MS`              | Convex; optional positive timeout, default `120000`.                                                                                                                            |
 | `TINYFISH_API_KEY`                  | Convex; onboarding company research web fetch and search through TinyFish.                                                                                                      |
 | `TINYFISH_TIMEOUT_MS`               | Convex; optional positive timeout, default `45000`.                                                                                                                             |
 | `XQUIK_REQUESTS_PER_SECOND`         | Convex; optional positive integer, default `100`. Hourly budget is value × 3,600; minute claims are capped at `min(60, value × 55)`.                                            |
@@ -264,7 +267,7 @@ configured identity-fence duration in the target environment.
 - Reddit: FetchLayer, `https://fetchlayer.dev/api/reddit`
 - Hacker News: public Algolia Hacker News API
 - Onboarding research: TinyFish Markdown Fetch (`https://api.fetch.tinyfish.ai`) and Search (`https://api.search.tinyfish.ai`)
-- Mention analysis: DeepSeek chat completions with `deepseek-v4-flash`, dispatched from the durable Convex mention analysis queue
+- Mention analysis and onboarding discovery: Vertex AI `gemini-3.5-flash-lite` with structured JSON and medium thinking. Mention analysis uses the durable Convex queue.
 - Billing: Creem test or production API selected by `CREEM_MODE`
 - Email: Resend API and signed webhook delivery events
 
@@ -275,7 +278,7 @@ configured identity-fence duration in the target environment.
 - [Customer, admin, public, webhook, and deletion authorization](docs/authorization.md)
 - [Creem billing, entitlement, usage cycles, warnings, and deletion guards](docs/billing.md)
 - [Tracking schedules, leases, budgets, checkpoints, and durable jobs](docs/jobs.md)
-- [Xquik, FetchLayer, Algolia HN, DeepSeek, and Resend contracts](docs/providers.md)
+- [Xquik, FetchLayer, Algolia HN, Vertex AI Gemini, and Resend contracts](docs/providers.md)
 - [Deterministic, Convex, adapter, UI, and credential-backed testing](docs/testing.md)
 - [Deployment runbook](docs/deployment.md)
 - [Incident, queue, rotation, deletion, and recovery runbooks](docs/runbooks/README.md)

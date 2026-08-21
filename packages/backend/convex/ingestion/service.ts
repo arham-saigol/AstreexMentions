@@ -1,8 +1,6 @@
 import { internal } from "../_generated/api"
-import {
-  DEFAULT_MENTION_ANALYSIS_MAX_ATTEMPTS,
-  DEEPSEEK_MENTION_ANALYSIS_MODEL,
-} from "../lib/deepseekMentionAnalysis"
+import { GEMINI_MODEL } from "../integrations/geminiModel"
+import { DEFAULT_MENTION_ANALYSIS_MAX_ATTEMPTS } from "../lib/mentionAnalysis"
 import { transitionMentionAnalysisStatusMetric } from "../mentionAnalysis/metrics"
 import {
   buildMentionRediscoveryPatch,
@@ -316,7 +314,7 @@ async function ensureMentionAnalysisJob(
     idempotencyKey,
     maxAttempts: DEFAULT_MENTION_ANALYSIS_MAX_ATTEMPTS,
     mentionId: input.mentionId,
-    model: DEEPSEEK_MENTION_ANALYSIS_MODEL,
+    model: GEMINI_MODEL,
     nextAttemptAt: now,
     status: "pending",
     updatedAt: now,

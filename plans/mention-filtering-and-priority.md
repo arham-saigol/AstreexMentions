@@ -129,7 +129,7 @@ Update the mention search index filter fields if the chosen query path supports 
 Replace the categorization-specific modules under:
 
 - `packages/backend/convex/categorization/`
-- `packages/backend/convex/lib/deepseekCategorization.ts`
+- `packages/backend/convex/lib/mentionAnalysis.ts`
 
 with mention-analysis equivalents. Update `packages/backend/convex/crons.ts` and all callers. Remove superseded categorization-only code and names.
 
@@ -246,7 +246,7 @@ Do not change plan limits or usage-warning thresholds.
 
 ### Labeled analysis fixture
 
-Replace/extend `packages/backend/tests/fixtures/mention-analysis/deepseek-cases.json` with a mention-analysis fixture containing independently labeled examples for:
+Replace/extend `packages/backend/tests/fixtures/mention-analysis/gemini-cases.json` with a mention-analysis fixture containing independently labeled examples for:
 
 - Linear product discussion versus linear algebra/equations/generic adjective use
 - Other ambiguous brand names and short context-poor mentions

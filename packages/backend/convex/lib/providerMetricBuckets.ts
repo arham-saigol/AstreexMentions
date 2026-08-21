@@ -11,7 +11,7 @@ export const METRIC_PROVIDERS = [
   "reddit_posts",
   "reddit_comments",
   "hacker_news",
-  "deepseek",
+  "gemini",
   "resend",
   "creem",
   "tinyfish",

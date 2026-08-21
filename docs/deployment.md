@@ -1,6 +1,6 @@
 # Deployment runbook
 
-This runbook describes the production topology and the credential-backed work that must be completed outside the repository. It does not claim that any Clerk, Convex, Creem, Resend, Xquik, FetchLayer, DeepSeek, Vercel, DNS, OAuth, payment, or email smoke test has been run.
+This runbook describes the production topology and the credential-backed work that must be completed outside the repository. It does not claim that any Clerk, Convex, Creem, Resend, Xquik, FetchLayer, Vertex AI, Vercel, DNS, OAuth, payment, or email smoke test has been run.
 
 ## Target topology
 
@@ -135,24 +135,25 @@ Set backend variables with the Convex CLI or dashboard. Omitting the value from 
 
 ### Required production runtime values
 
-| Variable                     | Production value                                                                  |
-| ---------------------------- | --------------------------------------------------------------------------------- |
-| `CLERK_JWT_ISSUER_DOMAIN`    | Issuer from Clerk's `convex` JWT template                                         |
-| `ADMIN_CLERK_USER_ID`        | Exact allowed `user_...` ID                                                       |
-| `APP_URL`                    | Customer HTTPS origin used to build the daily-digest CTA; see the route gap below |
-| `CREEM_API_KEY`              | Creem live API key                                                                |
-| `CREEM_MODE`                 | `production`                                                                      |
-| `CREEM_WEBHOOK_SECRET`       | Secret for the production Creem webhook endpoint                                  |
-| `CREEM_PRODUCT_ID_STARTER`   | Live Starter product ID                                                           |
-| `CREEM_PRODUCT_ID_GROWTH`    | Live Growth product ID                                                            |
-| `CREEM_PRODUCT_ID_SCALE`     | Live Scale product ID                                                             |
-| `CREEM_CHECKOUT_SUCCESS_URL` | Absolute HTTPS customer return URL, such as `https://app.example.com/onboarding`  |
-| `RESEND_API_KEY`             | Restricted production sending API key                                             |
-| `RESEND_WEBHOOK_SECRET`      | Secret for the production Resend webhook endpoint                                 |
-| `RESEND_FROM_EMAIL`          | Sender on a verified Resend domain                                                |
-| `XQUIK_API_KEY`              | Xquik API key                                                                     |
-| `FETCHLAYER_API_KEY`         | FetchLayer API key                                                                |
-| `DEEPSEEK_API_KEY`           | DeepSeek API key                                                                  |
+| Variable                         | Production value                                                                  |
+| -------------------------------- | --------------------------------------------------------------------------------- |
+| `CLERK_JWT_ISSUER_DOMAIN`        | Issuer from Clerk's `convex` JWT template                                         |
+| `ADMIN_CLERK_USER_ID`            | Exact allowed `user_...` ID                                                       |
+| `APP_URL`                        | Customer HTTPS origin used to build the daily-digest CTA; see the route gap below |
+| `CREEM_API_KEY`                  | Creem live API key                                                                |
+| `CREEM_MODE`                     | `production`                                                                      |
+| `CREEM_WEBHOOK_SECRET`           | Secret for the production Creem webhook endpoint                                  |
+| `CREEM_PRODUCT_ID_STARTER`       | Live Starter product ID                                                           |
+| `CREEM_PRODUCT_ID_GROWTH`        | Live Growth product ID                                                            |
+| `CREEM_PRODUCT_ID_SCALE`         | Live Scale product ID                                                             |
+| `CREEM_CHECKOUT_SUCCESS_URL`     | Absolute HTTPS customer return URL, such as `https://app.example.com/onboarding`  |
+| `RESEND_API_KEY`                 | Restricted production sending API key                                             |
+| `RESEND_WEBHOOK_SECRET`          | Secret for the production Resend webhook endpoint                                 |
+| `RESEND_FROM_EMAIL`              | Sender on a verified Resend domain                                                |
+| `XQUIK_API_KEY`                  | Xquik API key                                                                     |
+| `FETCHLAYER_API_KEY`             | FetchLayer API key                                                                |
+| `VERTEX_AI_PROJECT_ID`           | Google Cloud project ID for Vertex AI                                             |
+| `VERTEX_AI_SERVICE_ACCOUNT_JSON` | Complete service-account JSON stored only as a Convex secret                      |
 
 Optional runtime values:
 
@@ -161,7 +162,8 @@ Optional runtime values:
 | `RESEND_REPLY_TO_EMAIL`          | No separate reply-to when blank                                             |
 | `CREEM_TIMEOUT_MS`               | 15000 ms                                                                    |
 | `RESEND_TIMEOUT_MS`              | 15000 ms                                                                    |
-| `DEEPSEEK_TIMEOUT_MS`            | 120000 ms                                                                   |
+| `VERTEX_AI_LOCATION`             | `global`                                                                    |
+| `VERTEX_AI_TIMEOUT_MS`           | 120000 ms                                                                   |
 | `XQUIK_REQUESTS_PER_SECOND`      | 100; hourly budget is value × 3,600 and minute cap is `min(60, value × 55)` |
 | `FETCHLAYER_REQUESTS_PER_MINUTE` | 30; used as the minute cap and multiplied by 60 for the hourly budget       |
 | `HN_REQUESTS_PER_HOUR`           | 9000; used as the hourly budget and minute cap `min(12, value)`             |
@@ -314,15 +316,21 @@ A valid key and provider quota are required to verify X monitoring. Fixture-back
 
 The Hacker News adapter calls the public Algolia endpoint `https://hn.algolia.com/api/v1/search_by_date` and requires no API key. `HN_REQUESTS_PER_HOUR` defaults to `9000`, sets the hourly budget, and also bounds minute claims as `min(12, value)`. Keep it positive; invalid input makes shared tracking dispatch fail closed.
 
-### DeepSeek
+### Vertex AI Gemini
 
-- Variable: `DEEPSEEK_API_KEY`
-- Endpoint: `https://api.deepseek.com/chat/completions`
-- Implemented model: `deepseek-v4-flash`
-- Request behavior: JSON response format, temperature `0`, high reasoning effort, thinking enabled
-- Optional timeout: `DEEPSEEK_TIMEOUT_MS`, default `120000`
+- Model: fixed `gemini-3.5-flash-lite`
+- SDK: Node `@google/genai` in Vertex AI mode
+- Project: required `VERTEX_AI_PROJECT_ID`
+- Location: `VERTEX_AI_LOCATION`; use `global`, which is the default
+- Credential: required `VERTEX_AI_SERVICE_ACCOUNT_JSON` Convex secret
+- Timeout: optional `VERTEX_AI_TIMEOUT_MS`, default `120000`
+- Request behavior: structured JSON output and explicit medium thinking
 
-The model name is fixed in code. No environment variable selects a different model. Durable wake-ups dispatch same-workspace batches of up to 20 jobs. A 15-minute cron recovers missed work. The worker uses four-minute leases, full-result validation, and atomic application. Missing or invalid DeepSeek configuration returns jobs to pending without a consumed attempt or provider telemetry. The retry delay is five minutes. Local validation does not prove that the account can use `deepseek-v4-flash`.
+Enable `aiplatform.googleapis.com` in the Google Cloud project. Use the `global` endpoint so this model and Standard PayGo are available. Billing status and Vertex quota can still block requests. Create a dedicated Astreex service account. Grant only `roles/aiplatform.user`. Store its complete JSON credential only in the Convex deployment. Restrict access to this secret and rotate it through the secret-rotation runbook.
+
+The model name is fixed in code. No environment variable selects a different model. Durable wake-ups dispatch same-workspace batches of up to 20 jobs. A 15-minute cron recovers missed work. The worker uses four-minute leases, full-result validation, and atomic application. Missing or invalid Vertex configuration returns jobs to pending without a consumed attempt or provider telemetry. The retry delay is five minutes. Local validation does not prove model access, quota, or output quality.
+
+Before you deploy the narrowed provider schema to a development deployment, erase stale mention-analysis jobs, provider runs, and metric buckets. Re-ingest development mentions when you need analysis evidence. Do not add a provider compatibility path or a data migration.
 
 ## 8. Deploy the controlled Convex production backend
 
@@ -346,7 +354,10 @@ pnpm --filter @astreex/backend exec convex env set --prod RESEND_WEBHOOK_SECRET
 pnpm --filter @astreex/backend exec convex env set --prod RESEND_FROM_EMAIL
 pnpm --filter @astreex/backend exec convex env set --prod XQUIK_API_KEY
 pnpm --filter @astreex/backend exec convex env set --prod FETCHLAYER_API_KEY
-pnpm --filter @astreex/backend exec convex env set --prod DEEPSEEK_API_KEY
+pnpm --filter @astreex/backend exec convex env set --prod VERTEX_AI_PROJECT_ID
+pnpm --filter @astreex/backend exec convex env set --prod VERTEX_AI_LOCATION
+pnpm --filter @astreex/backend exec convex env set --prod VERTEX_AI_SERVICE_ACCOUNT_JSON
+pnpm --filter @astreex/backend exec convex env set --prod VERTEX_AI_TIMEOUT_MS
 ```
 
 Audit variable names without exposing values:
@@ -477,7 +488,8 @@ RESEND_WEBHOOK_SECRET
 RESEND_FROM_EMAIL
 FETCHLAYER_API_KEY
 XQUIK_API_KEY
-DEEPSEEK_API_KEY
+VERTEX_AI_PROJECT_ID
+VERTEX_AI_SERVICE_ACCOUNT_JSON
 ```
 
 It also:
@@ -495,7 +507,7 @@ It does **not** verify:
 - that the Creem product IDs exist in the selected Creem environment;
 - that a webhook can reach Convex or that its signature secret matches;
 - that Resend's domain is verified;
-- that provider quotas or DeepSeek model access are available.
+- that provider quotas or Vertex AI model access are available.
 
 ## 11. Required credential-backed smoke tests
 
@@ -529,11 +541,15 @@ These are manual or separately automated release checks. They require real accou
 - **Hacker News:** query known recent data through Algolia and verify story/comment normalization.
 - Confirm rate-limit or temporary-failure handling does not fabricate successful mentions.
 
-### DeepSeek
+### Vertex AI Gemini
 
-- Confirm the account can call `deepseek-v4-flash` with the implemented request fields.
-- Ingest approved test mentions. Then make sure that the event-driven dispatcher claims same-workspace batches, assigns one enabled category per mention, and records the expected `deepseek` provider run and metrics.
-- Exercise a controlled retryable failure and a rejected invalid result; confirm lease fencing, whole-batch retry, and no partial category writes. Do not claim these credential-backed behaviors unless the deployed worker was actually exercised.
+1. Set `VERTEX_AI_PROJECT_ID`, `VERTEX_AI_LOCATION=global`, `VERTEX_AI_SERVICE_ACCOUNT_JSON`, and `VERTEX_AI_TIMEOUT_MS` in a non-production Convex deployment.
+2. Make sure that the service account can access `gemini-3.5-flash-lite` while the selected billing account is active.
+3. Run onboarding discovery. Make sure that both structured Gemini calls complete.
+4. Ingest 20 labeled mentions in one workspace. Make sure that the event-driven dispatcher schedules one Gemini request and applies complete valid results atomically.
+5. Inspect provider runs and hourly metric buckets. Make sure that they use `gemini` and `mention_analysis:mention-analysis-v2`.
+6. Safely simulate a `429` or timeout. Make sure that the queue retries with no partial results or secret output.
+7. Compare the result with the independent fixture. Do not reduce the 20-mention batch size to fit the fixture.
 
 ### Creem test mode
 

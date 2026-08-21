@@ -1,10 +1,20 @@
 import { spawnSync } from "node:child_process"
+import { generateKeyPairSync } from "node:crypto"
 import { fileURLToPath } from "node:url"
 
 import { describe, expect, it } from "vitest"
 
 const scriptPath = fileURLToPath(
   new URL("../../../scripts/verify-release-env.mjs", import.meta.url),
+)
+
+const { privateKey: vertexServiceAccountPrivateKey } = generateKeyPairSync(
+  "rsa",
+  {
+    modulusLength: 2_048,
+    privateKeyEncoding: { format: "pem", type: "pkcs8" },
+    publicKeyEncoding: { format: "pem", type: "spki" },
+  },
 )
 
 const baseEnvironment = {
@@ -20,7 +30,13 @@ const baseEnvironment = {
   CREEM_PRODUCT_ID_SCALE: "prod_scale",
   CREEM_PRODUCT_ID_STARTER: "prod_starter",
   CREEM_WEBHOOK_SECRET: "creem_webhook_release",
-  DEEPSEEK_API_KEY: "deepseek_release",
+  VERTEX_AI_PROJECT_ID: "astreex-release",
+  VERTEX_AI_SERVICE_ACCOUNT_JSON: JSON.stringify({
+    client_email: "astreex@astreex-release.iam.gserviceaccount.com",
+    private_key: vertexServiceAccountPrivateKey,
+    project_id: "astreex-release",
+    type: "service_account",
+  }),
   DELETION_IDENTITY_FENCE_MS: "60000",
   FETCHLAYER_API_KEY: "fetchlayer_release",
   NEXT_PUBLIC_ADMIN_URL: "https://admin.example.com",
@@ -86,6 +102,31 @@ describe("release environment validation", () => {
       )
     },
   )
+
+  it("rejects an unusable Vertex private key without printing it", () => {
+    const invalidPrivateKey = "not-a-real-private-key"
+    const result = runReleaseValidation({
+      VERTEX_AI_SERVICE_ACCOUNT_JSON: JSON.stringify({
+        client_email: "astreex@astreex-release.iam.gserviceaccount.com",
+        private_key: invalidPrivateKey,
+        project_id: "astreex-release",
+        type: "service_account",
+      }),
+    })
+
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain(
+      "VERTEX_AI_SERVICE_ACCOUNT_JSON must contain a usable service-account credential.",
+    )
+    expect(result.stderr).not.toContain(invalidPrivateKey)
+  })
+
+  it("rejects a Vertex location other than global", () => {
+    const result = runReleaseValidation({ VERTEX_AI_LOCATION: "us-central1" })
+
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain("VERTEX_AI_LOCATION must be global")
+  })
 
   it("rejects a product ID reused by multiple plans", () => {
     const result = runReleaseValidation({

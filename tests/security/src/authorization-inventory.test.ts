@@ -64,7 +64,9 @@ const explicitPublicAllowlist = new Map([
 const providerSecretNames = [
   "CREEM_API_KEY",
   "CREEM_WEBHOOK_SECRET",
-  "DEEPSEEK_API_KEY",
+  "VERTEX_AI_PROJECT_ID",
+  "VERTEX_AI_SERVICE_ACCOUNT_JSON",
+  "VERTEX_AI_TIMEOUT_MS",
   "FETCHLAYER_API_KEY",
   "RESEND_API_KEY",
   "RESEND_WEBHOOK_SECRET",
@@ -689,7 +691,7 @@ describe("frontend and environment security inventory", () => {
       )
       for (const name of names) {
         if (
-          /^NEXT_PUBLIC_(?:CREEM|DEEPSEEK|FETCHLAYER|RESEND|TINYFISH|XQUIK)_/u.test(
+          /^NEXT_PUBLIC_(?:CREEM|FETCHLAYER|RESEND|TINYFISH|VERTEX_AI|XQUIK)_/u.test(
             name,
           ) ||
           /(?:API_KEY|ACCESS_TOKEN|PASSWORD|PRIVATE_KEY|SECRET|WEBHOOK_SECRET)(?:_|$)/u.test(

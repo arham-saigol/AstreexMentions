@@ -31,6 +31,10 @@ type Env = {
   readonly DELETION_IDENTITY_FENCE_MS: string | undefined;
   readonly TINYFISH_API_KEY: string | undefined;
   readonly TINYFISH_TIMEOUT_MS: string | undefined;
+  readonly VERTEX_AI_LOCATION: string | undefined;
+  readonly VERTEX_AI_PROJECT_ID: string | undefined;
+  readonly VERTEX_AI_SERVICE_ACCOUNT_JSON: string | undefined;
+  readonly VERTEX_AI_TIMEOUT_MS: string | undefined;
 };
 
 /**

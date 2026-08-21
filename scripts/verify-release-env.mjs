@@ -1,3 +1,5 @@
+import { createPrivateKey } from "node:crypto"
+
 const required = [
   "NEXT_PUBLIC_SITE_URL",
   "NEXT_PUBLIC_APP_URL",
@@ -21,7 +23,8 @@ const required = [
   "RESEND_FROM_EMAIL",
   "FETCHLAYER_API_KEY",
   "XQUIK_API_KEY",
-  "DEEPSEEK_API_KEY",
+  "VERTEX_AI_PROJECT_ID",
+  "VERTEX_AI_SERVICE_ACCOUNT_JSON",
   "DELETION_IDENTITY_FENCE_MS",
 ]
 
@@ -30,6 +33,48 @@ const missing = required.filter((name) => !process.env[name]?.trim())
 if (missing.length > 0) {
   console.error("Release environment validation failed. Missing variables:")
   for (const name of missing) console.error(`- ${name}`)
+  process.exit(1)
+}
+
+try {
+  const vertexCredentials = JSON.parse(
+    process.env.VERTEX_AI_SERVICE_ACCOUNT_JSON,
+  )
+  if (
+    typeof vertexCredentials !== "object" ||
+    vertexCredentials === null ||
+    Array.isArray(vertexCredentials) ||
+    vertexCredentials.type !== "service_account" ||
+    typeof vertexCredentials.project_id !== "string" ||
+    vertexCredentials.project_id.trim().length === 0 ||
+    typeof vertexCredentials.client_email !== "string" ||
+    vertexCredentials.client_email.trim().length === 0 ||
+    typeof vertexCredentials.private_key !== "string" ||
+    vertexCredentials.private_key.trim().length === 0 ||
+    createPrivateKey(vertexCredentials.private_key).asymmetricKeyType !== "rsa"
+  ) {
+    throw new TypeError("Vertex service-account credential is invalid")
+  }
+} catch {
+  console.error(
+    "VERTEX_AI_SERVICE_ACCOUNT_JSON must contain a usable service-account credential.",
+  )
+  process.exit(1)
+}
+
+const vertexLocation = process.env.VERTEX_AI_LOCATION?.trim()
+if (vertexLocation && vertexLocation !== "global") {
+  console.error("VERTEX_AI_LOCATION must be global when set.")
+  process.exit(1)
+}
+
+const vertexTimeout = process.env.VERTEX_AI_TIMEOUT_MS
+if (
+  vertexTimeout !== undefined &&
+  vertexTimeout.trim().length > 0 &&
+  (!Number.isFinite(Number(vertexTimeout)) || Number(vertexTimeout) <= 0)
+) {
+  console.error("VERTEX_AI_TIMEOUT_MS must be a positive number when set.")
   process.exit(1)
 }
 
