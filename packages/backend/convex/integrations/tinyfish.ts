@@ -8,9 +8,16 @@ export const MAX_TINYFISH_PAGE_CHARS = 24_000
 export const MAX_TINYFISH_SEARCH_RESULTS = 5
 export const DEFAULT_TINYFISH_TIMEOUT_MS = 45_000
 
+const fetchResultSchema = z
+  .object({
+    final_url: z.string().url(),
+    text: z.string(),
+    url: z.string().url(),
+  })
+  .passthrough()
 const fetchResponseSchema = z
   .object({
-    results: z.array(z.object({ text: z.string() }).passthrough()),
+    results: z.array(fetchResultSchema),
   })
   .passthrough()
 const searchResultSchema = z
@@ -62,15 +69,22 @@ function blockedHostname(hostname: string): boolean {
     return true
   }
   const parts = host.split(".").map(Number)
-  if (parts.length === 4 && parts.every((part) => Number.isInteger(part))) {
-    const [a, b] = parts as [number, number, number, number]
+  if (
+    parts.length === 4 &&
+    parts.every((part) => Number.isInteger(part) && part >= 0 && part <= 255)
+  ) {
+    const [a, b, c] = parts as [number, number, number, number]
     return (
       a === 0 ||
       a === 10 ||
+      (a === 100 && b >= 64 && b <= 127) ||
       a === 127 ||
       (a === 169 && b === 254) ||
       (a === 172 && b >= 16 && b <= 31) ||
-      (a === 192 && b === 168)
+      (a === 192 && (b === 0 || b === 2 || b === 168)) ||
+      (a === 198 && (b === 18 || b === 19 || (b === 51 && c === 100))) ||
+      (a === 203 && b === 0 && c === 113) ||
+      a >= 224
     )
   }
   const firstHextet = Number.parseInt(host.split(":")[0] ?? "", 16)
@@ -78,7 +92,8 @@ function blockedHostname(hostname: string): boolean {
     Number.isInteger(firstHextet) &&
     ((firstHextet & 0xfe00) === 0xfc00 ||
       (firstHextet & 0xffc0) === 0xfe80 ||
-      (firstHextet & 0xff00) === 0xff00)
+      (firstHextet & 0xff00) === 0xff00 ||
+      (firstHextet === 0x2001 && host.startsWith("2001:db8:")))
   )
 }
 
@@ -125,6 +140,18 @@ export function canonicalResearchUrl(value: string): string {
   }
   url.hash = ""
   return url.toString()
+}
+
+function validateFetchedDestination(value: string): void {
+  try {
+    canonicalResearchUrl(value)
+  } catch (cause) {
+    throw new TinyFishIntegrationError(
+      "INVALID_RESPONSE",
+      "TinyFish Fetch returned an unsafe destination",
+      { cause, retryable: false },
+    )
+  }
 }
 
 async function requestJson(
@@ -220,6 +247,10 @@ export function createTinyFishClient(options: {
             retryable: true,
           },
         )
+      }
+      for (const result of parsed.data.results) {
+        validateFetchedDestination(result.url)
+        validateFetchedDestination(result.final_url)
       }
       return parsed.data.results.map((result) =>
         result.text.slice(0, MAX_TINYFISH_PAGE_CHARS),
