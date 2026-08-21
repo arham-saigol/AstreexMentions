@@ -62,17 +62,17 @@ A Convex environment correction does not require a code deployment. Vercel serve
 
 After code/config recovery, classify each workflow:
 
-| State                                      | Recovery expectation                                                                                                           |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
-| Retryable active tracking source           | Recovers from stored `nextRunAt`/backoff; expired lease is fenced and reclaimable                                              |
-| Tracking `paused/config` or `error/config` | Does not bulk-resume automatically; requires customer keyword resume or reviewed maintenance                                   |
-| Pending Creem event                        | One-minute cron retries up to 16 due rows/run; provider replay is idempotent                                                   |
-| Dead Creem event                           | Same ID cannot reprocess; require a new canonical event or reviewed repair                                                     |
-| Pending/expired email outbox               | One-minute cron retries/reclaims up to 32 rows/run                                                                             |
-| Dead email/digest run                      | No admin requeue; reviewed maintenance required                                                                                |
-| Resend `pending_match`                     | Scheduled 30-second reconciliation chain; no scanning cron                                                                     |
-| Pending mention analysis                   | One-minute dispatcher claims due jobs; config-blocked work retries in 5 minutes; catalog-blocked work requires category repair |
-| Pending deletion                           | One-minute dispatcher resumes due work; security-fence phase waits until its configured expiry                                 |
+| State                                      | Recovery expectation                                                                                                     |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| Retryable active tracking source           | Recovers from stored `nextRunAt`/backoff; expired lease is fenced and reclaimable                                        |
+| Tracking `paused/config` or `error/config` | Does not bulk-resume automatically; requires customer keyword resume or reviewed maintenance                             |
+| Pending Creem event                        | Durable wake-up retries due work; 15-minute recovery sweep handles up to 16 rows/run                                     |
+| Dead Creem event                           | Same ID cannot reprocess; require a new canonical event or reviewed repair                                               |
+| Pending/expired email outbox               | Durable wake-up retries or reclaims work; 15-minute recovery sweep handles up to 32 rows/run                             |
+| Dead email/digest run                      | No admin requeue; reviewed maintenance required                                                                          |
+| Resend `pending_match`                     | Scheduled 30-second reconciliation chain; no scanning cron                                                               |
+| Pending mention analysis                   | Durable wake-up claims due jobs; config-blocked work retries in 5 minutes; catalog-blocked work requires category repair |
+| Pending deletion                           | Durable wake-up resumes due work; 15-minute recovery sweep remains available; security fence waits until its expiry      |
 
 Preserve idempotency keys, payload fingerprints, provider IDs, lease versions, and checkpoints. Direct state edits can create duplicate payments/emails/mentions or lost provider windows.
 

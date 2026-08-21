@@ -1,3 +1,4 @@
+import { internal } from "../_generated/api"
 import {
   DEFAULT_MENTION_ANALYSIS_MAX_ATTEMPTS,
   DEEPSEEK_MENTION_ANALYSIS_MODEL,
@@ -79,6 +80,29 @@ export type IngestionChunkResult = {
     mentionsUsed: number
   }
   warningThresholdsEnqueued: UsageWarningThreshold[]
+}
+
+export async function scheduleIngestionDispatchers(
+  ctx: MutationCtx,
+  work: {
+    mentionAnalysisJobsEnqueued: number
+    usageWarningEmailsEnqueued: number
+  },
+): Promise<void> {
+  if (work.mentionAnalysisJobsEnqueued > 0) {
+    await ctx.scheduler.runAfter(
+      0,
+      internal.mentionAnalysis.internal.dispatchDueMentionAnalysisJobs,
+      {},
+    )
+  }
+  if (work.usageWarningEmailsEnqueued > 0) {
+    await ctx.scheduler.runAfter(
+      0,
+      internal.email.internal.dispatchPendingEmails,
+      {},
+    )
+  }
 }
 
 export type IngestionServiceOptions = {

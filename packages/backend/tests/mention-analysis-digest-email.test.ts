@@ -96,7 +96,7 @@ describe("workspace category invariants", () => {
 
 type DigestMention = RankableMention & { title: string }
 
-const digestSchedule = { hour: 9, minute: 0, timeZone: "UTC" }
+const digestTimeZone = "UTC"
 const scheduledFor = Date.parse("2026-07-26T09:00:00.000Z")
 const digestMention = (input: Partial<DigestMention> = {}): DigestMention => ({
   engagement: {
@@ -127,22 +127,21 @@ describe("daily timezone digest", () => {
     expect(fallWindow.endAt - fallWindow.startAt).toBe(25 * 60 * 60 * 1_000)
   })
 
-  it("resolves a skipped DST wall time with Temporal compatible semantics", () => {
+  it("always schedules the next 9:00 AM local run across DST", () => {
     expect(
-      nextDailyDigestRunAt(Date.parse("2026-03-08T00:00:00.000Z"), {
-        hour: 2,
-        minute: 30,
-        timeZone: "America/New_York",
-      }),
-    ).toBe(Date.parse("2026-03-08T07:30:00.000Z"))
+      nextDailyDigestRunAt(
+        Date.parse("2026-03-08T00:00:00.000Z"),
+        "America/New_York",
+      ),
+    ).toBe(Date.parse("2026-03-08T13:00:00.000Z"))
   })
 
   it("records an idempotent skipped run and never enqueues an empty digest", () => {
     const plan = planDailyDigest<DigestMention>({
       alreadyRecorded: false,
       mentions: [],
-      schedule: digestSchedule,
       scheduledFor,
+      timeZone: digestTimeZone,
       workspaceId: "workspace-1",
     })
 
@@ -160,8 +159,8 @@ describe("daily timezone digest", () => {
         alreadyRecorded: false,
         mentionLimit: 0,
         mentions: [digestMention()],
-        schedule: digestSchedule,
         scheduledFor,
+        timeZone: digestTimeZone,
         workspaceId: "workspace-1",
       }),
     ).toThrowError("mentionLimit must be a positive integer")
@@ -172,8 +171,8 @@ describe("daily timezone digest", () => {
       planDailyDigest({
         alreadyRecorded: true,
         mentions: [digestMention()],
-        schedule: digestSchedule,
         scheduledFor,
+        timeZone: digestTimeZone,
         workspaceId: "workspace-1",
       }),
     ).toMatchObject({ kind: "duplicate" })
@@ -191,8 +190,8 @@ describe("daily timezone digest", () => {
     const plan = planDailyDigest({
       alreadyRecorded: false,
       mentions: [lowerEngagement, outsideWindow, digestMention()],
-      schedule: digestSchedule,
       scheduledFor,
+      timeZone: digestTimeZone,
       workspaceId: "workspace-1",
     })
 

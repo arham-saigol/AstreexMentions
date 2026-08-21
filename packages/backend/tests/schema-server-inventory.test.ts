@@ -35,6 +35,7 @@ const REQUIRED_TABLES = [
 ] as const
 
 type ExportedTable = {
+  documentType: { value: Record<string, unknown> }
   indexes: Array<{ fields: string[]; indexDescriptor: string }>
   searchIndexes: Array<{ indexDescriptor: string }>
   tableName: string
@@ -68,6 +69,21 @@ describe("complete Convex schema", () => {
     expect(
       exportedSchema.tables.map(({ tableName }) => tableName).sort(),
     ).toEqual([...REQUIRED_TABLES].sort())
+  })
+
+  it("keeps fixed-time digest preference fields", () => {
+    const fields = tableByName.get("digestPreferences")?.documentType.value
+    expect(Object.keys(fields ?? {}).sort()).toEqual([
+      "createdAt",
+      "deletionPausedAt",
+      "enabled",
+      "mentionLimit",
+      "nextRunAt",
+      "timeZone",
+      "updatedAt",
+      "userId",
+      "workspaceId",
+    ])
   })
 
   it("keeps authorization, dedupe, due-work, billing, and rollup indexes", () => {
@@ -302,23 +318,23 @@ describe("complete Convex schema", () => {
     ])
   })
 
-  it("registers every durable dispatcher at a one-minute interval", () => {
+  it("registers event-driven recovery sweeps and the one-minute tracking tick", () => {
     expect(JSON.parse(crons.export())).toEqual({
       "dispatch daily digest schedules": expect.objectContaining({
         name: "digest/internal:dispatchDueDailyDigests",
-        schedule: { minutes: 1, type: "interval" },
+        schedule: { minutes: 15, type: "interval" },
       }),
       "dispatch durable account deletions": expect.objectContaining({
         name: "deletion/internal:dispatchDueAccountDeletions",
-        schedule: { minutes: 1, type: "interval" },
+        schedule: { minutes: 15, type: "interval" },
       }),
       "dispatch durable email outbox": expect.objectContaining({
         name: "email/internal:dispatchPendingEmails",
-        schedule: { minutes: 1, type: "interval" },
+        schedule: { minutes: 15, type: "interval" },
       }),
       "dispatch mention analysis jobs": expect.objectContaining({
         name: "mentionAnalysis/internal:dispatchDueMentionAnalysisJobs",
-        schedule: { minutes: 1, type: "interval" },
+        schedule: { minutes: 15, type: "interval" },
       }),
       "dispatch persisted tracking schedules": expect.objectContaining({
         name: "scheduling/internal:dispatchDueTrackingSources",
@@ -334,7 +350,7 @@ describe("complete Convex schema", () => {
       }),
       "retry persisted Creem billing events": expect.objectContaining({
         name: "billing/internal:dispatchPendingCreemBillingEvents",
-        schedule: { minutes: 1, type: "interval" },
+        schedule: { minutes: 15, type: "interval" },
       }),
     })
   })

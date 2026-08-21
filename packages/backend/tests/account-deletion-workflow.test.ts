@@ -754,26 +754,36 @@ describe("account deletion model and Clerk outcomes", () => {
       }),
     )
 
-    await t.mutation(dispatchReference, { now: NOW })
-    await t.finishAllScheduledFunctions(vi.runAllTimers)
+    await vi.advanceTimersByTimeAsync(1)
+    await t.finishInProgressScheduledFunctions()
+    await vi.advanceTimersByTimeAsync(1)
+    await t.finishInProgressScheduledFunctions()
+    await vi.advanceTimersByTimeAsync(1)
+    await t.finishInProgressScheduledFunctions()
     const fenced = await persistedJob(t, accepted.deletionJobId)
     expect(fenced).toMatchObject({
       attempts: 1,
-      dataDeletionVerifiedAt: NOW,
-      identityDeletionVerifiedAt: NOW,
-      nextAttemptAt: NOW + FENCE_MS,
       phase: "security_fence",
-      securityFenceExpiresAt: NOW + FENCE_MS,
       status: "pending",
       workflowVersion: ACCOUNT_DELETION_WORKFLOW_VERSION,
     })
+    expect(fenced?.dataDeletionVerifiedAt).toEqual(expect.any(Number))
+    expect(fenced?.identityDeletionVerifiedAt).toBe(
+      fenced?.dataDeletionVerifiedAt,
+    )
+    expect(fenced?.nextAttemptAt).toBe(fenced?.securityFenceExpiresAt)
+    expect(
+      (fenced?.securityFenceExpiresAt ?? 0) -
+        (fenced?.identityDeletionVerifiedAt ?? 0),
+    ).toBe(FENCE_MS)
     expect(clerkCalls).toEqual(["GET", "DELETE", "GET"])
 
-    vi.setSystemTime(NOW + FENCE_MS)
-    await t.mutation(dispatchReference, { now: NOW + FENCE_MS })
-    await t.finishAllScheduledFunctions(vi.runAllTimers)
+    await vi.advanceTimersByTimeAsync(FENCE_MS)
+    await t.finishInProgressScheduledFunctions()
+    await vi.advanceTimersByTimeAsync(1)
+    await t.finishInProgressScheduledFunctions()
     expect(await persistedJob(t, accepted.deletionJobId)).toMatchObject({
-      completedAt: NOW + FENCE_MS,
+      completedAt: expect.any(Number),
       phase: "done",
       status: "completed",
     })

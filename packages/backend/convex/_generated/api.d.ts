@@ -656,43 +656,6 @@ export declare const api: {
       }
     >;
   };
-  digest: {
-    customer: {
-      getDailyDigestPreference: FunctionReference<
-        "query",
-        "public",
-        {},
-        {
-          enabled: boolean;
-          hour: number;
-          mentionLimit: number;
-          minute: number;
-          nextRunAt: number;
-          timeZone: string;
-        }
-      >;
-      updateDailyDigestPreference: FunctionReference<
-        "mutation",
-        "public",
-        {
-          enabled: boolean;
-          hour: number;
-          mentionLimit: number;
-          minute: number;
-          timeZone: string;
-        },
-        {
-          enabled: boolean;
-          hour: number;
-          mentionLimit: number;
-          minute: number;
-          nextRunAt: number;
-          timeZone: string;
-          updatedAt: number;
-        }
-      >;
-    };
-  };
   featureRequests: {
     createFeatureRequest: FunctionReference<
       "mutation",
@@ -1198,9 +1161,6 @@ export declare const api: {
       {
         digest: {
           enabled: boolean;
-          hour: number;
-          mentionLimit: number;
-          minute: number;
           nextRunAt: number;
           timeZone: string;
         };
@@ -1211,17 +1171,11 @@ export declare const api: {
       "public",
       {
         enabled: boolean;
-        hour: number;
-        mentionLimit: number;
-        minute: number;
         timeZone: string;
       },
       {
         digest: {
           enabled: boolean;
-          hour: number;
-          mentionLimit: number;
-          minute: number;
           nextRunAt: number;
           timeZone: string;
         };
@@ -1232,7 +1186,7 @@ export declare const api: {
     bootstrapCurrentUser: FunctionReference<
       "mutation",
       "public",
-      {},
+      { timeZone?: string },
       { userId: Id<"users">; workspaceId: Id<"workspaces"> }
     >;
     getCurrentUser: FunctionReference<

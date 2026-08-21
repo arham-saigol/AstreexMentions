@@ -67,8 +67,8 @@ describe("daily digest orchestration model", () => {
       planDailyDigest({
         alreadyRecorded: false,
         mentions: digestFixture.mentions.map(rankableDigestCandidate),
-        schedule: { hour: 9, minute: 0, timeZone: "UTC" },
         scheduledFor: Date.parse("2026-07-26T09:00:00.000Z"),
+        timeZone: "UTC",
         workspaceId: "workspace-fixture",
       }).idempotencyKey,
     ).toBe(expected)
@@ -128,8 +128,8 @@ describe("daily digest orchestration model", () => {
       planDailyDigest({
         alreadyRecorded: false,
         mentions: [],
-        schedule: { hour: 9, minute: 0, timeZone: "UTC" },
         scheduledFor: Date.parse("2026-07-26T09:00:00.000Z"),
+        timeZone: "UTC",
         workspaceId: "workspace-fixture",
       }),
     ).toMatchObject({ kind: "skipped_empty", runStatus: "skipped_empty" })

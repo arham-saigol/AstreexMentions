@@ -133,18 +133,13 @@ async function schedulePreference(
     return "skipped_recipient"
   }
 
-  const schedule = {
-    hour: preference.hour as number,
-    minute: preference.minute as number,
-    timeZone: preference.timeZone as string,
-  }
   const scheduledFor = preference.nextRunAt as number
   const plan = planDailyDigest({
     alreadyRecorded: false,
     mentionLimit: preference.mentionLimit as number,
     mentions: [],
-    schedule,
     scheduledFor,
+    timeZone: preference.timeZone as string,
     workspaceId: String(workspaceId),
   })
   const existing = await ctx.db
@@ -220,6 +215,13 @@ export const dispatchDueDailyDigests = internalMutation({
         String(left._id).localeCompare(String(right._id), "en"),
     )) {
       outcomes[await schedulePreference(ctx, preference, now)] += 1
+    }
+    if (due.length === MAX_DUE_DIGESTS) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.digest.internal.dispatchDueDailyDigests,
+        {},
+      )
     }
 
     return { outcomes, state: "dispatched" as const }
@@ -525,6 +527,7 @@ export const enqueueRenderedDailyDigest = internalMutation({
       .unique()
 
     let outboxId: EmailOutboxId
+    let created = false
     if (existing) {
       if (
         existing.payloadFingerprint !== fingerprint ||
@@ -559,6 +562,7 @@ export const enqueueRenderedDailyDigest = internalMutation({
           workspaceId: run.workspaceId,
         }),
       )) as EmailOutboxId
+      created = true
     }
 
     if (run.status === "processing") {
@@ -567,6 +571,13 @@ export const enqueueRenderedDailyDigest = internalMutation({
         status: "enqueued",
         updatedAt: Date.now(),
       })
+    }
+    if (created) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.email.internal.dispatchPendingEmails,
+        {},
+      )
     }
     return {
       outboxId,

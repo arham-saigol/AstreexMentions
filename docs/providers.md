@@ -182,7 +182,7 @@ A batch contains at most 20 unique, non-empty mentions. Its prompt cannot exceed
 
 Validation covers all input mentions. Every input ID must appear exactly once. Every category ID must come from the enabled catalog. An invalid ID, priority, reason, or object shape rejects the full batch before storage changes.
 
-The one-minute Convex dispatcher groups prompt-bounded jobs from one workspace under a four-minute lease. Each lease has an exact analysis snapshot. The dispatcher schedules at most four batches. It calls `createDeepSeekMentionAnalysisRequester` only after it validates the lease, mentions, workspace, and snapshot. The catalog must include exactly one enabled permanent system `Other` category.
+The event-driven Convex dispatcher groups prompt-bounded jobs from one workspace under a four-minute lease. The 15-minute cron is a recovery sweep. Each lease has an exact analysis snapshot. The dispatcher schedules at most four batches. It calls `createDeepSeekMentionAnalysisRequester` only after it validates the lease, mentions, workspace, and snapshot. The catalog must include exactly one enabled permanent system `Other` category.
 
 A result applies only after full-batch validation succeeds. Success atomically stores all analysis fields, feed state, and job state. Provider runs and metrics use a versioned `mention_analysis:` operation. Retryable errors use deterministic queue backoff from 30 seconds to 30 minutes. Permanent or exhausted jobs become `dead`. Linked mentions fail open as visible and unclassified. Missing or invalid DeepSeek configuration causes no request or provider telemetry. It restores the claimed attempt and returns jobs to pending for five minutes.
 
@@ -218,7 +218,7 @@ Idempotency exists at two layers:
 1. Convex indexes the durable outbox by `idempotencyKey` and stores a stable payload fingerprint. Reusing a key with different recipients/content/from/subject/reply-to is an `IDEMPOTENCY_COLLISION`.
 2. The same durable key is passed to Resend as `Idempotency-Key`. If a 60-second lease expires after Resend accepted the request but before Convex recorded success, the replacement worker repeats the same provider-idempotent request.
 
-The email cron claims at most 32 pending or expired-lease rows per minute. Retryable failures use up to eight attempts with delays of 30 seconds, 60 seconds, 120 seconds, and so on, capped at six hours. HTTP 408, 409, 429, and 5xx are retryable. Missing delivery configuration releases the lease, rolls back the attempt count, and retries after five minutes. Non-retryable or exhausted sends become `dead`; a linked digest run becomes `failed`.
+The event-driven email dispatcher claims at most 32 pending or expired-lease rows. The 15-minute cron is a recovery sweep. Retryable failures use up to eight attempts with delays of 30 seconds, 60 seconds, 120 seconds, and so on, capped at six hours. HTTP 408, 409, 429, and 5xx are retryable. Missing delivery configuration releases the lease, rolls back the attempt count, and retries after five minutes. Non-retryable or exhausted sends become `dead`. A linked digest run becomes `failed`.
 
 A successful send sets outbox `status: "sent"`, `deliveryStatus: "sent"`, and the provider message ID. It does not prove inbox delivery.
 

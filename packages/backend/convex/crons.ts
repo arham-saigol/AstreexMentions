@@ -5,14 +5,14 @@ const crons = cronJobs()
 
 crons.interval(
   "dispatch durable account deletions",
-  { minutes: 1 },
+  { minutes: 15 },
   internal.deletion.internal.dispatchDueAccountDeletions,
   {},
 )
 
 crons.interval(
   "retry persisted Creem billing events",
-  { minutes: 1 },
+  { minutes: 15 },
   internal.billing.internal.dispatchPendingCreemBillingEvents,
   {},
 )
@@ -33,7 +33,7 @@ crons.interval(
 
 crons.interval(
   "dispatch mention analysis jobs",
-  { minutes: 1 },
+  { minutes: 15 },
   internal.mentionAnalysis.internal.dispatchDueMentionAnalysisJobs,
   {},
 )
@@ -47,14 +47,14 @@ crons.interval(
 
 crons.interval(
   "dispatch daily digest schedules",
-  { minutes: 1 },
+  { minutes: 15 },
   internal.digest.internal.dispatchDueDailyDigests,
   {},
 )
 
 crons.interval(
   "dispatch durable email outbox",
-  { minutes: 1 },
+  { minutes: 15 },
   internal.email.internal.dispatchPendingEmails,
   {},
 )

@@ -133,7 +133,9 @@ describe("onboarding draft", () => {
     expect(buildFullWebsiteUrl("http://example.com/blog")).toBe(
       "http://example.com/blog",
     )
-    expect(buildFullWebsiteUrl("https://example.com")).toBe("https://example.com")
+    expect(buildFullWebsiteUrl("https://example.com")).toBe(
+      "https://example.com",
+    )
     expect(buildFullWebsiteUrl("example.com")).toBe("https://example.com")
     expect(buildFullWebsiteUrl("//example.com")).toBe("https://example.com")
     expect(buildFullWebsiteUrl("   http://example.com   ")).toBe(

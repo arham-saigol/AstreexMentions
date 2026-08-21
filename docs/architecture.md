@@ -21,14 +21,14 @@ The root is a pnpm workspace orchestrated by Turborepo. Root scripts are the sup
 
 - Clerk issues browser sessions and the JWT used for authenticated Convex calls. The Clerk JWT template must be named `convex`.
 - `apps/web` and `apps/admin` are separate Next.js deployments but use the same Clerk tenant and Convex deployment.
-- Convex stores application state, runs transactional functions, executes one-minute crons, and exposes only two HTTP webhook paths.
+- Convex stores application state, runs transactional functions, executes scheduled jobs, and exposes only two HTTP webhook paths.
 - External services are called only from backend actions/adapters:
   - X through **Xquik**.
   - Reddit posts and comments through FetchLayer.
   - Hacker News stories and comments through Algolia's public HN API.
   - Billing through Creem.
   - Email delivery and delivery webhooks through Resend.
-  - DeepSeek mention analysis through a durable one-minute dispatcher, leased batch action, strict total-result validation, and atomic result application.
+  - DeepSeek mention analysis through an event-driven dispatcher, leased batch action, strict total-result validation, and atomic result application.
 
 ## Customer request and authentication flow
 
@@ -37,7 +37,7 @@ The root is a pnpm workspace orchestrated by Turborepo. Root scripts are the sup
 3. `auth()` requires a signed-in Clerk user; signed-out users are redirected to `/sign-in` with the intended destination.
 4. In the browser, `ConvexProviderWithClerk` obtains the Clerk `convex` JWT and attaches it to Convex calls.
 5. `packages/backend/convex/auth.config.ts` accepts the JWT only for application ID `convex` and the configured `CLERK_JWT_ISSUER_DOMAIN`.
-6. The first product bootstrap calls `users:bootstrapCurrentUser`. In one Convex mutation it reconciles the token identifier and Clerk subject, creates or repairs one personal workspace and owner membership, creates default categories, and creates default digest preferences.
+6. The first product bootstrap calls `users:bootstrapCurrentUser`. In one Convex mutation it reconciles the token identifier and Clerk subject, creates or repairs one personal workspace and owner membership, creates default categories, and creates a 9:00 AM local digest preference from the browser timezone. UTC is used when detection is unavailable.
 7. Every later customer operation derives the workspace from the persisted user record. The client does not select a `workspaceId`.
 8. The backend verifies the JWT subject, token identifier, active user, active workspace, active membership, personal workspace ownership, `users.personalWorkspaceId`, and owner role before data access.
 9. Functions that accept record IDs also verify that each record belongs to the derived workspace; user-owned records such as saved views are checked against both workspace and user.
@@ -78,14 +78,7 @@ Future team tenancy requires an intentional schema and policy change: expand wor
 
 ## Scheduled and provider work
 
-All six Convex crons run every minute:
-
-1. dispatch durable account-deletion jobs;
-2. retry persisted Creem billing events;
-3. claim due tracking sources;
-4. claim due mention analysis jobs;
-5. claim due daily digests;
-6. claim pending email outbox messages.
+Tracking-source dispatch runs every minute. Account deletion, Creem billing, mention analysis, daily digest, and email dispatch run every 15 minutes as recovery sweeps. Monitoring access reconciliation runs every five minutes. Free-mention retention runs hourly. Durable state transitions schedule immediate, retry, and lease-expiry wake-ups.
 
 Account deletion, tracking, mention analysis, and email use durable leases. Billing retries pending inbox rows directly, and digest dispatch relies on local-date/idempotency guards rather than a lease.
 
@@ -129,7 +122,7 @@ Account deletion is a durable Convex workflow, never an immediate client-side ca
 2. The customer supplies literal `DELETE`. The strict same-origin Next.js route authenticates Clerk, obtains the Convex JWT, calls `workspaces:deleteAccount`, and never calls Clerk deletion APIs.
 3. Convex evaluates subscriptions, open/completed unexpired checkouts, unresolved billing events, running provider operations, active leased side effects, and provider configuration. Any uncertainty fails closed.
 4. Active entitlement creates/updates a blocked job and returns `BILLING_PORTAL_REQUIRED`; other uncertainty returns support-required state. Confirmed inactivity creates or resumes one versioned account job and atomically fences the user/workspace.
-5. A one-minute dispatcher claims only current workflow-version jobs with a versioned five-minute lease. Expired workers are fenced and reclaimable; legacy jobs are review-only.
+5. An event-driven dispatcher claims only current workflow-version jobs with a versioned five-minute lease. A 15-minute cron recovers missed work. Expired workers are fenced and reclaimable. Legacy jobs are review-only.
 6. The worker verifies Creem authoritatively, rechecks local billing state in the quiescence transaction, revokes producers, and purges tenant-owned rows in bounded workspace-indexed batches.
 7. Convex verifies the workspace and tenant rows are absent before making Clerk identity deletion available. Clerk success and not-found converge; retryable failures back off, while permanent/configuration failures dead-letter for exact-admin recovery.
 8. A retained user tombstone blocks old credentials for `DELETION_IDENTITY_FENCE_MS`. Only after the fence expires is the user tombstone removed and the durable job marked `completed`.

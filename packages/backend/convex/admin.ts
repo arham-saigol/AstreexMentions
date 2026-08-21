@@ -1,5 +1,6 @@
 import type { UserIdentity } from "convex/server"
 import { ConvexError, v } from "convex/values"
+import { internal } from "./_generated/api"
 import type { Doc, Id } from "./_generated/dataModel"
 
 import {
@@ -1191,6 +1192,11 @@ export const retryDeletionJob = adminMutation({
       workflowVersion: ACCOUNT_DELETION_WORKFLOW_VERSION,
       workspaceId: original.workspaceId,
     })
+    await ctx.scheduler.runAfter(
+      0,
+      internal.deletion.internal.dispatchDueAccountDeletions,
+      {},
+    )
     await auditAdminMutation(
       ctx,
       ctx.adminIdentity,

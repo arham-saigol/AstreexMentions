@@ -244,7 +244,7 @@ Subscribe the endpoint to the supported events available in the relevant Creem e
 - **Checkout:** `POST /checkouts` with the mapped product ID, an idempotent request ID, the configured success URL, optional Clerk email, and `internal_customer_id` metadata containing the Astreex workspace ID.
 - **Upgrade:** `POST /subscriptions/{subscriptionId}/upgrade` with the target product and `update_behavior: "proration-charge-immediately"`.
 - **Portal:** `POST /customers/billing` for the Creem customer ID stored on the synchronized subscription.
-- **Webhook processing:** signed events are persisted and processed idempotently; a one-minute cron retries pending Creem billing events.
+- **Webhook processing:** signed events are persisted and processed idempotently. Durable wake-ups retry pending Creem billing events, and a 15-minute cron recovers missed work.
 
 Checkout, upgrade, and portal actions deliberately return a provider-unconfigured state when required values are missing. They must not be described as operational until credential-backed tests complete.
 
@@ -288,7 +288,7 @@ Subscribe to the delivery events that the repository understands:
 - `email.failed`
 - `email.suppressed`
 
-Email delivery is durable: messages are written to an outbox, a one-minute cron dispatches pending entries, Resend requests use idempotency keys, and signed webhook events update delivery state.
+Email delivery is durable: messages are written to an outbox, durable wake-ups dispatch pending entries, Resend requests use idempotency keys, and signed webhook events update delivery state. A 15-minute cron recovers missed work.
 
 ## 7. Monitoring and analysis providers
 
@@ -322,7 +322,7 @@ The Hacker News adapter calls the public Algolia endpoint `https://hn.algolia.co
 - Request behavior: JSON response format, temperature `0`, high reasoning effort, thinking enabled
 - Optional timeout: `DEEPSEEK_TIMEOUT_MS`, default `120000`
 
-The model name is fixed in code. No environment variable selects a different model. A one-minute Convex cron dispatches same-workspace batches of up to 20 jobs. The worker uses four-minute leases, full-result validation, and atomic application. Missing or invalid DeepSeek configuration returns jobs to pending without a consumed attempt or provider telemetry. The retry delay is five minutes. Local validation does not prove that the account can use `deepseek-v4-flash`.
+The model name is fixed in code. No environment variable selects a different model. Durable wake-ups dispatch same-workspace batches of up to 20 jobs. A 15-minute cron recovers missed work. The worker uses four-minute leases, full-result validation, and atomic application. Missing or invalid DeepSeek configuration returns jobs to pending without a consumed attempt or provider telemetry. The retry delay is five minutes. Local validation does not prove that the account can use `deepseek-v4-flash`.
 
 ## 8. Deploy the controlled Convex production backend
 
@@ -519,7 +519,7 @@ These are manual or separately automated release checks. They require real accou
 
 - Bootstrap a fresh user and personal workspace.
 - Create, update, pause/resume, and remove a keyword while checking plan limits.
-- Confirm the one-minute crons are installed and producing no configuration errors.
+- Confirm that the installed dispatcher crons have no configuration errors.
 - Inspect Convex logs for rejected auth, schema, scheduler, webhook, or provider errors.
 
 ### Provider ingestion
@@ -532,7 +532,7 @@ These are manual or separately automated release checks. They require real accou
 ### DeepSeek
 
 - Confirm the account can call `deepseek-v4-flash` with the implemented request fields.
-- Ingest approved test mentions, then verify the one-minute dispatcher claims same-workspace batches, assigns exactly one enabled category per mention, and records the expected `deepseek` provider run/metrics.
+- Ingest approved test mentions. Then make sure that the event-driven dispatcher claims same-workspace batches, assigns one enabled category per mention, and records the expected `deepseek` provider run and metrics.
 - Exercise a controlled retryable failure and a rejected invalid result; confirm lease fencing, whole-batch retry, and no partial category writes. Do not claim these credential-backed behaviors unless the deployed worker was actually exercised.
 
 ### Creem test mode

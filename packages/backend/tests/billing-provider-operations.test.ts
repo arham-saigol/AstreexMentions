@@ -1,7 +1,7 @@
 import { convexTest } from "convex-test"
 import { makeFunctionReference } from "convex/server"
 import type { GenericId } from "convex/values"
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { PROVIDER_OPERATION_STALE_MS } from "../convex/lib/billingDeletionGuard"
 import schema from "../convex/schema"
@@ -52,7 +52,84 @@ const dispatchBilling = makeFunctionReference<
   { expiredOperations: number; state: string }
 >("billing/internal:dispatchPendingCreemBillingEvents")
 
+afterEach(() => {
+  vi.useRealTimers()
+})
+
 describe("Creem provider operation retries", () => {
+  it("uses stale wake-ups without failing a newer operation attempt", async () => {
+    const now = Date.parse("2026-07-26T12:00:00.000Z")
+    vi.useFakeTimers()
+    vi.setSystemTime(now)
+    const t = convexTest({ modules, schema })
+    const workspaceId = await t.run(async (ctx) => {
+      const userId = await ctx.db.insert("users", {
+        clerkUserId: "user_billing_wakeup",
+        createdAt: now,
+        tokenIdentifier: "issuer|user_billing_wakeup",
+        updatedAt: now,
+      })
+      return await ctx.db.insert("workspaces", {
+        createdAt: now,
+        kind: "personal",
+        name: "Billing wake-up",
+        normalizedName: "billing wake-up",
+        ownerUserId: userId,
+        updatedAt: now,
+      })
+    })
+    const args = {
+      idempotencyKey: "portal:wakeup",
+      operation: "portal",
+      workspaceId,
+    }
+
+    await expect(t.mutation(beginOperation, args)).resolves.toEqual({
+      state: "started",
+    })
+    await expect(
+      t.mutation(markRetryable, {
+        errorCode: "HTTP_503",
+        errorMessage: "Retry operation",
+        idempotencyKey: args.idempotencyKey,
+        workspaceId,
+      }),
+    ).resolves.toEqual({ state: "retryable" })
+    vi.setSystemTime(now + 1)
+    await expect(t.mutation(beginOperation, args)).resolves.toEqual({
+      state: "started",
+    })
+
+    await vi.advanceTimersByTimeAsync(PROVIDER_OPERATION_STALE_MS - 1)
+    await t.finishInProgressScheduledFunctions()
+    const beforeNewTimeout = await t.run(
+      async (ctx) =>
+        await ctx.db
+          .query("providerRuns")
+          .withIndex("by_idempotency_key", (q) =>
+            q.eq("idempotencyKey", args.idempotencyKey),
+          )
+          .unique(),
+    )
+    expect(beforeNewTimeout).toMatchObject({ attempt: 2, status: "running" })
+
+    await vi.advanceTimersByTimeAsync(1)
+    await t.finishInProgressScheduledFunctions()
+    const expired = await t.run(
+      async (ctx) =>
+        await ctx.db
+          .query("providerRuns")
+          .withIndex("by_idempotency_key", (q) =>
+            q.eq("idempotencyKey", args.idempotencyKey),
+          )
+          .unique(),
+    )
+    expect(expired).toMatchObject({
+      errorCode: "operation_abandoned",
+      status: "failed",
+    })
+  })
+
   it("keeps completed checkout payment blocked until subscription reconciliation", async () => {
     const t = convexTest({ modules, schema })
     const now = Date.now()

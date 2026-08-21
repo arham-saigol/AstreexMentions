@@ -34,7 +34,7 @@ The admin metrics page can show Creem request success/failure totals if metric b
 ## Expected retry and idempotency
 
 - Pending target/configuration failures retry after 30 seconds.
-- The one-minute cron processes at most 16 due pending events per run.
+- Durable wake-ups process pending retries at their due time. The 15-minute recovery sweep processes at most 16 due events per run.
 - `(provider = creem, providerEventId)` is the durable idempotency key.
 - Replaying a pending event increments attempts and reuses the originally stored verified payload; a replay cannot replace it with a different body.
 - A `processed` or `dead` event ID is terminal and replay is a no-op.
@@ -47,8 +47,8 @@ The admin metrics page can show Creem request success/failure totals if metric b
    - ensure checkout metadata contains the active Astreex workspace ID and a matching checkout exists when required;
    - restore the matching webhook secret and route;
    - keep test and live products/secrets/deployments separate.
-2. Allow the cron to retry, or ask Creem to replay the same event. Do not alter its event ID or raw body.
-3. If volume exceeds 16 due events/minute, monitor oldest `nextAttemptAt`/`receivedAt`; processing should catch up after the dependency is fixed.
+2. Allow the dispatcher to retry, or ask Creem to replay the same event. Do not alter its event ID or raw body.
+3. If volume exceeds 16 due events, monitor oldest `nextAttemptAt` and `receivedAt`. Processing catches up after the dependency is fixed.
 
 ## Recover dead or stale events
 

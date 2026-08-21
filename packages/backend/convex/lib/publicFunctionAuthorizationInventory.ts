@@ -137,16 +137,6 @@ export const PUBLIC_FUNCTION_AUTHORIZATION_INVENTORY = {
     kind: "query",
     wrapper: "publicQuery",
   },
-  "digest/customer:getDailyDigestPreference": {
-    authorization: "authenticated_identity_current_workspace",
-    kind: "query",
-    wrapper: "customerQuery",
-  },
-  "digest/customer:updateDailyDigestPreference": {
-    authorization: "authenticated_identity_current_workspace",
-    kind: "mutation",
-    wrapper: "customerMutation",
-  },
   "email/resendHttp:resendWebhook": {
     authorization: "provider_signature",
     kind: "httpAction",

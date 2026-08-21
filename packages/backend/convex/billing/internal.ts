@@ -70,6 +70,17 @@ type ProviderRunId = Id<"providerRuns">
 type GenericMutationContext = MutationCtx
 type DatabaseContext = Pick<MutationCtx | QueryCtx, "db">
 
+async function schedulePendingCreemBillingEvents(
+  ctx: GenericMutationContext,
+  at: number,
+): Promise<void> {
+  await ctx.scheduler.runAt(
+    at,
+    internal.billing.internal.dispatchPendingCreemBillingEvents,
+    {},
+  )
+}
+
 function metadataJson(value: Record<string, unknown>): string {
   return JSON.stringify(value)
 }
@@ -889,6 +900,10 @@ export const beginCreemProviderOperation = internalMutation({
           status: "running",
           updatedAt: now,
         })
+        await schedulePendingCreemBillingEvents(
+          ctx,
+          now + PROVIDER_OPERATION_STALE_MS,
+        )
         return { state: "started" as const }
       }
       return {
@@ -977,6 +992,10 @@ export const beginCreemProviderOperation = internalMutation({
       updatedAt: now,
       workspaceId: args.workspaceId,
     })
+    await schedulePendingCreemBillingEvents(
+      ctx,
+      now + PROVIDER_OPERATION_STALE_MS,
+    )
     return { state: "started" as const }
   },
 })
@@ -1170,12 +1189,14 @@ async function ingestCreemWebhookBody(
 
   const allowlist = productAllowlistOrUnconfigured()
   if (isProviderUnconfigured(allowlist)) {
+    const nextAttemptAt = args.receivedAt + WEBHOOK_RETRY_DELAY_MS
     await ctx.db.patch("billingEvents", billingEventId, {
       lastError: "PROVIDER_UNCONFIGURED",
-      nextAttemptAt: args.receivedAt + WEBHOOK_RETRY_DELAY_MS,
+      nextAttemptAt,
       status: "pending",
       updatedAt: args.receivedAt,
     })
+    await schedulePendingCreemBillingEvents(ctx, nextAttemptAt)
     return {
       kind: "provider_unconfigured" as const,
       missing: allowlist.missing,
@@ -1194,12 +1215,14 @@ async function ingestCreemWebhookBody(
   }
 
   if (result.kind === "pending") {
+    const nextAttemptAt = args.receivedAt + WEBHOOK_RETRY_DELAY_MS
     await ctx.db.patch("billingEvents", billingEventId, {
       lastError: "TARGET_NOT_READY",
-      nextAttemptAt: args.receivedAt + WEBHOOK_RETRY_DELAY_MS,
+      nextAttemptAt,
       status: "pending",
       updatedAt: args.receivedAt,
     })
+    await schedulePendingCreemBillingEvents(ctx, nextAttemptAt)
     await recordProviderRunAndMetric(ctx, {
       durationMs,
       errorCode: "TARGET_NOT_READY",
@@ -1213,12 +1236,14 @@ async function ingestCreemWebhookBody(
   }
 
   if (result.kind === "incomplete_period") {
+    const nextAttemptAt = args.receivedAt + WEBHOOK_RETRY_DELAY_MS
     await ctx.db.patch("billingEvents", billingEventId, {
       lastError: "INCOMPLETE_SUBSCRIPTION_PERIOD",
-      nextAttemptAt: args.receivedAt + WEBHOOK_RETRY_DELAY_MS,
+      nextAttemptAt,
       status: "pending",
       updatedAt: args.receivedAt,
     })
+    await schedulePendingCreemBillingEvents(ctx, nextAttemptAt)
     await recordProviderRunAndMetric(ctx, {
       durationMs,
       errorCode: "INCOMPLETE_SUBSCRIPTION_PERIOD",
@@ -1410,6 +1435,14 @@ export const dispatchPendingCreemBillingEvents = internalMutation({
         receivedAt: now,
       })
       outcomes[result.kind] = (outcomes[result.kind] ?? 0) + 1
+    }
+
+    if (due.length === MAX_BILLING_EVENT_RETRIES_PER_DISPATCH) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.billing.internal.dispatchPendingCreemBillingEvents,
+        {},
+      )
     }
 
     return {

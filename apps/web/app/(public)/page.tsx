@@ -62,8 +62,8 @@ const features: Array<{
   },
   {
     label: "Daily digest",
-    title: "09:00 by default",
-    body: "Set your local delivery time",
+    title: "Around 09:00 local time",
+    body: "Set your account timezone",
   },
   {
     label: "Saved views",
