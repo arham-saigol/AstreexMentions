@@ -14,4 +14,4 @@ export type Theme = "dark" | "light"
  * the OS `prefers-color-scheme`. The result is written to <html data-theme>,
  * which the global CSS uses to select the dark or light token set.
  */
-export const themeScript = `(function(){try{var k="${THEME_STORAGE_KEY}";var s=localStorage.getItem(k);var m=window.matchMedia("(prefers-color-scheme: light)");var t=s?s:(m.matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();`
+export const themeScript = `(function(){try{var k="${THEME_STORAGE_KEY}";var s=null;try{s=localStorage.getItem(k);}catch(e){}var m=window.matchMedia("(prefers-color-scheme: light)");var t=s?s:(m.matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(e){}})();`

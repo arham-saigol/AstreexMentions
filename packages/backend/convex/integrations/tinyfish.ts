@@ -92,6 +92,7 @@ function blockedHostname(hostname: string): boolean {
     Number.isInteger(firstHextet) &&
     ((firstHextet & 0xfe00) === 0xfc00 ||
       (firstHextet & 0xffc0) === 0xfe80 ||
+      (firstHextet & 0xffc0) === 0xfec0 ||
       (firstHextet & 0xff00) === 0xff00 ||
       (firstHextet === 0x2001 && host.startsWith("2001:db8:")))
   )

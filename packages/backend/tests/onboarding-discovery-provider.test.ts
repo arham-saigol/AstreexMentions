@@ -23,6 +23,7 @@ describe("TinyFish onboarding provider boundary", () => {
       "http://240.0.0.1",
       "http://[::ffff:127.0.0.1]",
       "http://[febf::1]",
+      "http://[fec0::1]",
     ]) {
       expect(() => canonicalResearchUrl(value)).toThrow(
         TinyFishIntegrationError,
