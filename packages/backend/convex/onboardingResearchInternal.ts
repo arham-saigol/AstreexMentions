@@ -102,7 +102,7 @@ export const beginResearch = internalMutation({
             inputItemCount: 1,
             operation: "onboarding.research",
             outputItemCount: 0,
-            provider: "tinyfish",
+            provider: abandonedRun.provider,
             rateLimitedCount: 0,
             retryCount: 0,
             successCount: 0,
