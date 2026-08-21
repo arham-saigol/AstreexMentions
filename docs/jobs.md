@@ -186,15 +186,15 @@ At the mention cap, active workspace sources are atomically paused for usage. Th
 
 Verified Creem events are deduplicated by provider event ID. Pending target/configuration failures retry after 30 seconds; the cron processes at most 16 due events each minute. Current processing runs directly in the mutation and does not use the schema's optional billing-event lease fields.
 
-### DeepSeek mention analysis
+### Vertex AI Gemini mention analysis
 
 The mention analysis cron scans up to 256 due or expired jobs. It considers at most 16 workspaces and schedules at most four batches. Each prompt-bounded batch contains at most 20 jobs from one workspace. Thus, one dispatch claims at most 80 jobs.
 
 A claim snapshots the workspace filtering fields and the enabled category catalog. The catalog must contain exactly one enabled permanent system `Other` category. Jobs receive one shared four-minute lease. Linked mentions move to `analysisState: "leased"` and remain out of both customer feeds. Before the provider call, the action validates the lease, complete snapshot, mention links, workspace, and full input.
 
-The worker validates the entire model result before one mutation applies a result. Every mention must receive relevance, priority, one enabled category, and bounded reasons. Success completes the jobs and mentions. It also sets feed state and records a versioned `deepseek` provider run with hourly metrics. A changed snapshot or invalid result retries the full batch without partial application. Retryable errors use deterministic 30-second exponential backoff capped at 30 minutes. Permanent or exhausted jobs become `dead`. Their mentions fail open as visible and unclassified. Ingestion gives each job three maximum attempts.
+The worker validates the entire model result before one mutation applies it. The model is fixed to `gemini-3.5-flash-lite` on Vertex AI. It uses structured JSON and medium thinking. Every mention receives relevance, priority, one enabled category, and bounded reasons. Success completes the jobs and mentions. It also sets feed state and records a versioned `gemini` provider run with hourly metrics. A changed snapshot or invalid result retries the full batch without partial application. Retryable errors use deterministic 30-second exponential backoff capped at 30 minutes. Permanent or exhausted jobs become `dead`. Their mentions fail open as visible and unclassified. Ingestion gives each job three maximum attempts.
 
-Missing or invalid DeepSeek configuration causes no provider call or telemetry write. The worker releases the lease and restores the claimed attempt. It returns jobs and mentions to pending and adds a five-minute delay. Missing filtering context or an invalid catalog blocks due jobs without consuming attempts.
+Missing or invalid Vertex configuration causes no provider call or telemetry write. The worker releases the lease and restores the claimed attempt. It returns jobs and mentions to pending after five minutes. Missing filtering context or an invalid catalog blocks due jobs without consuming attempts.
 
 ### Daily digest
 

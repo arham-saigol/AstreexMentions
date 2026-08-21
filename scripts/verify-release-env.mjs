@@ -21,7 +21,8 @@ const required = [
   "RESEND_FROM_EMAIL",
   "FETCHLAYER_API_KEY",
   "XQUIK_API_KEY",
-  "DEEPSEEK_API_KEY",
+  "VERTEX_AI_PROJECT_ID",
+  "VERTEX_AI_SERVICE_ACCOUNT_JSON",
   "DELETION_IDENTITY_FENCE_MS",
 ]
 
@@ -30,6 +31,52 @@ const missing = required.filter((name) => !process.env[name]?.trim())
 if (missing.length > 0) {
   console.error("Release environment validation failed. Missing variables:")
   for (const name of missing) console.error(`- ${name}`)
+  process.exit(1)
+}
+
+const vertexCredentialJson = process.env.VERTEX_AI_SERVICE_ACCOUNT_JSON
+let vertexCredentials
+try {
+  vertexCredentials = JSON.parse(vertexCredentialJson)
+} catch {
+  console.error(
+    "VERTEX_AI_SERVICE_ACCOUNT_JSON must contain a usable service-account credential.",
+  )
+  process.exit(1)
+}
+if (
+  typeof vertexCredentials !== "object" ||
+  vertexCredentials === null ||
+  Array.isArray(vertexCredentials) ||
+  vertexCredentials.type !== "service_account" ||
+  typeof vertexCredentials.project_id !== "string" ||
+  vertexCredentials.project_id.trim().length === 0 ||
+  typeof vertexCredentials.client_email !== "string" ||
+  vertexCredentials.client_email.trim().length === 0 ||
+  typeof vertexCredentials.private_key !== "string" ||
+  vertexCredentials.private_key.trim().length === 0 ||
+  !vertexCredentials.private_key.includes("-----BEGIN PRIVATE KEY-----") ||
+  !vertexCredentials.private_key.includes("-----END PRIVATE KEY-----")
+) {
+  console.error(
+    "VERTEX_AI_SERVICE_ACCOUNT_JSON must contain a usable service-account credential.",
+  )
+  process.exit(1)
+}
+
+const vertexLocation = process.env.VERTEX_AI_LOCATION?.trim()
+if (vertexLocation && vertexLocation !== "global") {
+  console.error("VERTEX_AI_LOCATION must be global when set.")
+  process.exit(1)
+}
+
+const vertexTimeout = process.env.VERTEX_AI_TIMEOUT_MS
+if (
+  vertexTimeout !== undefined &&
+  vertexTimeout.trim().length > 0 &&
+  (!Number.isFinite(Number(vertexTimeout)) || Number(vertexTimeout) <= 0)
+) {
+  console.error("VERTEX_AI_TIMEOUT_MS must be a positive number when set.")
   process.exit(1)
 }
 

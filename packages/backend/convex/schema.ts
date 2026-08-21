@@ -207,7 +207,7 @@ export const providerValidator = v.union(
   v.literal("reddit_posts"),
   v.literal("reddit_comments"),
   v.literal("hacker_news"),
-  v.literal("deepseek"),
+  v.literal("gemini"),
   v.literal("resend"),
   v.literal("creem"),
   v.literal("tinyfish"),

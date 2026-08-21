@@ -10,6 +10,10 @@ const app = defineApp({
     DELETION_IDENTITY_FENCE_MS: v.optional(v.string()),
     TINYFISH_API_KEY: v.optional(v.string()),
     TINYFISH_TIMEOUT_MS: v.optional(v.string()),
+    VERTEX_AI_LOCATION: v.optional(v.string()),
+    VERTEX_AI_PROJECT_ID: v.optional(v.string()),
+    VERTEX_AI_SERVICE_ACCOUNT_JSON: v.optional(v.string()),
+    VERTEX_AI_TIMEOUT_MS: v.optional(v.string()),
   },
 })
 

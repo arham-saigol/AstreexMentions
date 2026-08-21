@@ -9,7 +9,7 @@ import {
   type MentionAnalysisContext,
   type MentionAnalysisMention,
   type MentionAnalysisResult,
-} from "../lib/deepseekMentionAnalysis"
+} from "../lib/mentionAnalysis"
 
 export const MENTION_ANALYSIS_LEASE_MS = 4 * 60_000
 export const MENTION_ANALYSIS_RETRY_BASE_MS = 30_000

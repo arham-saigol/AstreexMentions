@@ -40,7 +40,7 @@ The existing category-configuration onboarding screens are removed. Default cate
 ### Website research and recommendations
 
 - Use TinyFish Fetch for the submitted website and TinyFish Search for a bounded number of AI-derived competitor/product searches. TinyFish Search and Fetch use `X-API-Key`; Fetch accepts only HTTP(S) URLs and has a ten-URL request maximum. Use direct server-side `fetch` with explicit request/response schemas rather than adding an SDK solely for two HTTP APIs.
-- Use the existing DeepSeek integration to turn bounded website/search material into structured output. Do not give the model unrestricted network access or accept tool arguments/output without schema validation.
+- Use the existing Vertex AI Gemini integration to turn bounded website/search material into structured output. Do not give the model unrestricted network access or accept tool arguments/output without schema validation.
 - The orchestration should be fixed and bounded: validate/canonicalize one submitted URL; Fetch it as Markdown; have the model propose a small number of search queries; execute those searches; then have the model return the company summary and a limited set of keyword suggestions. Fetch additional search-result pages only when needed and within TinyFish’s ten-URL cap.
 - Validate every model response with strict Zod schemas. Treat remote page/search content as untrusted prompt input, delimit it in prompts, and instruct the model not to follow instructions contained in it.
 - Store the resulting concise company context and selected keyword descriptions so the planned relevance/filter agent can consume them later. The relevance/filter agent itself is not part of this work.
@@ -53,7 +53,7 @@ The existing category-configuration onboarding screens are removed. Default cate
 - Existing paid entitlement and recurring counters live in `subscriptions` and `usageCycles`; ingestion in `packages/backend/convex/ingestion/service.ts` atomically increments `mentionsUsed` and pauses sources at a cap. Reuse that transactional cap behavior for the evaluation rather than implementing client-side counting.
 - `packages/backend/convex/keywords.ts` currently makes every no-subscription source paused with reason `paid`; `apps/web/lib/product-access.ts` correspondingly treats non-subscribers as preview/onboarding only. Both need an explicit free-evaluation access path.
 - The public pricing section is in `apps/web/app/(public)/page.tsx`; keep its three paid cards and add only the agreed subheading/copy about the first 100 mentions.
-- Separately from this rollout, the DeepSeek mention analysis pipeline receives mention text, category definitions, filtering fields, and matched-keyword context (`packages/backend/convex/mentionAnalysis/internal.ts` and `packages/backend/convex/lib/deepseekMentionAnalysis.ts`).
+- Separately from this rollout, the Vertex AI Gemini mention analysis pipeline receives mention text, category definitions, filtering fields, and matched-keyword context (`packages/backend/convex/mentionAnalysis/internal.ts` and `packages/backend/convex/lib/Vertex AI GeminiMentionAnalysis.ts`).
 
 ## Implementation plan
 
@@ -98,7 +98,7 @@ Create a small, provider-isolated TinyFish adapter under `packages/backend/conve
 - Validate input URLs: trimmed absolute HTTP(S), no credentials, and a practical maximum length. TinyFish Fetch also rejects private/localhost/metadata targets; surface a safe, actionable failure rather than trying alternate internal URLs.
 - Call TinyFish Fetch with Markdown output and explicit per-URL timeout. Call Search with a purpose/intent and a fixed query/result cap. Validate TinyFish payloads before model use, cap extracted text/search snippets, and record provider-run/metric outcomes using the project’s existing operational patterns.
 - Add a workspace-scoped onboarding-research record/state so duplicate clicks and reloads reuse a completed result or resume a known request instead of repeatedly purchasing/triggering external work. Add a per-workspace discovery cooldown using the recommended Convex rate-limiter component rather than a hand-rolled counter.
-- Reuse the DeepSeek runtime integration with a strict structured schema: concise company description; limited suggested keywords; each suggestion’s phrase, <=160-character description, platform array, and internal brand-candidate flag. Require human review before any suggestion becomes a monitor.
+- Reuse the Vertex AI Gemini runtime integration with a strict structured schema: concise company description; limited suggested keywords; each suggestion’s phrase, <=160-character description, platform array, and internal brand-candidate flag. Require human review before any suggestion becomes a monitor.
 - Persist only the concise reviewed company summary and accepted keyword context. Do not persist full fetched pages or arbitrary search-result content.
 
 ### 5. Replace the onboarding UI and update product surfaces
@@ -149,5 +149,5 @@ Manually verify a new signed-in workspace through: website discovery success/fai
 - Selected overflow keywords are saved, visibly paused, and can be swapped into the active slot without data loss; a selected brand candidate is preferred, but no unselected keyword is created.
 - Keyword descriptions are limited to 160 characters, editable, tenant-scoped, and reach mention-analysis context without changing provider queries.
 - Mentions collected under free access stop appearing after 60 days and are purged safely; paid mentions are unaffected.
-- TinyFish and DeepSeek credentials remain server-side; website/search/model inputs and outputs are bounded and validated; external discovery is rate-limited and safe to retry.
+- TinyFish and Vertex AI Gemini credentials remain server-side; website/search/model inputs and outputs are bounded and validated; external discovery is rate-limited and safe to retry.
 - The public pricing page still has only the three paid plan cards and only the agreed “first 100 mentions free” supporting copy.

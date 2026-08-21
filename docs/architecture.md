@@ -28,7 +28,7 @@ The root is a pnpm workspace orchestrated by Turborepo. Root scripts are the sup
   - Hacker News stories and comments through Algolia's public HN API.
   - Billing through Creem.
   - Email delivery and delivery webhooks through Resend.
-  - DeepSeek mention analysis through a durable one-minute dispatcher, leased batch action, strict total-result validation, and atomic result application.
+  - Vertex AI Gemini mention analysis and onboarding discovery. Mention analysis uses a durable one-minute dispatcher, leased batch action, strict validation, and atomic result application.
 
 ## Customer request and authentication flow
 
