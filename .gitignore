@@ -33,3 +33,7 @@ Thumbs.db
 # logs
 *.log
 pnpm-debug.log*
+
+# agents
+plans/
+prompts/

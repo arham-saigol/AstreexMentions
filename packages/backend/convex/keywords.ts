@@ -134,6 +134,15 @@ function validatedPhrase(value: string) {
       `Keyword phrases must contain 1 to ${MAX_KEYWORD_LENGTH} characters`,
     )
   }
+  // Phrases are sent to provider search APIs as exact-phrase queries, so
+  // double quotes act as query syntax. A phrase without text besides quotes
+  // would degenerate into an empty phrase query.
+  if (!phrase.replace(/"/gu, "").trim()) {
+    keywordError(
+      "INVALID_KEYWORD",
+      "Keyword phrases must contain characters besides quotes",
+    )
+  }
   return { normalizedPhrase: normalizeKeywordPhrase(phrase), phrase }
 }
 

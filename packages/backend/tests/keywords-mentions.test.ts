@@ -326,6 +326,20 @@ function mentionPage(value: unknown) {
 }
 
 describe("keyword Convex functions", () => {
+  it("rejects phrases that contain no text besides quotes", async () => {
+    const t = createBackendTest()
+    const customer = await seedCustomer(t, { paid: true, suffix: "quotes" })
+
+    // Quotes become exact-phrase query syntax at provider search APIs; an
+    // all-quotes phrase would degenerate into an empty phrase query.
+    await expect(
+      customer.client.mutation(createKeywordReference, {
+        phrase: '"  "',
+        platforms: ["hacker_news"],
+      }),
+    ).rejects.toMatchObject({ data: { code: "INVALID_KEYWORD" } })
+  })
+
   it("creates one free-evaluation keyword with independent scheduled Reddit sources", async () => {
     const t = createBackendTest()
     const customer = await seedCustomer(t, {
