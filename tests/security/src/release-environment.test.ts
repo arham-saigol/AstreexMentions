@@ -1,10 +1,20 @@
 import { spawnSync } from "node:child_process"
+import { generateKeyPairSync } from "node:crypto"
 import { fileURLToPath } from "node:url"
 
 import { describe, expect, it } from "vitest"
 
 const scriptPath = fileURLToPath(
   new URL("../../../scripts/verify-release-env.mjs", import.meta.url),
+)
+
+const { privateKey: vertexServiceAccountPrivateKey } = generateKeyPairSync(
+  "rsa",
+  {
+    modulusLength: 2_048,
+    privateKeyEncoding: { format: "pem", type: "pkcs8" },
+    publicKeyEncoding: { format: "pem", type: "spki" },
+  },
 )
 
 const baseEnvironment = {
@@ -23,8 +33,7 @@ const baseEnvironment = {
   VERTEX_AI_PROJECT_ID: "astreex-release",
   VERTEX_AI_SERVICE_ACCOUNT_JSON: JSON.stringify({
     client_email: "astreex@astreex-release.iam.gserviceaccount.com",
-    private_key:
-      "-----BEGIN PRIVATE KEY-----\\nprivate\\n-----END PRIVATE KEY-----\\n",
+    private_key: vertexServiceAccountPrivateKey,
     project_id: "astreex-release",
     type: "service_account",
   }),
@@ -94,16 +103,22 @@ describe("release environment validation", () => {
     },
   )
 
-  it("rejects malformed Vertex service-account credentials without printing them", () => {
+  it("rejects an unusable Vertex private key without printing it", () => {
+    const invalidPrivateKey = "not-a-real-private-key"
     const result = runReleaseValidation({
-      VERTEX_AI_SERVICE_ACCOUNT_JSON: "not-json-private-credential",
+      VERTEX_AI_SERVICE_ACCOUNT_JSON: JSON.stringify({
+        client_email: "astreex@astreex-release.iam.gserviceaccount.com",
+        private_key: invalidPrivateKey,
+        project_id: "astreex-release",
+        type: "service_account",
+      }),
     })
 
     expect(result.status).toBe(1)
     expect(result.stderr).toContain(
       "VERTEX_AI_SERVICE_ACCOUNT_JSON must contain a usable service-account credential.",
     )
-    expect(result.stderr).not.toContain("not-json-private-credential")
+    expect(result.stderr).not.toContain(invalidPrivateKey)
   })
 
   it("rejects a Vertex location other than global", () => {

@@ -4,6 +4,7 @@ import { makeFunctionReference, type UserIdentity } from "convex/server"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import schema from "../convex/schema"
+import { vertexServiceAccountJson } from "./fixtures/vertexServiceAccount"
 
 vi.mock("@google/genai", () => ({
   GoogleGenAI: class {
@@ -46,13 +47,7 @@ const researchCompany = makeFunctionReference<
   unknown
 >("onboardingDiscovery:researchCompany")
 
-const serviceAccountJson = JSON.stringify({
-  client_email: "astreex@test.iam.gserviceaccount.com",
-  private_key:
-    "-----BEGIN PRIVATE KEY-----\\nprivate\\n-----END PRIVATE KEY-----\\n",
-  project_id: "astreex-test",
-  type: "service_account",
-})
+const serviceAccountJson = vertexServiceAccountJson()
 
 function createBackendTest() {
   const t = convexTest({ modules, schema })

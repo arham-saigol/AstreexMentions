@@ -4,7 +4,7 @@ import type { GenericId } from "convex/values"
 import { describe, expect, it } from "vitest"
 
 import schema from "../convex/schema"
-import { GEMINI_MODEL } from "../convex/integrations/gemini"
+import { GEMINI_MODEL } from "../convex/integrations/geminiModel"
 import { RETENTION_BATCH_SIZE } from "../convex/retention"
 
 const NOW = Date.parse("2026-08-01T12:00:00.000Z")

@@ -1,3 +1,5 @@
+import { createPrivateKey } from "node:crypto"
+
 const required = [
   "NEXT_PUBLIC_SITE_URL",
   "NEXT_PUBLIC_APP_URL",
@@ -34,30 +36,26 @@ if (missing.length > 0) {
   process.exit(1)
 }
 
-const vertexCredentialJson = process.env.VERTEX_AI_SERVICE_ACCOUNT_JSON
-let vertexCredentials
 try {
-  vertexCredentials = JSON.parse(vertexCredentialJson)
-} catch {
-  console.error(
-    "VERTEX_AI_SERVICE_ACCOUNT_JSON must contain a usable service-account credential.",
+  const vertexCredentials = JSON.parse(
+    process.env.VERTEX_AI_SERVICE_ACCOUNT_JSON,
   )
-  process.exit(1)
-}
-if (
-  typeof vertexCredentials !== "object" ||
-  vertexCredentials === null ||
-  Array.isArray(vertexCredentials) ||
-  vertexCredentials.type !== "service_account" ||
-  typeof vertexCredentials.project_id !== "string" ||
-  vertexCredentials.project_id.trim().length === 0 ||
-  typeof vertexCredentials.client_email !== "string" ||
-  vertexCredentials.client_email.trim().length === 0 ||
-  typeof vertexCredentials.private_key !== "string" ||
-  vertexCredentials.private_key.trim().length === 0 ||
-  !vertexCredentials.private_key.includes("-----BEGIN PRIVATE KEY-----") ||
-  !vertexCredentials.private_key.includes("-----END PRIVATE KEY-----")
-) {
+  if (
+    typeof vertexCredentials !== "object" ||
+    vertexCredentials === null ||
+    Array.isArray(vertexCredentials) ||
+    vertexCredentials.type !== "service_account" ||
+    typeof vertexCredentials.project_id !== "string" ||
+    vertexCredentials.project_id.trim().length === 0 ||
+    typeof vertexCredentials.client_email !== "string" ||
+    vertexCredentials.client_email.trim().length === 0 ||
+    typeof vertexCredentials.private_key !== "string" ||
+    vertexCredentials.private_key.trim().length === 0 ||
+    createPrivateKey(vertexCredentials.private_key).asymmetricKeyType !== "rsa"
+  ) {
+    throw new TypeError("Vertex service-account credential is invalid")
+  }
+} catch {
   console.error(
     "VERTEX_AI_SERVICE_ACCOUNT_JSON must contain a usable service-account credential.",
   )

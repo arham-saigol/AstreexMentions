@@ -18,6 +18,7 @@ import {
   type MentionAnalysisCategory,
 } from "../convex/lib/mentionAnalysis"
 import { GEMINI_MODEL } from "../convex/integrations/gemini"
+import { vertexServiceAccountJson } from "./fixtures/vertexServiceAccount"
 
 vi.mock("@google/genai", () => ({
   GoogleGenAI: class {
@@ -400,13 +401,7 @@ function completionFetch(output: unknown) {
   )
 }
 
-const VERTEX_SERVICE_ACCOUNT_JSON = JSON.stringify({
-  client_email: "astreex@test.iam.gserviceaccount.com",
-  private_key:
-    "-----BEGIN PRIVATE KEY-----\\nprivate\\n-----END PRIVATE KEY-----\\n",
-  project_id: "astreex-test",
-  type: "service_account",
-})
+const VERTEX_SERVICE_ACCOUNT_JSON = vertexServiceAccountJson()
 
 function configureVertex(): void {
   process.env.VERTEX_AI_PROJECT_ID = "astreex-test"

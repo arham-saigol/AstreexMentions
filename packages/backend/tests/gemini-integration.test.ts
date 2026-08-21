@@ -1,25 +1,41 @@
 import { describe, expect, it, vi } from "vitest"
 
+const { googleGenAiOptions } = vi.hoisted(() => ({
+  googleGenAiOptions: [] as unknown[],
+}))
+
+vi.mock("@google/genai", () => ({
+  GoogleGenAI: class {
+    readonly models = { generateContent: async () => ({ text: "{}" }) }
+
+    constructor(options: unknown) {
+      googleGenAiOptions.push(options)
+    }
+  },
+  ThinkingLevel: { MEDIUM: "MEDIUM" },
+}))
+
 import {
   createGeminiJsonRequester,
   GeminiIntegrationError,
   readGeminiRuntimeConfiguration,
 } from "../convex/integrations/gemini"
+import { vertexServiceAccountJson } from "./fixtures/vertexServiceAccount"
+
+function configuredGemini() {
+  const configuration = readGeminiRuntimeConfiguration({
+    VERTEX_AI_PROJECT_ID: "astreex-test",
+    VERTEX_AI_SERVICE_ACCOUNT_JSON: vertexServiceAccountJson(),
+  })
+  if (configuration.state !== "configured") {
+    throw new Error("Expected valid Vertex configuration")
+  }
+  return configuration
+}
 
 describe("Vertex Gemini configuration", () => {
   it("parses server-only Vertex service-account credentials and defaults to global", () => {
-    const configuration = readGeminiRuntimeConfiguration({
-      VERTEX_AI_PROJECT_ID: "astreex-test",
-      VERTEX_AI_SERVICE_ACCOUNT_JSON: JSON.stringify({
-        client_email: "astreex@astreex-test.iam.gserviceaccount.com",
-        private_key:
-          "-----BEGIN PRIVATE KEY-----\nprivate\n-----END PRIVATE KEY-----\n",
-        project_id: "astreex-test",
-        type: "service_account",
-      }),
-    })
-
-    expect(configuration).toMatchObject({
+    expect(configuredGemini()).toMatchObject({
       location: "global",
       projectId: "astreex-test",
       provider: "gemini",
@@ -28,26 +44,32 @@ describe("Vertex Gemini configuration", () => {
     })
   })
 
-  it("uses Vertex structured output and explicit medium thinking", async () => {
-    const configuration = readGeminiRuntimeConfiguration({
-      VERTEX_AI_PROJECT_ID: "astreex-test",
-      VERTEX_AI_SERVICE_ACCOUNT_JSON: JSON.stringify({
-        client_email: "astreex@astreex-test.iam.gserviceaccount.com",
-        private_key:
-          "-----BEGIN PRIVATE KEY-----\nprivate\n-----END PRIVATE KEY-----\n",
-        project_id: "astreex-test",
-        type: "service_account",
+  it("initializes the SDK for Vertex with explicit service-account credentials", () => {
+    createGeminiJsonRequester({ configuration: configuredGemini() })
+
+    expect(googleGenAiOptions).toEqual([
+      expect.objectContaining({
+        googleAuthOptions: {
+          credentials: expect.objectContaining({
+            client_email: "astreex@astreex-test.iam.gserviceaccount.com",
+            private_key: expect.any(String),
+            project_id: "astreex-test",
+          }),
+        },
+        location: "global",
+        project: "astreex-test",
+        vertexai: true,
       }),
-    })
-    if (configuration.state !== "configured") {
-      throw new Error("Expected valid Vertex configuration")
-    }
+    ])
+  })
+
+  it("uses Vertex structured output and explicit medium thinking", async () => {
     const generateContent = vi.fn().mockResolvedValue({
       text: '{"results":[]}',
     })
     const requester = createGeminiJsonRequester({
       client: { models: { generateContent } },
-      configuration,
+      configuration: configuredGemini(),
     })
 
     await expect(
@@ -85,13 +107,7 @@ describe("Vertex Gemini configuration", () => {
       readGeminiRuntimeConfiguration({
         VERTEX_AI_LOCATION: "us-central1",
         VERTEX_AI_PROJECT_ID: "astreex-test",
-        VERTEX_AI_SERVICE_ACCOUNT_JSON: JSON.stringify({
-          client_email: "astreex@astreex-test.iam.gserviceaccount.com",
-          private_key:
-            "-----BEGIN PRIVATE KEY-----\\nprivate\\n-----END PRIVATE KEY-----\\n",
-          project_id: "astreex-test",
-          type: "service_account",
-        }),
+        VERTEX_AI_SERVICE_ACCOUNT_JSON: vertexServiceAccountJson(),
       }),
     ).toEqual({
       invalid: ["VERTEX_AI_LOCATION"],
@@ -100,11 +116,22 @@ describe("Vertex Gemini configuration", () => {
     })
   })
 
-  it("rejects malformed service-account configuration without retaining its JSON", () => {
+  it.each([
+    ["malformed JSON", "private-invalid-json"],
+    [
+      "an unusable private key",
+      JSON.stringify({
+        client_email: "astreex@astreex-test.iam.gserviceaccount.com",
+        private_key: "not-a-private-key",
+        project_id: "astreex-test",
+        type: "service_account",
+      }),
+    ],
+  ])("rejects %s service-account configuration", (_label, credentials) => {
     expect(
       readGeminiRuntimeConfiguration({
         VERTEX_AI_PROJECT_ID: "astreex-test",
-        VERTEX_AI_SERVICE_ACCOUNT_JSON: "private-invalid-json",
+        VERTEX_AI_SERVICE_ACCOUNT_JSON: credentials,
       }),
     ).toEqual({
       invalid: ["VERTEX_AI_SERVICE_ACCOUNT_JSON"],
@@ -114,30 +141,17 @@ describe("Vertex Gemini configuration", () => {
   })
 
   it("maps rate limits to a secret-safe retryable failure", async () => {
-    const configuration = readGeminiRuntimeConfiguration({
-      VERTEX_AI_PROJECT_ID: "astreex-test",
-      VERTEX_AI_SERVICE_ACCOUNT_JSON: JSON.stringify({
-        client_email: "astreex@astreex-test.iam.gserviceaccount.com",
-        private_key:
-          "-----BEGIN PRIVATE KEY-----\nprivate\n-----END PRIVATE KEY-----\n",
-        project_id: "astreex-test",
-        type: "service_account",
-      }),
-    })
-    if (configuration.state !== "configured") {
-      throw new Error("Expected valid Vertex configuration")
-    }
     const requester = createGeminiJsonRequester({
       client: {
         models: {
           generateContent: vi.fn().mockRejectedValue({
-            headers: new Headers({ "retry-after": "2" }),
+            headers: { "retry-after": "2" },
             message: "private provider body",
             statusCode: 429,
           }),
         },
       },
-      configuration,
+      configuration: configuredGemini(),
     })
 
     await expect(
@@ -159,6 +173,50 @@ describe("Vertex Gemini configuration", () => {
     )
   })
 
+  it("uses a Vertex RetryInfo delay after the SDK discards response headers", async () => {
+    const requester = createGeminiJsonRequester({
+      client: {
+        models: {
+          generateContent: vi.fn().mockRejectedValue(
+            Object.assign(
+              new Error(
+                JSON.stringify({
+                  error: {
+                    details: [
+                      {
+                        "@type": "type.googleapis.com/google.rpc.RetryInfo",
+                        retryDelay: "7.5s",
+                      },
+                    ],
+                  },
+                }),
+              ),
+              { status: 429 },
+            ),
+          ),
+        },
+      },
+      configuration: configuredGemini(),
+    })
+
+    await expect(
+      requester(
+        {
+          responseJsonSchema: { type: "object" },
+          systemInstruction: "Apply the analysis policy.",
+          userContent: '{"mentions":[]}',
+        },
+        new AbortController().signal,
+      ),
+    ).rejects.toEqual(
+      expect.objectContaining({
+        code: "RATE_LIMIT",
+        retryAfterMs: 7_500,
+        retryable: true,
+      } satisfies Partial<GeminiIntegrationError>),
+    )
+  })
+
   it.each([
     { code: "AUTH", retryable: false, statusCode: 401 },
     { code: "INVALID_REQUEST", retryable: false, statusCode: 400 },
@@ -167,19 +225,6 @@ describe("Vertex Gemini configuration", () => {
   ])(
     "classifies Vertex HTTP $statusCode as $code",
     async ({ code, retryable, statusCode }) => {
-      const configuration = readGeminiRuntimeConfiguration({
-        VERTEX_AI_PROJECT_ID: "astreex-test",
-        VERTEX_AI_SERVICE_ACCOUNT_JSON: JSON.stringify({
-          client_email: "astreex@astreex-test.iam.gserviceaccount.com",
-          private_key:
-            "-----BEGIN PRIVATE KEY-----\\nprivate\\n-----END PRIVATE KEY-----\\n",
-          project_id: "astreex-test",
-          type: "service_account",
-        }),
-      })
-      if (configuration.state !== "configured") {
-        throw new Error("Expected valid Vertex configuration")
-      }
       const requester = createGeminiJsonRequester({
         client: {
           models: {
@@ -189,7 +234,7 @@ describe("Vertex Gemini configuration", () => {
             }),
           },
         },
-        configuration,
+        configuration: configuredGemini(),
       })
 
       await expect(
@@ -212,24 +257,11 @@ describe("Vertex Gemini configuration", () => {
   )
 
   it("maps malformed structured JSON to a retryable safe error", async () => {
-    const configuration = readGeminiRuntimeConfiguration({
-      VERTEX_AI_PROJECT_ID: "astreex-test",
-      VERTEX_AI_SERVICE_ACCOUNT_JSON: JSON.stringify({
-        client_email: "astreex@astreex-test.iam.gserviceaccount.com",
-        private_key:
-          "-----BEGIN PRIVATE KEY-----\\nprivate\\n-----END PRIVATE KEY-----\\n",
-        project_id: "astreex-test",
-        type: "service_account",
-      }),
-    })
-    if (configuration.state !== "configured") {
-      throw new Error("Expected valid Vertex configuration")
-    }
     const requester = createGeminiJsonRequester({
       client: {
         models: { generateContent: vi.fn().mockResolvedValue({ text: "{" }) },
       },
-      configuration,
+      configuration: configuredGemini(),
     })
 
     await expect(

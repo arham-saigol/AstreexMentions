@@ -1,4 +1,4 @@
-import { GEMINI_MODEL } from "../integrations/gemini"
+import { GEMINI_MODEL } from "../integrations/geminiModel"
 import { DEFAULT_MENTION_ANALYSIS_MAX_ATTEMPTS } from "../lib/mentionAnalysis"
 import { transitionMentionAnalysisStatusMetric } from "../mentionAnalysis/metrics"
 import {

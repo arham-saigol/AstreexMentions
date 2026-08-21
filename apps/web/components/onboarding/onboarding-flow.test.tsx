@@ -82,7 +82,9 @@ describe("OnboardingFlow", () => {
     fireEvent.click(screen.getByRole("button", { name: "Back" }))
 
     // Step 1 should be visible again
-    expect(screen.getByRole("button", { name: "Research company" })).toBeDefined()
+    expect(
+      screen.getByRole("button", { name: "Research company" }),
+    ).toBeDefined()
 
     // Now resolve the abandoned research request
     await act(async () => {

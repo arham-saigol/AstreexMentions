@@ -9,7 +9,7 @@ import {
   type MentionAnalysisContext,
   type MentionAnalysisMention,
 } from "../lib/mentionAnalysis"
-import { GEMINI_MODEL } from "../integrations/gemini"
+import { GEMINI_MODEL } from "../integrations/geminiModel"
 import { isCategorySystemKey } from "../lib/categories"
 import { recordProviderMetricBuckets } from "../lib/providerMetricBuckets"
 import { incrementDailySystemMetric } from "../lib/systemMetricBuckets"

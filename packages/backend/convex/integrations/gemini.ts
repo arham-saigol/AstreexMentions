@@ -1,25 +1,24 @@
+"use node"
+
+import { createPrivateKey } from "node:crypto"
+
 import { GoogleGenAI, ThinkingLevel } from "@google/genai"
 import { z } from "zod"
 
-export const GEMINI_MODEL = "gemini-3.5-flash-lite"
+import { GEMINI_MODEL } from "./geminiModel"
+
+export { GEMINI_MODEL } from "./geminiModel"
 export const DEFAULT_VERTEX_AI_LOCATION = "global"
 export const DEFAULT_VERTEX_AI_TIMEOUT_MS = 120_000
 export const MAX_GEMINI_GENERATION_CONTENT_CHARS = 48_000
 
 const nonEmptyStringSchema = z.string().trim().min(1)
-const serviceAccountPrivateKeySchema = nonEmptyStringSchema.refine(
-  (value) =>
-    value.includes("-----BEGIN PRIVATE KEY-----") &&
-    value.includes("-----END PRIVATE KEY-----"),
-)
-const serviceAccountSchema = z
-  .object({
-    client_email: nonEmptyStringSchema,
-    private_key: serviceAccountPrivateKeySchema,
-    project_id: nonEmptyStringSchema,
-    type: z.literal("service_account"),
-  })
-  .passthrough()
+const serviceAccountSchema = z.object({
+  client_email: nonEmptyStringSchema,
+  private_key: nonEmptyStringSchema,
+  project_id: nonEmptyStringSchema,
+  type: z.literal("service_account"),
+})
 
 type GeminiConfigurationInvalidName =
   | "VERTEX_AI_LOCATION"
@@ -146,7 +145,13 @@ function parseCredentials(value: string | undefined) {
   }
   try {
     const result = serviceAccountSchema.safeParse(JSON.parse(value) as unknown)
-    return result.success ? result.data : undefined
+    if (
+      !result.success ||
+      createPrivateKey(result.data.private_key).asymmetricKeyType !== "rsa"
+    ) {
+      return undefined
+    }
+    return result.data
   } catch {
     return undefined
   }
@@ -237,14 +242,33 @@ function integerStatus(error: unknown): number | undefined {
     : undefined
 }
 
-function headersFor(error: unknown): Headers | undefined {
+function headerFor(error: unknown, name: string): string | undefined {
   if (!isRecord(error)) return undefined
-  const headers = error.headers
-  return headers instanceof Headers ? headers : undefined
+  const candidates = [
+    error.headers,
+    ...(isRecord(error.response) ? [error.response.headers] : []),
+  ]
+  for (const headers of candidates) {
+    if (headers instanceof Headers) {
+      const value = headers.get(name)
+      if (value !== null) return value
+      continue
+    }
+    if (!isRecord(headers)) continue
+    for (const [key, value] of Object.entries(headers)) {
+      if (key.toLocaleLowerCase("en") === name && typeof value === "string") {
+        return value
+      }
+    }
+  }
+  return undefined
 }
 
-function retryAfterMs(value: string | null, now: number): number | undefined {
-  if (value === null || value.trim().length === 0) {
+function retryAfterMs(
+  value: string | undefined,
+  now: number,
+): number | undefined {
+  if (value === undefined || value.trim().length === 0) {
     return undefined
   }
   const seconds = Number(value)
@@ -255,9 +279,58 @@ function retryAfterMs(value: string | null, now: number): number | undefined {
   return Number.isFinite(retryAt) ? Math.max(0, retryAt - now) : undefined
 }
 
+function retryInfoDelayMs(error: unknown): number | undefined {
+  if (
+    !isRecord(error) ||
+    typeof error.message !== "string" ||
+    error.message.length > 16_384
+  ) {
+    return undefined
+  }
+  try {
+    const payload = JSON.parse(error.message) as unknown
+    const details =
+      isRecord(payload) &&
+      isRecord(payload.error) &&
+      Array.isArray(payload.error.details)
+        ? payload.error.details
+        : []
+    for (const detail of details) {
+      if (
+        !isRecord(detail) ||
+        detail["@type"] !== "type.googleapis.com/google.rpc.RetryInfo" ||
+        typeof detail.retryDelay !== "string"
+      ) {
+        continue
+      }
+      const match = /^(\d+(?:\.\d+)?)s$/u.exec(detail.retryDelay)
+      if (!match) continue
+      const milliseconds = Number(match[1]) * 1_000
+      if (Number.isFinite(milliseconds) && milliseconds >= 0) {
+        return Math.ceil(milliseconds)
+      }
+    }
+  } catch {
+    // SDK errors can contain non-JSON messages. The queue has normal backoff.
+  }
+  return undefined
+}
+
+function providerRetryAfterMs(error: unknown, now: number): number | undefined {
+  const retryAfterMilliseconds = Number(headerFor(error, "retry-after-ms"))
+  if (Number.isFinite(retryAfterMilliseconds) && retryAfterMilliseconds >= 0) {
+    return Math.ceil(retryAfterMilliseconds)
+  }
+  return (
+    retryAfterMs(headerFor(error, "retry-after"), now) ??
+    retryInfoDelayMs(error)
+  )
+}
+
 function requestError(
   error: unknown,
   timedOut: boolean,
+  now: number,
 ): GeminiIntegrationError {
   if (timedOut) {
     return new GeminiIntegrationError(
@@ -275,16 +348,7 @@ function requestError(
     )
   }
   if (status === 429) {
-    const headers = headersFor(error)
-    const retryAfter =
-      headers?.get("retry-after-ms") !== null &&
-      headers?.get("retry-after-ms") !== undefined
-        ? Number(headers.get("retry-after-ms"))
-        : undefined
-    const retryAfterMsValue =
-      retryAfter !== undefined && Number.isFinite(retryAfter) && retryAfter >= 0
-        ? Math.ceil(retryAfter)
-        : retryAfterMs(headers?.get("retry-after") ?? null, Date.now())
+    const retryAfterMsValue = providerRetryAfterMs(error, now)
     return new GeminiIntegrationError(
       "RATE_LIMIT",
       "Vertex Gemini rate limit exceeded",
@@ -444,7 +508,7 @@ export function createGeminiJsonRequester(options: {
       const typedError =
         error instanceof GeminiIntegrationError
           ? error
-          : requestError(error, timedOut)
+          : requestError(error, timedOut, now())
       emitLog(options.logger, {
         durationMs: Math.max(0, now() - startedAt),
         errorCode: typedError.code,
